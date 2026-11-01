@@ -1,0 +1,55 @@
+package raphael.model;
+
+import java.util.List;
+
+// The whole run: one Snapshot per step, everything the program printed, and why it ended.
+// Going back a step just means showing snapshot i - 1.
+// OOP: encapsulation. The list is private and read-only, so nobody can change a recorded run.
+// Memento pattern: the Trace is the album that stores the saved states (Snapshots).
+public class Trace {
+
+    private final List<Snapshot> snapshots;
+    private final String output;
+    private final EndReason endReason;
+    private final String endMessage;
+
+    public Trace(List<Snapshot> snapshots, String output, EndReason endReason, String endMessage) {
+        this.snapshots = List.copyOf(snapshots);
+        this.output = output;
+        this.endReason = endReason;
+        this.endMessage = endMessage;
+    }
+
+    public int size() {
+        return snapshots.size();
+    }
+
+    public Snapshot get(int step) {
+        return snapshots.get(step);
+    }
+
+    public List<Snapshot> getSnapshots() {
+        return snapshots;
+    }
+
+    // Everything the program printed during the whole run.
+    public String getOutput() {
+        return output;
+    }
+
+    // What had been printed by this step. At the last step the program is over, so it's everything.
+    public String getOutputAt(int step) {
+        if (step == snapshots.size() - 1) {
+            return output;
+        }
+        return output.substring(0, Math.min(output.length(), get(step).getOutputLength()));
+    }
+
+    public EndReason getEndReason() {
+        return endReason;
+    }
+
+    public String getEndMessage() {
+        return endMessage;
+    }
+}

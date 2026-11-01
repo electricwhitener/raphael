@@ -1,0 +1,11 @@
+# Build output: made by mvn and scripts/build-app.sh
+target/
+dist/
+*.class
+
+# Editor settings
+.vscode/
+.idea/
+.classpath
+.project
+.settings/

@@ -1,0 +1,7 @@
+# Windows needs CRLF line endings in .bat files, and Linux needs LF in shell scripts.
+*.bat text eol=crlf
+*.sh text eol=lf
+*.java text eol=lf
+*.md text eol=lf
+*.png binary
+*.ttf binary

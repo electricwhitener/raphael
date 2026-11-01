@@ -1,0 +1,96 @@
+package raphael.render;
+
+import java.awt.Dimension;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import raphael.detect.ArrayStructure;
+import raphael.detect.BinaryTreeStructure;
+import raphael.detect.GenericStructure;
+import raphael.detect.GridStructure;
+import raphael.detect.LinkedListStructure;
+import raphael.detect.MultiwayTreeStructure;
+import raphael.detect.Structure;
+import raphael.model.NullValue;
+import raphael.model.PrimitiveValue;
+import raphael.model.ReferenceValue;
+import raphael.model.Value;
+
+// Turns one Structure into shapes in a Scene, with its top-left corner at (x, y).
+// OOP: abstract class + polymorphism. Each subclass lays out its own kind of structure, and
+// SceneBuilder just calls render() without knowing which one it has.
+// Factory pattern: forStructure() picks the right subclass, so no one else has to.
+public abstract class StructureRenderer {
+
+    // Adds this structure's shapes to the scene and returns the size it used.
+    public abstract Dimension render(Scene scene, double x, double y);
+
+    public static StructureRenderer forStructure(Structure structure, RenderContext context) {
+        if (structure instanceof GridStructure) {
+            return new GridRenderer((GridStructure) structure, context);
+        }
+        if (structure instanceof ArrayStructure) {
+            return new ArrayRenderer((ArrayStructure) structure, context);
+        }
+        if (structure instanceof LinkedListStructure) {
+            return new LinkedListRenderer((LinkedListStructure) structure, context);
+        }
+        if (structure instanceof BinaryTreeStructure) {
+            return new BinaryTreeRenderer((BinaryTreeStructure) structure, context);
+        }
+        if (structure instanceof MultiwayTreeStructure) {
+            return new MultiwayTreeRenderer((MultiwayTreeStructure) structure, context);
+        }
+        return new BoxRenderer((GenericStructure) structure, context);
+    }
+
+    // The key of an object's main shape, e.g. "#12".
+    protected static String key(long id) {
+        return "#" + id;
+    }
+
+    // One cell that holds a value: the value as text, or a pointer slot with an arrow if it's a reference.
+    protected static void addCell(Scene scene, String key, Value value, double x, double y, double w, String caption) {
+        if (value instanceof ReferenceValue) {
+            scene.add(new SceneNode(key, SceneNode.Kind.SLOT, x, y, w, Style.CELL_H, "", caption));
+            scene.add(new SceneEdge(key + "→", key, key(((ReferenceValue) value).id()), SceneEdge.Kind.ARROW));
+        } else if (value instanceof NullValue) {
+            scene.add(new SceneNode(key, SceneNode.Kind.NULL_SLOT, x, y, w, Style.CELL_H, "", caption));
+        } else {
+            scene.add(new SceneNode(key, SceneNode.Kind.CELL, x, y, w, Style.CELL_H, value.display(), caption));
+        }
+    }
+
+    // How wide a cell must be for the longest of these values. References are drawn as arrows, so they don't count.
+    public static double widestValue(List<Value> values) {
+        double width = Style.CELL_W;
+        for (Value value : values) {
+            if (value instanceof PrimitiveValue) {
+                width = Math.max(width, Style.textWidth(value.display(), Style.VALUE_FONT) + 14);
+            }
+        }
+        return width;
+    }
+
+    // Index markers under a row of cells: each marker sits under its cell, and markers on the
+    // same cell stack downwards. firstCellX and cellW place index 0; y is the first marker row.
+    // An index just outside the array (-1 or the length, often why a loop stops) sits "outside"
+    // pixels past that end, at full strength: it's a real value, not a mistake. No cell shows what
+    // it is there, so the marker says it: i=-1.
+    protected static void addMarkers(Scene scene, long arrayId, List<RenderContext.Marker> markers,
+                                     RenderContext.Axis axis, double firstCellX, double cellW, double y, double outside) {
+        Map<Integer, Integer> stacked = new HashMap<>();
+        for (RenderContext.Marker marker : markers) {
+            if (marker.axis() != axis) {
+                continue;
+            }
+            int level = stacked.merge(marker.index(), 1, Integer::sum) - 1;
+            String text = marker.inRange() ? marker.name() : marker.name() + "=" + marker.index();
+            double w = Style.textWidth(text, Style.MARKER_FONT) + 10;
+            double centerX = marker.inRange() ? firstCellX + (marker.index() + 0.5) * cellW
+                    : marker.index() < 0 ? firstCellX - outside : firstCellX + marker.index() * cellW + outside;
+            scene.add(new SceneNode("idx:" + arrayId + ":" + axis + ":" + marker.name(), SceneNode.Kind.MARKER,
+                    centerX - w / 2, y + level * Style.MARKER_H, w, Style.MARKER_H, text, null));
+        }
+    }
+}
