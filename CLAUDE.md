@@ -64,7 +64,18 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
   - `Locale.ROOT` for case changes.
   - javac reads UTF-8 and reports in English.
   - Not done here: the HiDPI check needs real screens, and the native launchers moved to Stage 5 (`jpackage`).
-- **Next:** ROADMAP Stage 2, bulletproof tracing (debuggee memory cap and cleanup, edge-case corpus, soak test).
+- **Stage 2 (bulletproof tracing): done, 2026-11-04.**
+  - The debuggee gets `-Xmx256m` (`TraceLimits.MAX_MEMORY_MB`).
+  - A static shutdown hook in `JdiTracer` ends every child process when Raphael quits.
+  - `trace/ParentWatch` is a Java agent (`-javaagent`, its jar written at runtime) that halts the debuggee if Raphael is killed. With the agent switched off, the test fails.
+  - The exclusion filter `raphael.*` keeps the agent out of the trace.
+  - Runaway recursion now says "f() calling itself again and again. Is its base case missing?".
+  - `EdgeCaseTest`: 32 programs in `src/test/resources/edge/`, with expectations in `// key: value` headers.
+  - `SoakTest` is tagged `soak`, excluded by default, and run nightly by `.github/workflows/soak.yml`.
+  - JaCoCo 0.8.12: 78.5% lines, 70.5% branches.
+  - 150 tests pass.
+  - Known gap: Raphael killed during the half second while the program is starting (paused before the agent runs) can leave it waiting.
+- **Next:** ROADMAP Stage 3, Raphael catches its own errors (exception hierarchy, safety net, log file, autosave, settings dialog).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

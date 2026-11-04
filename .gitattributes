@@ -5,3 +5,5 @@
 *.md text eol=lf
 *.png binary
 *.ttf binary
+# An edge-case test program that must keep its Windows line endings and tabs.
+src/test/resources/edge/CrlfAndTabs.java -text

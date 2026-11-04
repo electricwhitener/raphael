@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import raphael.compile.CompileResult;
 import raphael.model.EndReason;
+import raphael.model.FrameSnapshot;
 import raphael.model.Names;
 import raphael.model.Snapshot;
 import raphael.model.Trace;
@@ -48,18 +49,34 @@ public class JdiTracer implements Tracer {
 
     // Java's own packages. We never pause inside them, and we don't draw their objects.
     private static final String[] JDK_PACKAGES = {"java.", "javax.", "sun.", "jdk."};
+    // Raphael's own classes that run inside the program (ParentWatch). The student's code has no
+    // package (SourceCompiler blanks the package line), so it can never be in here.
+    private static final String RAPHAEL_PACKAGE = "raphael.";
     private static final long POLL_MS = 100; // how often to look up from waiting, to see if stop was pressed
 
     private volatile Run current; // the run in progress, or null; volatile because the window's thread reads it
 
+    // When Raphael quits, Java runs this hook on its way out. It ends every program Raphael
+    // started, even one still starting up, whose Process isn't known until launch() returns.
+    // (If Raphael is killed outright, hooks don't run; ParentWatch covers that.)
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(
+                () -> ProcessHandle.current().children().forEach(ProcessHandle::destroyForcibly),
+                "end traced programs"));
+    }
+
     @Override
     public Trace trace(CompileResult program, String input) throws TraceException {
         VirtualMachine vm = launch(program);
+        Process process = vm.process();
         current = new Run(vm);
         try {
             return current.record(input);
         } finally {
             current = null;
+            if (process.isAlive()) { // whatever happened above, the program never runs on
+                process.destroyForcibly();
+            }
         }
     }
 
@@ -92,9 +109,17 @@ public class JdiTracer implements Tracer {
         LaunchingConnector connector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = connector.defaultArguments();
         arguments.get("main").setValue(program.mainClass());
-        // The quotes keep a folder name with spaces in one piece; UTF-8 keeps printed text intact.
-        arguments.get("options").setValue("-cp \"" + program.classDir() + "\""
-                + " -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8");
+        // The quotes keep a folder name with spaces in one piece; UTF-8 keeps printed text intact;
+        // -Xmx caps the memory the program may use; the agent ends it if Raphael is killed.
+        String options = "-cp \"" + program.classDir() + "\""
+                + " -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
+                + " -Xmx" + TraceLimits.MAX_MEMORY_MB + "m";
+        try {
+            options += " -javaagent:\"" + ParentWatch.jar() + "\"";
+        } catch (IOException e) {
+            // Without the agent the program still runs; only the "Raphael was killed" safety net is missing.
+        }
+        arguments.get("options").setValue(options);
         try {
             return connector.launch(arguments);
         } catch (IOException | IllegalConnectorArgumentsException | VMStartException e) {
@@ -135,6 +160,7 @@ public class JdiTracer implements Tracer {
             for (String prefix : JDK_PACKAGES) {
                 classLoaded.addClassExclusionFilter(prefix + "*");
             }
+            classLoaded.addClassExclusionFilter(RAPHAEL_PACKAGE + "*");
             classLoaded.enable();
             // ...and when an exception is thrown that nothing catches.
             ExceptionRequest crash = requests.createExceptionRequest(null, false, true);
@@ -222,10 +248,30 @@ public class JdiTracer implements Tracer {
             snapshots.add(reader.capture(thread, output::length, null));
             steps = snapshots.size();
             if (snapshots.size() >= TraceLimits.MAX_STEPS) {
-                end(EndReason.STEP_LIMIT, "Stopped after " + TraceLimits.MAX_STEPS
-                        + " steps. If it isn't an infinite loop, try a smaller input.");
+                String method = recursingMethod(snapshots.get(snapshots.size() - 1));
+                end(EndReason.STEP_LIMIT, method != null
+                        ? "Stopped after " + TraceLimits.MAX_STEPS + " steps, with " + method
+                                + " calling itself again and again. Is its base case missing?"
+                        : "Stopped after " + TraceLimits.MAX_STEPS
+                                + " steps. If it isn't an infinite loop, try a smaller input.");
                 stopProgram();
             }
+        }
+
+        // The method that fills the whole call stack, if one does: a recursion that never stops
+        // long before Java's own StackOverflowError, which only comes thousands of calls later.
+        private static String recursingMethod(Snapshot step) {
+            List<FrameSnapshot> frames = step.getFrames();
+            if (frames.size() < TraceLimits.MAX_FRAMES) {
+                return null;
+            }
+            String method = frames.get(0).getMethodName();
+            for (FrameSnapshot frame : frames) {
+                if (!frame.getMethodName().equals(method)) {
+                    return null;
+                }
+            }
+            return method + "()";
         }
 
         // An exception nothing catches: record it as the last step, then let the program finish

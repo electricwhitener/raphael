@@ -142,9 +142,10 @@ The status bar has a small key to these.
 ### Limits
 - The program must be one file with a `public static void main(String[] args)`.
 - A step is one line, so `for (...) sum += a[i];` written on one line runs as one step. Put one statement on each line to see each one.
-- A run stops after 2,000 steps, so keep inputs small. This is also what ends an infinite loop.
+- A run stops after 2,000 steps, so keep inputs small. This is also what ends an infinite loop, and a recursion with no base case, which Raphael names.
 - A program that does nothing for 5 seconds is stopped, which includes a long `Thread.sleep`.
 - Each step keeps at most 300 objects, 64 cells per array and the newest 32 method calls.
+- A program may use at most 256 MB of memory. More than that ends it with an `OutOfMemoryError`.
 - Java's other classes (`Scanner`, `Random`…) appear by name only.
 - A program with many objects can take a while to record (a 500-node list takes about 35 seconds). The status bar counts the steps, and **stop** keeps what's recorded.
 
@@ -206,6 +207,8 @@ Safety:
 - a stop button, with a live count of the steps recorded
 - output read on separate threads, so the program never blocks
 - an uncaught exception shown as the last step
+- at most 256 MB of memory for the program (`-Xmx256m`)
+- the program never outlives Raphael: a shutdown hook ends it when Raphael quits, and a small Java agent inside it (`ParentWatch`) ends it if Raphael is killed
 
 ![An arrow swinging from node 3 to node 1 during a reversal](docs/arrow-swing.png)
 
@@ -222,7 +225,8 @@ Safety:
 | `JdiTracer` | Runs the program with JDI: breakpoints, events, step limit, exceptions | `trace()`, `launch()`, `Run.handleEvents()`, `Run.classLoaded()`, `Run.lineReached()`, `Run.crashed()`, `stop()` |
 | `HeapReader` | Copies the paused program's memory into a `Snapshot` (BFS); asks a collection for its items | `capture()`, `readFrames()`, `readStatics()`, `readObject()`, `readCollection()`, `call()`, `toValue()` |
 | `OutputDrainer` | A thread that copies the program's printed output into a buffer | `run()` |
-| `TraceLimits` | Safety limits (2,000 steps, object and cell caps, timeout) | constants |
+| `TraceLimits` | Safety limits (2,000 steps, object and cell caps, timeout, memory) | constants |
+| `ParentWatch` | A Java agent inside the student's program that ends it if Raphael is killed; writes its own agent jar | `premain()`, `jar()` |
 | `TraceException` | Custom exception: the program couldn't be traced | — |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
@@ -289,10 +293,10 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
 | Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
-| Exception handling | `TraceException`; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
-| Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
+| Exception handling | `TraceException`; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
+| Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
-| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
+| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
 | Records and enums | `CompileResult`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
@@ -301,10 +305,12 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 ## Tests
 
-`mvn test` runs 116 JUnit 5 tests, on Windows, macOS and Linux in CI:
+`mvn test` runs 150 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
 - `ExamplesTest`: every program in the examples menu runs to its expected end.
+- `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
+- `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
-- `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case, pressing stop, Java's collections, an enum's name, and a student's own collection class.
+- `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, and no program left running after Raphael quits or is killed.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
 - `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, a cycle that doesn't hang, and a count field found on a Turkish-language computer.
 - `IndexUsageTest`: which variables index which arrays, reads vs writes, `x.keys[i]` and `keys[j + T]`, constants and comments.

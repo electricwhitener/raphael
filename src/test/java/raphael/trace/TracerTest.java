@@ -2,9 +2,16 @@ package raphael.trace;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
@@ -204,6 +211,7 @@ class TracerTest {
                     }
                     """, "");
             assertEquals(TraceLimits.MAX_STEPS, trace.size());
+            assertTrue(trace.getEndMessage().contains("f() calling itself"), trace.getEndMessage());
             assertTrue(trace.get(trace.size() - 1).getFrames().size() <= TraceLimits.MAX_FRAMES);
         });
     }
@@ -315,5 +323,44 @@ class TracerTest {
         ArrayNode list = listAtTheEnd("list.add(4); list.remove(0);");
         assertEquals(0, list.getLength());
         assertTrue(list.getElements().isEmpty());
+    }
+
+    // The program must never outlive Raphael, however Raphael ends. TraceAndWait plays Raphael.
+    @Test
+    void theProgramEndsWhenRaphaelIsKilled() throws Exception {
+        assertNothingLeftBehind("kill"); // like Task Manager's "End task": no code of Raphael's runs
+    }
+
+    @Test
+    void theProgramEndsWhenRaphaelQuits() throws Exception {
+        assertNothingLeftBehind("exit"); // a normal quit, in the middle of a run
+    }
+
+    private void assertNothingLeftBehind(String how) throws Exception {
+        String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        Process raphael = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"),
+                TraceAndWait.class.getName(), how).redirectErrorStream(true).start();
+        long pid = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+            BufferedReader out = new BufferedReader(new InputStreamReader(raphael.getInputStream(), StandardCharsets.UTF_8));
+            for (String line = out.readLine(); line != null; line = out.readLine()) {
+                if (line.startsWith("program ")) {
+                    return Long.parseLong(line.substring("program ".length()).trim());
+                }
+            }
+            return fail("the stand-in for Raphael ended without starting the program");
+        });
+        if (how.equals("kill")) {
+            raphael.destroyForcibly();
+        }
+        assertTrue(raphael.waitFor(10, TimeUnit.SECONDS));
+        ProcessHandle program = ProcessHandle.of(pid).orElse(null);
+        if (program != null) {
+            try {
+                program.onExit().get(4, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                program.destroyForcibly();
+                fail("the traced program was still running after Raphael ended (" + how + ")");
+            }
+        }
     }
 }

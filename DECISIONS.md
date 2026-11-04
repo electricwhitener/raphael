@@ -450,3 +450,33 @@ Five things:
 
 Checking how it looks on a high-resolution screen needs a real screen, which CI machines don't have. A real launcher instead of `Run Raphael.bat` comes from `jpackage` in Stage 5. Both happen there.
 
+## Stage 2: Bulletproof tracing
+
+- How much memory can the student's program use?
+
+256 MB, set with `-Xmx256m` when its JVM starts (`TraceLimits.MAX_MEMORY_MB`). Without a cap, a program that allocates in a loop could use up a quarter of the computer's memory, which is Java's default. With it, the program ends with an `OutOfMemoryError`, shown like any other crash. The edge-case `OutOfMemory` checks this.
+
+- How do we make sure the program never keeps running after Raphael?
+
+In two layers, because Raphael can end in two ways.
+
+When Raphael quits normally, Java runs its *shutdown hooks* on the way out: threads registered with `Runtime.addShutdownHook`. `JdiTracer` registers one, once, that ends every child process Raphael started. At first I registered a hook for each run, but a test caught a gap: if Raphael quit while the program was still starting up, the hook wasn't there yet, and the program stayed frozen forever, waiting for a debugger that was gone. Ending *every* child closes that gap.
+
+When Raphael is killed outright (Task Manager's "End task", or a crash), none of its code runs, hooks included. So the program carries its own guard. `ParentWatch` is a *Java agent*: a class that Java runs before `main`, given with `-javaagent:file.jar`. Its `premain()` asks `ProcessHandle` to tell it when its parent process (Raphael) ends, and then halts the program. An agent has to be in a jar whose manifest names it, so `ParentWatch.jar()` writes that small jar into the temp folder with a `JarOutputStream`. Raphael's own classes are excluded from tracing (`raphael.*`), so the agent never shows up as steps. To check the agent really matters, I switched it off: the "killed" test failed. Switched back on, it passes.
+
+One gap is left. In the half second while the program's JVM is starting, it's paused before the agent has run. If Raphael is killed at exactly that moment, the program stays waiting. That's rare, and it takes no CPU.
+
+- What did the edge-case programs find?
+
+`EdgeCaseTest` runs the 32 programs in `src/test/resources/edge/`. Each says at its top what must happen, in comments like `// expect: EXCEPTION` and `// output: total 200`, and every step is also laid out and drawn. Raphael already handled every case: threads, `System.exit`, unicode names, cycles, nulls, a 10,000-cell array, `Integer` caching, running out of input or memory, a 3,000-character line, Windows line endings, a `package` line, a long sleep.
+
+One message was wrong, though. A recursion with no base case reaches the 2,000-step limit long before Java's `StackOverflowError`, and the message said "If it isn't an infinite loop, try a smaller input", which sends a student the wrong way. Now, if the whole call stack is one method calling itself, it says "Stopped after 2000 steps, with down() calling itself again and again. Is its base case missing?"
+
+- What is the soak test?
+
+The 1-in-60 timing bug from version 1 only showed up by running the same programs again and again. `SoakTest` does that for good: every example 100 times, and every run must take exactly the same lines and print the same output. That takes about 10 minutes per system, too slow for every push. So it's tagged `soak`, a normal `mvn test` leaves it out, and `.github/workflows/soak.yml` runs it every night on all three systems.
+
+- What is coverage?
+
+JaCoCo, a Maven plugin, watches the tests run and records which lines and branches of Raphael they used. It writes a report to `target/site/jacoco/index.html`. Overall it's 78.5% of lines and 70.5% of branches. The engine is at 89–99% (compile, detect, model, render, trace). The window is at 58%, because most of it reacts to clicks.
+

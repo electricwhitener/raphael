@@ -9,6 +9,7 @@ public final class TraceLimits {
     public static final int MAX_ARRAY_CELLS = 64;      // cells kept per array
     public static final int MAX_FRAMES = 32;           // newest method calls read per step (deep recursion stays quick)
     public static final long EVENT_TIMEOUT_MS = 5000;  // longest wait for the program between two steps
+    public static final int MAX_MEMORY_MB = 256;       // memory the program may use (-Xmx), so it can't use up the computer's
 
     private TraceLimits() {
     }

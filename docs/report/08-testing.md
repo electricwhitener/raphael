@@ -1,9 +1,9 @@
 # 8. Quality and testing
 
-*Sections 8.3, 8.5 and 8.6 are written as ROADMAP stages 2 and 4 are done.*
+*Section 8.6 is written when ROADMAP stage 4 is done.*
 
 ## 8.1 The test suite
-Raphael has 116 JUnit 5 tests (version 1 had 107). Each package is tested on its own:
+Raphael has 150 JUnit 5 tests in its normal run (version 1 had 107), plus a separate soak test (8.4). Each package is tested on its own:
 - **Compiling:** errors on the right line, file rules, invisible characters.
 - **Tracing:** a second JVM, with the exact line path of loops, the step limit, crashes, input, collections and stop.
 - **Detection:** snapshots built by hand, with no JVM.
@@ -21,6 +21,8 @@ Raphael is written in Java, which runs on every system, but a program can still 
 | macOS (macos-latest) | 116 | 0 | 0 |
 | Linux (ubuntu-latest) | 116 | 0 | 0 |
 
+(At stage 1. Every later push runs the whole suite on all three.)
+
 Reviewing the code for system-dependent behaviour found five problems, each now fixed and tested:
 
 | Problem | Effect | Fix |
@@ -36,13 +38,50 @@ The two Mac tests caught real mistakes during development:
 - One description still said "Ctrl".
 
 ## 8.3 Edge cases
-*Stage 2.*
+A student can paste anything, so Raphael is tested against programs chosen to be awkward. Each of the 32 programs in `src/test/resources/edge/` states at its top what must happen:
+
+```java
+// expect: EXCEPTION
+// input: 1 2
+// message: NoSuchElementException
+```
+
+`EdgeCaseTest`, a JUnit parameterised test, runs each one and checks those statements. It then lays out and draws every step, as the window would, so a program that crashed the drawing would fail too.
+
+| Area | Programs |
+|---|---|
+| Ending | empty `main`; `System.exit` mid-run; a thread that outlives `main`; an 8-second sleep (timeout); infinite loops with and without output; 1 MB of output |
+| Errors | recursion with no base case; running out of memory (256 MB cap); `Scanner` running out of input; wrong input type; caught exceptions, `finally` and multi-catch; a compile error on the right line |
+| Language features | generics; lambdas and streams; inner, anonymous and nested classes; interfaces with default and static methods; records and enums with a switch expression; `var`, varargs, text blocks and pattern matching; static initialisers; `printf` |
+| Data | a 10,000-cell array and a 300 × 300 grid; cycles; nulls everywhere; `Integer` caching; `NaN`, infinity, overflow and `Long.MAX_VALUE` |
+| Text | unicode names and emoji; a 3,000-character line; Windows line endings and tabs; a `package` line and several top-level classes |
+| Threads | two threads updating a shared counter |
+
+All 32 now pass. Raphael already behaved correctly on every one. The only change was a clearer message: recursion with no base case reaches the 2,000-step limit long before Java's `StackOverflowError`, so Raphael now says which method keeps calling itself and asks whether its base case is missing.
+
+**Cleaning up after itself.** Two further tests check that the student's program never outlives Raphael. A helper program plays the part of Raphael and is ended in two ways:
+- **Quitting normally:** a shutdown hook ends every program Raphael started.
+- **Killed outright:** shutdown hooks don't run, so a small Java agent inside the student's program (`ParentWatch`) watches Raphael's process and halts the program when it disappears.
+
+With the agent switched off, the second test fails, which shows it is what makes the difference.
 
 ## 8.4 Soak testing
-Running the same programs many times caught a timing bug in version 1: about 1 run in 60 recorded no steps. The program's JVM was released twice, so it sometimes ran on before its breakpoints were set. It was fixed on 2026-11-01, and 150 of 150 runs were then right. Stage 2 adds this kind of repeated run to CI.
+Running the same programs many times caught a timing bug in version 1: about 1 run in 60 recorded no steps. The program's JVM was released twice, so it sometimes ran on before its breakpoints were set. It was fixed on 2026-11-01, and 150 of 150 runs were then right. Since stage 2, `SoakTest` repeats this for good. It runs every example 100 times, and every run must take exactly the same lines, print the same output and end the same way. It takes about 10 minutes per system, so it is left out of the normal test run. A separate CI job (`soak.yml`) runs it every night on Windows, macOS and Linux.
 
 ## 8.5 Coverage
-*Stage 2.*
+JaCoCo, a Maven plugin, records which lines and branches of Raphael the tests execute.
+
+| Package | Lines covered |
+|---|---|
+| `compile` | 99% |
+| `model` | 97% |
+| `detect` | 95% |
+| `trace` | 93% |
+| `render` | 89% |
+| `ui` | 58% |
+| **All** | **78.5%** of lines, **70.5%** of branches |
+
+The engine, from compiling to drawing, is almost fully exercised. The window code is lower, because much of it only runs in response to clicks and menus.
 
 ## 8.6 Performance
 *Stage 4.*

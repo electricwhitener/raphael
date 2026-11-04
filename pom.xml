@@ -13,6 +13,9 @@
         <!-- Compile for Java 21 -->
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Tests tagged "soak" (hundreds of repeated runs) are left out of a normal "mvn test".
+             Run them with: mvn test -Dgroups=soak -DexcludedGroups= -->
+        <excludedGroups>soak</excludedGroups>
     </properties>
 
     <dependencies>
@@ -44,6 +47,28 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+            </plugin>
+            <!-- JaCoCo measures which lines the tests run (coverage). After "mvn test", the report
+                 is in target/site/jacoco/index.html -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>watch-the-tests</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>write-the-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <!-- Lets "mvn exec:java" start the app -->
             <plugin>

@@ -108,7 +108,7 @@ The user now wants Raphael to be **a real, production-grade product**:
 - **Launchers:** moved to Stage 5. `jpackage` makes a native launcher for each system, which replaces `Run Raphael.bat` and makes WSL optional.
 
 ### 2. Bulletproof tracing
-- **The debuggee:**
+- **The debuggee (done, 2026-11-04):**
   - a memory cap (`-Xmx256m`, configurable)
   - a shutdown hook and a kill on quit, so no stray JVMs are left behind
   - kill and clean up if Raphael crashes mid-run
