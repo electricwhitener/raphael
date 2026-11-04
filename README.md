@@ -1,5 +1,7 @@
 # Raphael
 
+[![tests](https://github.com/electricwhitener/raphael/actions/workflows/ci.yml/badge.svg)](https://github.com/electricwhitener/raphael/actions/workflows/ci.yml)
+
 Raphael shows data structures changing while a Java program runs. Type, paste or open a single-file Java program and press **run**. Raphael plays it back line by line and draws its arrays, linked lists, trees and objects, so you can see what the code does. You can step forward and back through the whole run.
 
 It was built as an object-oriented programming course project in Java. [docs/OOP-HIGHLIGHTS.md](docs/OOP-HIGHLIGHTS.md) shows where each OOP concept is used in its code.
@@ -61,7 +63,7 @@ A B-tree is drawn the way textbooks draw it: each node is a row of keys (faded p
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
 
 ## Getting started
-Raphael has been tested on Ubuntu 24.04 inside WSL 2 on Windows. It should work anywhere JDK 21 does, because it's plain Java, but other systems haven't been tested.
+Every push runs the full test suite on fresh Windows, macOS and Linux machines (GitHub Actions; the badge above shows the result). The app itself has been used day to day on Ubuntu 24.04 inside WSL 2 on Windows. Installers for each system come in a later stage (see [ROADMAP.md](ROADMAP.md)).
 
 **On Linux or WSL:**
 
@@ -102,7 +104,7 @@ You should see the window open with the BSTInsert example loaded. Press **run**,
 | BankAccounts | OOP: an interface, an abstract class, inheritance, polymorphism and a caught exception |
 
 ### Keyboard shortcuts
-**keys** (or F1) shows these in the app.
+**keys** (or F1) shows these in the app. On a Mac, use Cmd where this table says Ctrl, and Option where it says Alt; the app shows the Mac names there.
 
 | Keys | Action |
 |---|---|
@@ -266,6 +268,8 @@ Safety:
 | `ControlsBar` | Step buttons, skip call and finish call, slider, play and speed; a step made by hand pauses playing | `stepChanged()`, `togglePlay()`, `play()` |
 | `CallStackPanel`, `LocalsPanel`, `ConsolePanel` | Running methods; variables (changed ones tinted); output (new output tinted) and a stdin box that appears when needed | `stepChanged()`, `showInput()` |
 | `Section` | Terminal-style section headers and thin borders | `header()`, `wrap()`, `hairline()` |
+| `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
+| `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | **resources/examples/** | The nine example programs in the examples menu | — |
 | **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
 
@@ -284,11 +288,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `TraceException` extends `Exception` | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
-| Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors | Same name, different parameters. |
-| Exception handling | `TraceException`; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
+| Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
+| Exception handling | `TraceException`; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
-| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
+| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
 | Records and enums | `CompileResult`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
@@ -297,12 +301,12 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 ## Tests
 
-`mvn test` runs 107 JUnit 5 tests:
+`mvn test` runs 116 JUnit 5 tests, on Windows, macOS and Linux in CI:
 - `ExamplesTest`: every program in the examples menu runs to its expected end.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
 - `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case, pressing stop, Java's collections, an enum's name, and a student's own collection class.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
-- `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, and a cycle that doesn't hang.
+- `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, a cycle that doesn't hang, and a count field found on a Turkish-language computer.
 - `IndexUsageTest`: which variables index which arrays, reads vs writes, `x.keys[i]` and `keys[j + T]`, constants and comments.
 - `SceneBuilderTest`:
   - list nodes keep their places across a reversal
@@ -331,6 +335,8 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `JavaTokensTest`: each kind of colour, words inside comments and strings, unfinished text while typing, very long strings.
 - `ControlsBarTest`: a step made by hand pauses playing.
 - `MainWindowTest`: no panel around the picture takes the shortcut keys for itself.
+- `ShortcutsTest`: Ctrl becomes Cmd and Alt becomes Option on a Mac, in the keys and in the text; the keys screen stays in two columns.
+- `SystemThemeTest`: the dark-mode answers of Windows, macOS and Linux are read correctly, and asking never fails.
 
 ## Project documents and scripts
 
