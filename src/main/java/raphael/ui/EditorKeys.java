@@ -3,10 +3,10 @@ package raphael.ui;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.UnaryOperator;
 import javax.swing.AbstractAction;
 import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
 import javax.swing.text.BadLocationException;
 
 // The small things a code editor does for you: Enter keeps the indentation, Tab and Shift+Tab
@@ -33,7 +33,7 @@ public class EditorKeys {
     }
 
     private void bind(String key, Runnable action) {
-        editor.getInputMap().put(KeyStroke.getKeyStroke(key), key);
+        editor.getInputMap().put(Shortcuts.key(key), key);
         editor.getActionMap().put(key, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -108,8 +108,8 @@ public class EditorKeys {
         if (text == null || text.isEmpty()) {
             return false;
         }
-        String all = editor.getText().toLowerCase();
-        String wanted = text.toLowerCase();
+        String all = editor.getText().toLowerCase(Locale.ROOT);
+        String wanted = text.toLowerCase(Locale.ROOT);
         int found = all.indexOf(wanted, editor.getSelectionEnd());
         if (found < 0) {
             found = all.indexOf(wanted);

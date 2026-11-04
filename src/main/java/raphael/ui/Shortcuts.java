@@ -1,0 +1,51 @@
+package raphael.ui;
+
+import java.awt.event.InputEvent;
+import java.util.Locale;
+
+import javax.swing.KeyStroke;
+
+// The keys shortcuts use on this computer. Everywhere but macOS they use Ctrl. A Mac uses Cmd
+// (Swing calls it "meta") for the same shortcuts, so Cmd+S saves there, as Mac users expect.
+// Shortcuts are written once, the Windows way ("control S"), and translated here.
+// OOP: a utility class (static methods, private constructor), with overloading: key(spec) and
+// key(spec, mac) share a name and differ in their parameters.
+public final class Shortcuts {
+
+    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("mac");
+
+    private Shortcuts() {
+    }
+
+    public static boolean isMac() {
+        return MAC;
+    }
+
+    // "control S" → the KeyStroke for Ctrl+S here, or Cmd+S on a Mac.
+    public static KeyStroke key(String spec) {
+        return key(spec, MAC);
+    }
+
+    static KeyStroke key(String spec, boolean mac) {
+        return KeyStroke.getKeyStroke(mac ? spec.replace("control", "meta") : spec);
+    }
+
+    // Text shown to the user. On a Mac, "Ctrl+S" becomes "Cmd+S" ("ctrl+s" becomes "cmd+s"), and
+    // "Alt" becomes "Option", which is what the Mac keyboard calls that key.
+    public static String label(String text) {
+        return label(text, MAC);
+    }
+
+    static String label(String text, boolean mac) {
+        if (!mac) {
+            return text;
+        }
+        return text.replace("Ctrl", "Cmd").replace("ctrl", "cmd").replace("Alt", "Option");
+    }
+
+    // Whether the shortcut key is held during a mouse event, for Ctrl + mouse wheel. A Mac
+    // accepts both Cmd and Ctrl.
+    public static boolean isDown(InputEvent e) {
+        return e.isControlDown() || (MAC && e.isMetaDown());
+    }
+}

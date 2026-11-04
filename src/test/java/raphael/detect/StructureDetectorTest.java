@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import raphael.model.ArrayNode;
@@ -137,14 +138,19 @@ class StructureDetectorTest {
 
     // A B-tree node: an int[] of keys, a Node[] of children, and n (how many keys are in use).
     private static ObjectNode bnode(long id, long keys, long children, int n) {
+        return bnode(id, keys, children, n, "n");
+    }
+
+    // The same, with the count field called countName instead of n.
+    private static ObjectNode bnode(long id, long keys, long children, int n, String countName) {
         Map<String, Value> fields = new LinkedHashMap<>();
         Map<String, String> types = new LinkedHashMap<>();
         fields.put("keys", ref(keys));
         types.put("keys", "int[]");
         fields.put("children", ref(children));
         types.put("children", NODE + "[]");
-        fields.put("n", new PrimitiveValue(String.valueOf(n)));
-        types.put("n", "int");
+        fields.put(countName, new PrimitiveValue(String.valueOf(n)));
+        types.put(countName, "int");
         return new ObjectNode(id, NODE, fields, types);
     }
 
@@ -169,6 +175,22 @@ class StructureDetectorTest {
         assertEquals(List.of(2L, 3L, -1L, -1L), tree.getChildren(1));
         assertEquals(10, tree.getKeysArray(1).getId());
         assertEquals(2, tree.getUsedKeys(2));
+    }
+
+    // In Turkish, "SIZE".toLowerCase() is "sıze" (a dotless ı), so a check that used the
+    // computer's language would miss the count field there and show every key as used.
+    @Test
+    void countFieldIsFoundWhateverTheComputersLanguage() {
+        Locale before = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+        try {
+            List<Structure> found = detector.detect(snapshot(
+                    bnode(1, 10, 11, 2, "SIZE"), intArray(10, 3, 5, 7), refArray(11, 0, 0, 0, 0)));
+            MultiwayTreeStructure tree = assertInstanceOf(MultiwayTreeStructure.class, found.get(0));
+            assertEquals(2, tree.getUsedKeys(1));
+        } finally {
+            Locale.setDefault(before);
+        }
     }
 
     @Test

@@ -10,6 +10,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import raphael.render.Style;
 import raphael.ui.MainWindow;
+import raphael.ui.SystemTheme;
 
 // Starts Raphael: sets up the look, then opens the main window on Swing's event dispatch thread
 // (the one thread that may touch Swing components).
@@ -23,9 +24,10 @@ public class App {
         SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
     }
 
-    // The look the user last chose.
+    // The look the user last chose. The first time, before they have chosen, match the computer.
     public static void setupLook() {
-        setupLook(SETTINGS.getBoolean("dark", false));
+        String chosen = SETTINGS.get("dark", null);
+        setupLook(chosen != null ? Boolean.parseBoolean(chosen) : SystemTheme.isDark());
         Style.setCodeSize(SETTINGS.getInt("textSize", Style.DEFAULT_CODE_SIZE));
     }
 

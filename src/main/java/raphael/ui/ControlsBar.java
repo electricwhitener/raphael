@@ -156,7 +156,7 @@ public class ControlsBar extends JPanel implements TraceListener {
     // A flat button that doesn't take the keyboard focus, so the shortcut keys keep working.
     private static JButton button(String text, String tip) {
         JButton button = new JButton(text);
-        button.setToolTipText(tip);
+        button.setToolTipText(Shortcuts.label(tip));
         button.setFocusable(false);
         button.putClientProperty("JButton.buttonType", "toolBarButton"); // flat, like the toolbar's
         return button;

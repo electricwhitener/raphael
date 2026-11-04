@@ -6,6 +6,7 @@ import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.font.TextAttribute;
+import java.util.Locale;
 import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
@@ -26,7 +27,7 @@ public final class Section {
     }
 
     public static JLabel header(String text) {
-        JLabel label = new JLabel(text.toUpperCase()) {
+        JLabel label = new JLabel(text.toUpperCase(Locale.ROOT)) {
             @Override
             public Color getForeground() {
                 return Style.MUTED;
