@@ -7,7 +7,7 @@
 3. Records a snapshot of variables and objects at each step.
 4. Draws arrays, linked lists and binary trees in a Swing window, with step forward/back and animation.
 
-The full spec and stage order are in [PLAN.md](PLAN.md). Follow the stages in order and don't jump ahead.
+Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raphael into an open-source product. Its stages are in [ROADMAP.md](ROADMAP.md): follow them in order and don't jump ahead.
 
 ## Progress
 - **Stage 0 (Setup): done, 2026-10-17.** JDK 21 and Maven 3.8.7 are installed in WSL. `pom.xml` exists (JUnit 5, compiler, surefire and exec plugins). `App.java` prints Hello World. VS Code is connected to WSL with the Java extensions. The Stage 0 entry is in `DECISIONS.md`.
@@ -47,12 +47,21 @@ The full spec and stage order are in [PLAN.md](PLAN.md). Follow the stages in or
   - Fixed a timing bug from Stage 2: `JdiTracer` released the paused JVM twice, so about 1 run in 60 recorded 0 steps. 150 of 150 runs were right after the fix.
   - 107 tests pass.
 - **Shipping: 2026-11-01.** BankAccounts example added (9 examples). `README.md` rewritten for anyone who finds the repo. `docs/OOP-HIGHLIGHTS.md` is the guide for showing the OOP to the teacher. Pushed to GitHub: `electricwhitener/raphael` (private).
-- **Next:** the user rehearses the demo.
+- **Version 2, the product: started 2026-11-04.** The teacher liked the submission and asked for more Java (exceptions, files), edge-case testing and a detailed report.
+  - The user's decisions:
+    - production-grade on Windows, macOS and Linux
+    - a desktop app first and IDE plugins later
+    - open source
+    - Java only for now
+    - beat the competitors, mainly JavaWiz
+  - All of it is in ROADMAP.md.
+  - **Stage 0 (set up): done, 2026-11-04.** ROADMAP.md, this file, a DECISIONS.md entry, and the report skeleton in `docs/report/` with chapters 1–5 drafted.
+- **Next:** ROADMAP Stage 1, works on any machine (CI on three operating systems, platform fixes).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
-- Deadline: finish by Sunday 2026-11-01.
-- For the viva they must explain how the project works, which file does what (and its key methods), and where each OOP concept is used. They don't need to explain every line.
+- The course submission is done (2026-11-01). There's no deadline now.
+- They want Raphael to be a real product, and they'll write a detailed report about it for their department and perhaps the college magazine. For that they must be able to explain how it works, which file does what (and its key methods), and where each OOP and Java concept is used. They don't need to explain every line.
 
 ## How to explain things
 - **Architecture, not lines.** Explain what each class is for, its key methods and which OOP concept it shows. Skip line-by-line walkthroughs unless asked.
@@ -62,14 +71,14 @@ The full spec and stage order are in [PLAN.md](PLAN.md). Follow the stages in or
 - **Keep replies concise.** No recap summaries, and don't repeat the same point in different sections.
 
 ## How to work here (from 2026-10-26)
-- **Claude writes the code**, stage by stage in PLAN.md order, without stopping between stages. There are no mini-exercises, and PLAN.md's "How each stage works" no longer applies.
-- **After each stage:** `mvn test` passes, the Progress section is updated, and Claude posts a short "for your teacher" note in chat (new files, key methods, OOP concepts).
+- **Claude writes the code**, stage by stage in ROADMAP.md order, without stopping between stages. There are no mini-exercises, and PLAN.md's "How each stage works" no longer applies.
+- **After each stage:** `mvn test` passes, the Progress section and the report chapter in `docs/report/` are updated, and Claude posts a short "for your teacher" note in chat (new files, key methods, OOP concepts).
 - **Decision log:** Claude writes each stage's `DECISIONS.md` entry in the user's style: their question headings, short plain paragraphs, no repetition and no extra sections.
 - **README.md is the teacher-facing guide:** how it works (the pipeline), a file map (file → job → key methods) and an OOP map (concept → where). Keep it up to date.
 - **Java style is mostly classic:** private fields with constructors and getters. Use records only for tiny data holders, and no sealed types or pattern-matching switch.
 - **OOP tags:** each class that shows an OOP concept starts with a short `// OOP: ...` comment.
-- **Dependencies:** only the JDK, FlatLaf and JUnit 5 (tests). Ask before adding anything else. The JetBrains Mono NL font files in `src/main/resources/fonts/` (SIL Open Font License, `OFL.txt` beside them) are a resource, not a code dependency.
-- **Explainable only:** nothing goes in that the user can't explain to their teacher. Prefer changes with no new classes, and explain before doing.
+- **Dependencies (relaxed 2026-11-04):** new libraries and build plugins are allowed. Before adding one, name it and say why. Today the app uses the JDK and FlatLaf, and the tests use JUnit 5. The JetBrains Mono NL font files in `src/main/resources/fonts/` (SIL Open Font License, `OFL.txt` beside them) are a resource, not a code dependency.
+- **Explain before doing:** explain each stage (what, why, which concepts) before building it, so the user can write about it. New classes are fine (relaxed 2026-11-04).
 - **The look (decided 2026-10-26, dark mode added 2026-11-01):** a plain terminal feel, white or dark. All colours, sizes, fonts and timings go in `render/Style`.
   - One monospace font (JetBrains Mono NL, which ships inside the app), square thin lines, lowercase terminal-style labels.
   - The editor's code is coloured as in an IDE (the user asked, 2026-10-31). Those colours avoid the blue, amber and red below.

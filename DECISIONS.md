@@ -397,3 +397,37 @@ The course is about OOP, but no example in the menu used it. BankAccounts has an
 
 The source, tests, docs, examples and scripts. The build output (`target/`, `dist/`) isn't, because anyone can rebuild it with `scripts/build-app.sh`. `.gitattributes` keeps `.bat` files with Windows line endings and `.sh` files with Linux ones.
 
+## Version 2: from course project to product
+
+- Why keep going after the submission?
+
+My teacher liked Raphael and asked for more: more Java (exception handling, file handling, catching errors), testing the edge cases, and a detailed report. I decided to go further and make it a real product that anyone can download. It should have no bugs, work on any machine and not just my laptop, and do better than the tools that already exist. [ROADMAP.md](ROADMAP.md) lists the stages.
+
+- Who else does this?
+
+I looked at the tools a student or teacher would use instead:
+- **JavaWiz** is the closest. It comes from JKU Linz, has won awards and was presented at a conference in 2025. It records the run so you can step back, and it has ten synchronised views: a memory diagram, a trace table, a flowchart, a sequence diagram and more. But it runs inside VS Code or IntelliJ and needs JDK 25 or newer installed.
+- **Python Tutor** is a website that covers five languages. It stops at 1,000 steps and draws every structure as plain boxes and arrows.
+- **jGRASP** recognises lists, trees and hash tables, but it's an older IDE whose viewers you open by hand.
+- **VisuAlgo** has polished animations, but only of its own built-in algorithms.
+
+Raphael's place is: paste any Java program, with no setup, and get a textbook-quality animated picture, plus a plain explanation when something goes wrong. B-trees, grids, `i`/`j` markers and spring animation are things none of them do. JavaWiz's views are worth having too, so stage 9 adds them, with each one linked to the others.
+
+- Which parts are ours?
+
+All the logic is ours: the spring animation, the layouts, recognising the structures and reading the code for indexes. The JDK gives the building blocks: the compiler, the debugger interface, Java 2D for drawing a line or a letter, and Swing for the window. FlatLaf, the only outside library, styles the buttons and menus. No animation library, layout library or online service is used.
+
+- Why a desktop app, and why only Java?
+
+A desktop app keeps everything built so far, works offline and costs nothing to run. A website would mean rewriting the window and drawing in JavaScript, and running strangers' code on a server. IDE plugins come later. IntelliJ is built with Swing too, so Raphael's own panels can sit inside it.
+
+Other languages are possible later, because only three files depend on Java's tools (`SourceCompiler`, `JdiTracer`, `HeapReader`). Each language needs its own tracer, though. C/C++ would help my university most, but it's the hardest. So this version stays Java only.
+
+- Why open source?
+
+Teachers and universities trust a tool whose code they can read, and others can help improve it. JavaWiz is open source too. The licence gets chosen at the first public release.
+
+- What changed in how we work?
+
+The limits from the course are relaxed: new classes and new libraries are allowed, as long as each one is explained first. The report is written alongside the work in `docs/report/`, one chapter per file, so each stage adds its own chapter.
+
