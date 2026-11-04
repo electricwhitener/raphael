@@ -31,7 +31,6 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.event.DocumentEvent;
@@ -124,10 +123,11 @@ public class CodePanel extends JPanel implements TraceListener {
         editor.getDocument().addUndoableEditListener(undo);
         bindEditKey("control Z", this::undo);
         bindEditKey("control Y", this::redo);
+        bindEditKey("shift control Z", this::redo); // the usual redo on a Mac, and in many editors
         keys = new EditorKeys(editor);
         keys.install();
         editor.addMouseWheelListener(e -> {
-            if (e.isControlDown()) {
+            if (Shortcuts.isDown(e)) {
                 onTextSizeWheel.accept(e.getWheelRotation() < 0 ? 1 : -1);
             } else { // let the scroll pane scroll as usual
                 scroll.dispatchEvent(SwingUtilities.convertMouseEvent(editor, e, scroll));
@@ -272,7 +272,7 @@ public class CodePanel extends JPanel implements TraceListener {
     }
 
     private void bindEditKey(String key, Runnable action) {
-        editor.getInputMap().put(KeyStroke.getKeyStroke(key), key);
+        editor.getInputMap().put(Shortcuts.key(key), key);
         editor.getActionMap().put(key, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {

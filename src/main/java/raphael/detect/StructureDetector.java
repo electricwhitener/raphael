@@ -8,6 +8,7 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import raphael.model.ArrayNode;
@@ -131,10 +132,10 @@ public class StructureDetector {
         if (links.size() == 2) {
             String a = links.get(0);
             String b = links.get(1);
-            if (a.toLowerCase().contains("prev") && b.toLowerCase().contains("next")) {
+            if (a.toLowerCase(Locale.ROOT).contains("prev") && b.toLowerCase(Locale.ROOT).contains("next")) {
                 return new ClassShape(Shape.DOUBLY_LIST, b, a);
             }
-            if (a.toLowerCase().contains("next") && b.toLowerCase().contains("prev")) {
+            if (a.toLowerCase(Locale.ROOT).contains("next") && b.toLowerCase(Locale.ROOT).contains("prev")) {
                 return new ClassShape(Shape.DOUBLY_LIST, a, b);
             }
             return new ClassShape(Shape.TREE, a, b);
@@ -154,7 +155,7 @@ public class StructureDetector {
                 children = children == null ? field : children;
             } else if (type.endsWith("[]") && !type.endsWith("[][]")) {
                 keys = keys == null ? field : keys;
-            } else if (type.equals("int") && COUNT_NAMES.contains(field.toLowerCase())) {
+            } else if (type.equals("int") && COUNT_NAMES.contains(field.toLowerCase(Locale.ROOT))) {
                 count = count == null ? field : count;
             }
         }

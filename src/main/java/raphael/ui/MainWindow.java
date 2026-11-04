@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -42,7 +43,6 @@ import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.JToolBar;
-import javax.swing.KeyStroke;
 import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.JTextComponent;
@@ -274,7 +274,7 @@ public class MainWindow extends JFrame {
         Style.setCodeSize(Style.CODE_FONT.getSize() + change);
         App.SETTINGS.putInt("textSize", Style.CODE_FONT.getSize());
         applyTextSize();
-        say("text size " + Style.CODE_FONT.getSize() + " · ctrl+0 for normal", Style.INK_SOFT);
+        say("text size " + Style.CODE_FONT.getSize() + Shortcuts.label(" · ctrl+0 for normal"), Style.INK_SOFT);
     }
 
     private void resetView() {
@@ -320,12 +320,38 @@ public class MainWindow extends JFrame {
     }
 
     private void showHelp() {
-        JTextArea text = new JTextArea(HELP);
+        JTextArea text = new JTextArea(helpText(Shortcuts.isMac()));
         text.setEditable(false);
         text.setFont(Style.UI_FONT);
         text.setBackground(Style.BACKGROUND);
         text.setForeground(Style.INK);
         JOptionPane.showMessageDialog(this, text, "raphael · keys", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    // HELP with this computer's key names. On a Mac "Ctrl" becomes "Cmd" and "Alt" becomes
+    // "Option", which changes their length, so the lines are laid out again: the keys, then the
+    // descriptions in one column just past the longest keys.
+    static String helpText(boolean mac) {
+        String[] lines = HELP.split("\n");
+        String[][] rows = new String[lines.length][]; // the keys and what they do, or null
+        int width = 0;
+        for (int i = 0; i < lines.length; i++) {
+            String[] parts = lines[i].split("(?<=\\S)\\s{2,}", 2);
+            if (lines[i].startsWith("  ") && parts.length == 2) {
+                rows[i] = new String[] {Shortcuts.label(parts[0], mac), Shortcuts.label(parts[1], mac)};
+                width = Math.max(width, rows[i][0].length() + 2);
+            }
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (rows[i] != null) {
+                out.append(rows[i][0]).append(" ".repeat(width - rows[i][0].length())).append(rows[i][1]);
+            } else {
+                out.append(Shortcuts.label(lines[i], mac));
+            }
+            out.append('\n');
+        }
+        return out.toString();
     }
 
     private static String hex(Color color) {
@@ -354,7 +380,7 @@ public class MainWindow extends JFrame {
         themeButton.addActionListener(e -> toggleTheme());
         JButton help = toolButton("keys", "all the keyboard shortcuts  (F1)");
         help.addActionListener(e -> showHelp());
-        runButton.setToolTipText("compile and trace the program  (Ctrl+Enter or F5)");
+        runButton.setToolTipText(Shortcuts.label("compile and trace the program  (Ctrl+Enter or F5)"));
         runButton.setFocusable(false);
         // The one filled control in the window. applyTheme() sets its colours: FlatLaf would turn a
         // toolbar button grey under the mouse, which white text can't be read on.
@@ -377,7 +403,7 @@ public class MainWindow extends JFrame {
 
     private static JButton toolButton(String text, String tip) {
         JButton button = new JButton(text);
-        button.setToolTipText(tip);
+        button.setToolTipText(Shortcuts.label(tip));
         button.setFocusable(false);
         return button;
     }
@@ -425,7 +451,7 @@ public class MainWindow extends JFrame {
     }
 
     private void bind(String key, Runnable action) {
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(key), key);
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(Shortcuts.key(key), key);
         getRootPane().getActionMap().put(key, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -524,7 +550,7 @@ public class MainWindow extends JFrame {
             visual.setMessage("needs input:", "this program reads input. type it into the stdin box below, then press run.");
             say("[needs input] type it into the stdin box, then run again", Style.ERROR);
         } else {
-            say("[" + trace.getEndReason().name().toLowerCase().replace('_', ' ') + "] " + trace.getEndMessage()
+            say("[" + trace.getEndReason().name().toLowerCase(Locale.ROOT).replace('_', ' ') + "] " + trace.getEndMessage()
                     + " · " + steps, Style.ERROR);
         }
     }
@@ -559,7 +585,7 @@ public class MainWindow extends JFrame {
         code.startTypingAt(3, 8);
         currentFile = null;
         setTitle("raphael · new program");
-        say("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)", Style.INK_SOFT);
+        say(Shortcuts.label("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
     private void loadExample(String name) {
@@ -571,16 +597,23 @@ public class MainWindow extends JFrame {
             top.setDividerLocation(dividerForCode());
             currentFile = null;
             setTitle("raphael · " + name + ".java (example)");
-            say("loaded " + name + ".java · press run (ctrl+enter)", Style.INK_SOFT);
+            say("loaded " + name + Shortcuts.label(".java · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException | NullPointerException e) {
             say("[error] could not load the example " + name, Style.ERROR);
         }
     }
 
-    // Where open and save start. Inside WSL, Windows's files are under /mnt/c, so start at the
-    // Windows Desktop if there is one. Otherwise null, which means the usual home folder.
+    // Where open and save start: the Desktop, if there is one. Inside WSL (Linux running on
+    // Windows), that's the Windows Desktop, under /mnt/c. Otherwise null, which means the usual
+    // home folder.
     private static File startFolder() {
-        File desktop = new File("/mnt/c/Users/" + System.getProperty("user.name") + "/Desktop");
+        if (System.getenv("WSL_DISTRO_NAME") != null) {
+            File windowsDesktop = new File("/mnt/c/Users/" + System.getProperty("user.name") + "/Desktop");
+            if (windowsDesktop.isDirectory()) {
+                return windowsDesktop;
+            }
+        }
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
         return desktop.isDirectory() ? desktop : null;
     }
 
@@ -596,7 +629,7 @@ public class MainWindow extends JFrame {
             top.setDividerLocation(dividerForCode());
             currentFile = chooser.getSelectedFile();
             setTitle("raphael · " + currentFile.getName());
-            say("opened " + currentFile.getName() + " · press run (ctrl+enter)", Style.INK_SOFT);
+            say("opened " + currentFile.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Could not open the file: " + e.getMessage());
         }

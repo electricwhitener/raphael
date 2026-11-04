@@ -1,0 +1,37 @@
+# Runs every test on a fresh Windows, macOS and Linux machine, on every push and pull request.
+# This is how Raphael is checked on systems the developer doesn't own.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: # a "Run workflow" button on GitHub
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false # finish all three, so one failure doesn't hide another
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Linux runners have no screen, and some tests open Swing windows, so give them a virtual one.
+      - name: Test (Linux, virtual screen)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum mvn -B test
+      - name: Test
+        if: runner.os != 'Linux'
+        run: mvn -B test
+      - name: Keep the test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: target/surefire-reports/

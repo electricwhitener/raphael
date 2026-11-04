@@ -5,12 +5,14 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.tools.Diagnostic;
@@ -48,7 +50,9 @@ public class SourceCompiler {
 
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         boolean ok;
-        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+        // The file was written as UTF-8, so javac reads it as UTF-8 on every computer, and it
+        // reports errors in English, like the rest of Raphael, whatever the computer's language.
+        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, Locale.ENGLISH, StandardCharsets.UTF_8)) {
             Iterable<? extends JavaFileObject> files = fileManager.getJavaFileObjects(file);
             // -g keeps variable names; -d puts the .class files in our temp folder.
             List<String> options = List.of("-g", "-d", dir.toString());
@@ -59,7 +63,7 @@ public class SourceCompiler {
         List<CompileResult.CompileError> errors = new ArrayList<>();
         for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
             if (d.getKind() == Diagnostic.Kind.ERROR) {
-                errors.add(new CompileResult.CompileError(d.getLineNumber(), d.getMessage(null)));
+                errors.add(new CompileResult.CompileError(d.getLineNumber(), d.getMessage(Locale.ENGLISH)));
             }
         }
 

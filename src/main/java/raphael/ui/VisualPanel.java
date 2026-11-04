@@ -61,7 +61,7 @@ public class VisualPanel extends JPanel implements TraceListener {
             }
         });
         addMouseWheelListener(e -> {
-            if (e.isControlDown()) {
+            if (Shortcuts.isDown(e)) {
                 zoomBy(Math.pow(1.1, -e.getPreciseWheelRotation()), e.getPoint());
             } else { // let the scroll pane scroll as usual
                 getParent().dispatchEvent(SwingUtilities.convertMouseEvent(this, e, getParent()));
@@ -133,7 +133,7 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (messageTitle != null && !model.hasSteps()) {
             // the message says it all
         } else if (scene == null || !model.hasSteps()) {
-            hint(g2, recording ? "recording your program…" : "press run (ctrl+enter) to trace the program");
+            hint(g2, recording ? "recording your program…" : Shortcuts.label("press run (ctrl+enter) to trace the program"));
         } else {
             if (scene.getNodes().isEmpty()) {
                 hint(g2, "no arrays or objects yet · plain variables are listed below");
