@@ -1,0 +1,38 @@
+# Runs every example 100 times on each system, to catch bugs that only show up now and then
+# (version 1 had one: about 1 run in 60 recorded no steps). Too slow for every push, so it runs
+# every night, and from the "Run workflow" button on GitHub.
+name: soak
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC every day
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'Runs of each example'
+        default: '100'
+
+jobs:
+  soak:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Soak
+        shell: bash
+        run: mvn -B test -Dgroups=soak -DexcludedGroups= -Dsoak.runs=${{ github.event.inputs.runs || '100' }}
+      - name: Keep the test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-reports-${{ matrix.os }}
+          path: target/surefire-reports/
