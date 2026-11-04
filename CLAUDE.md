@@ -56,7 +56,15 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
     - beat the competitors, mainly JavaWiz
   - All of it is in ROADMAP.md.
   - **Stage 0 (set up): done, 2026-11-04.** ROADMAP.md, this file, a DECISIONS.md entry, and the report skeleton in `docs/report/` with chapters 1–5 drafted.
-- **Next:** ROADMAP Stage 1, works on any machine (CI on three operating systems, platform fixes).
+- **Stage 1 (works on any machine): done, 2026-11-04.** The repo is public.
+  - `.github/workflows/ci.yml` runs `mvn test` on Windows, macOS and Linux (xvfb) on every push. All 116 tests pass on all three, with none skipped.
+  - `ui/Shortcuts`: Cmd and Option on a Mac, for both the keys and the labels.
+  - `ui/SystemTheme`: the first launch matches the OS dark mode.
+  - The start folder is the Desktop on any OS (the Windows one only inside WSL).
+  - `Locale.ROOT` for case changes.
+  - javac reads UTF-8 and reports in English.
+  - Not done here: the HiDPI check needs real screens, and the native launchers moved to Stage 5 (`jpackage`).
+- **Next:** ROADMAP Stage 2, bulletproof tracing (debuggee memory cap and cleanup, edge-case corpus, soak test).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

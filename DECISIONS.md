@@ -431,3 +431,22 @@ Teachers and universities trust a tool whose code they can read, and others can 
 
 The limits from the course are relaxed: new classes and new libraries are allowed, as long as each one is explained first. The report is written alongside the work in `docs/report/`, one chapter per file, so each stage adds its own chapter.
 
+## Stage 1: Works on any machine
+
+- How do I test on systems I don't own?
+
+GitHub Actions. On every push, GitHub starts a fresh Windows, macOS and Linux machine, installs JDK 21, and runs `mvn test` on each (`.github/workflows/ci.yml`). Linux machines there have no screen, and some tests open Swing windows, so they run inside `xvfb-run`, a virtual screen. All 116 tests pass on all three, and none are skipped. The badge at the top of the README shows the latest result.
+
+- What would have gone wrong on other computers?
+
+Five things:
+- **Mac shortcuts.** Swing's `"control S"` is the Control key, but Mac users press Cmd. `Shortcuts.key()` turns "control" into "meta" (Swing's name for Cmd) on a Mac, and `Shortcuts.label()` turns "Ctrl" into "Cmd" and "Alt" into "Option" in tooltips, messages and the keys screen. The keys screen re-pads its columns, because "Option+Down" is longer than "Alt+Down".
+- **The start folder.** Open and save started at `/mnt/c/Users/…/Desktop`, which only exists inside WSL. Now they start at the Desktop on any system, and at the Windows one only when `WSL_DISTRO_NAME` says we're inside WSL.
+- **The Turkish i.** `toLowerCase()` follows the computer's language. In Turkish, `"SIZE".toLowerCase()` is `"sıze"`, with a dotless ı, so a B-tree's count field wouldn't be found. Every case change now uses `Locale.ROOT`, which is the same everywhere. A test runs the detector with Turkish as the language.
+- **Encoding and language of the compiler.** javac read the file in the computer's default encoding and wrote its errors in the computer's language. A Japanese computer would show Japanese errors in an English app. Now it reads UTF-8 and reports in English.
+- **Dark mode.** The first launch was always light. Java can't ask the system about dark mode, so `SystemTheme` runs the small command each system has: `reg query` on Windows (and through `reg.exe` inside WSL), `defaults read` on a Mac, and `gsettings` on Linux. It gives up after 2 seconds. Once you press Ctrl+D, your choice wins from then on.
+
+- What's left for later?
+
+Checking how it looks on a high-resolution screen needs a real screen, which CI machines don't have. A real launcher instead of `Run Raphael.bat` comes from `jpackage` in Stage 5. Both happen there.
+

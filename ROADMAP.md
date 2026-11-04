@@ -103,9 +103,9 @@ The user now wants Raphael to be **a real, production-grade product**:
   - Shortcuts: `Toolkit.getMenuShortcutKeyMaskEx()`, so a Mac uses Cmd; key-help text per OS.
   - `toLowerCase(Locale.ROOT)` everywhere.
   - UTF-8 forced for source files, and Windows paths and line endings handled.
-  - HiDPI and scaling checked on Windows at 150%, and on a Mac Retina screen via CI screenshots.
+  - HiDPI and scaling checked on Windows at 150% and on a Mac Retina screen. Moved to Stage 5: CI machines have no real screens, so this is checked by installing the packages there.
   - Dark mode follows the OS on first launch.
-- **Launchers:** native launchers replace `Run Raphael.bat`, and WSL becomes optional.
+- **Launchers:** moved to Stage 5. `jpackage` makes a native launcher for each system, which replaces `Run Raphael.bat` and makes WSL optional.
 
 ### 2. Bulletproof tracing
 - **The debuggee:**
