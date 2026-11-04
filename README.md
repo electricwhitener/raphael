@@ -339,7 +339,9 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | [docs/OOP-HIGHLIGHTS.md](docs/OOP-HIGHLIGHTS.md) | Where the OOP concepts are used, with real code and a comment on each line |
 | [DEMO.md](DEMO.md) | The script for demonstrating Raphael |
 | [DECISIONS.md](DECISIONS.md) | Why things were built the way they were, stage by stage |
-| [PLAN.md](PLAN.md) | The original plan and stages |
+| [PLAN.md](PLAN.md) | The original plan and stages (version 1, the course project) |
+| [ROADMAP.md](ROADMAP.md) | Version 2: the stages that turn Raphael into a product |
+| [docs/report/](docs/report/) | The project report, one chapter per file (a draft that grows with the roadmap) |
 | [CLAUDE.md](CLAUDE.md) | Project notes and instructions for Claude Code, the AI coding assistant used to build Raphael |
 | `.claude/agents/raphael-design-critic.md` | The design reviewer agent used during development |
 | `scripts/build-app.sh` | Packages the app into `dist/` |
