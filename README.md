@@ -1,12 +1,16 @@
 # Raphael
 
 [![tests](https://github.com/electricwhitener/raphael/actions/workflows/ci.yml/badge.svg)](https://github.com/electricwhitener/raphael/actions/workflows/ci.yml)
+[![latest release](https://img.shields.io/github/v/release/electricwhitener/raphael)](https://github.com/electricwhitener/raphael/releases/latest)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Raphael shows data structures changing while a Java program runs. Type, paste or open a single-file Java program and press **run**. Raphael plays it back line by line and draws its arrays, linked lists, trees and objects, so you can see what the code does. You can step forward and back through the whole run.
+**See your Java program's data structures change while it runs.** Paste or open a Java program and press **Run**. Raphael records every line, then plays it back as a picture: arrays, linked lists, trees and objects, animated as each line changes them. Step forward and back through the whole run.
 
-It began as an object-oriented programming course project in Java, and is now an open-source tool. The [project report](docs/report/) explains how it works and where each OOP concept is used.
+![Raphael reversing a linked list](docs/demo.gif)
 
-![Raphael reversing a linked list](docs/window-reverse.png)
+**[Download Raphael](https://github.com/electricwhitener/raphael/releases/latest)** for Windows, macOS or Linux. It's free, open source, and has its own Java inside, so there's nothing else to install.
+
+It began as an object-oriented programming course project and is now an open-source tool. The [project report](docs/report/) explains how it works and where each OOP concept is used.
 
 ## What it does
 - **Runs your own code.** Paste any single-file Java program. A `package` line and any number of classes are fine.
@@ -75,7 +79,7 @@ Raphael comes as an installer for each system, with its own Java inside, so ther
 | Ubuntu 24.04 and newer | `Raphael-1.0.0-linux-x64.deb` | `sudo apt install ./Raphael-1.0.0-linux-x64.deb` |
 | Any other Linux | `Raphael-1.0.0-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
 
-Until the first public release, the installers are built by the [installers workflow](https://github.com/electricwhitener/raphael/actions/workflows/package.yml): open its latest run and download them from the bottom of the page.
+They're all on the [latest release](https://github.com/electricwhitener/raphael/releases/latest) page. Raphael says in its status bar when a newer version is out (it checks once a day; you can turn that off in Settings).
 
 ### Build it yourself
 You need JDK 21 and Maven 3.8 or newer. Every push runs the full test suite on fresh Windows, macOS and Linux machines (the badge above shows the result).
@@ -262,6 +266,7 @@ Safety:
 | `AppLog` | The log file: java.util.logging, 3 files of 1 MB, one line per message | `setup()`, `folder()`, `LineFormatter.format()` |
 | `SafeFiles` | Saving that never leaves a half-written file; reading that refuses huge or binary files; plain reasons for file errors | `write()`, `readCode()`, `describe()` |
 | `DraftStore` | The autosaved draft | `save()`, `load()`, `clear()` |
+| `UpdateCheck` | Asks GitHub, at most once a day, whether a newer Raphael exists | `newer()`, `isNewer()`, `currentVersion()` |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
 | `HeapObject` → `ObjectNode`, `ArrayNode` | An object in memory: one with fields, or an array (or a collection) | `describe(snapshot)`, `shortName()`, `getFields()`, `getElements()` |
@@ -401,6 +406,9 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 | File | What it is |
 |---|---|
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
+| [PRIVACY.md](PRIVACY.md) | What Raphael stores and sends |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Reporting bugs, building and testing |
 | [DECISIONS.md](DECISIONS.md) | Why things were built the way they were, stage by stage |
 | [ROADMAP.md](ROADMAP.md) | Version 2: the stages that turn Raphael into a product |
 | [docs/report/](docs/report/) | The project report, one chapter per file (a draft that grows with the roadmap) |
@@ -412,5 +420,9 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | `scripts/build-app.sh` | Packages the app into `dist/` |
 | `scripts/Run Raphael.bat` | Starts `dist/` from Windows through WSL |
 
-## Licences
-The bundled font is under the SIL Open Font License (`src/main/resources/fonts/OFL.txt`). FlatLaf and JUnit keep their own licences, listed above. No licence has been chosen yet for Raphael's own code.
+## Licence
+Raphael is free and open source, under the [MIT License](LICENSE).
+
+The bundled fonts are under the SIL Open Font License: JetBrains Mono NL (`src/main/resources/fonts/OFL.txt`) and Inter (`src/main/resources/fonts/Inter-OFL.txt`). FlatLaf and JUnit keep their own licences, listed above.
+
+Raphael keeps your code on your computer; see [PRIVACY.md](PRIVACY.md). To report a problem or suggest an idea, see [CONTRIBUTING.md](CONTRIBUTING.md).

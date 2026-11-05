@@ -35,7 +35,7 @@ public class SettingsDialog extends JDialog {
     public enum Theme { SYSTEM, LIGHT, DARK }
 
     // Everything the dialog shows and returns.
-    public record Values(RunLimits limits, int textSize, Theme theme) {
+    public record Values(RunLimits limits, int textSize, Theme theme, boolean checkUpdates) {
     }
 
     private final JSpinner steps = spinner(RunLimits.MIN_STEPS, RunLimits.MAX_STEPS, 100);
@@ -45,6 +45,7 @@ public class SettingsDialog extends JDialog {
     private final JToggleButton system = segment("System");
     private final JToggleButton light = segment("Light");
     private final JToggleButton dark = segment("Dark");
+    private final javax.swing.JCheckBox updates = new javax.swing.JCheckBox();
     private Values chosen; // set by Save
 
     SettingsDialog(Frame owner, Values current) {
@@ -70,12 +71,16 @@ public class SettingsDialog extends JDialog {
         segments.add(system);
         segments.add(light);
         segments.add(dark);
-        row(form, y, "Theme", "System follows your computer's light or dark mode.", segments, null);
+        row(form, y++, "Theme", "System follows your computer's light or dark mode.", segments, null);
+        group(form, y++, "Updates", true);
+        updates.getAccessibleContext().setAccessibleName("Check for new versions");
+        row(form, y, "Check for new versions", "Once a day, Raphael asks GitHub whether a newer version exists. "
+                + "Nothing about you or your code is sent.", updates, null);
 
         JButton defaults = new JButton("Restore defaults");
         defaults.putClientProperty("JButton.buttonType", "borderless");
         defaults.setForeground(Style.ACCENT); // looks like a link: it changes the fields, not the settings
-        defaults.addActionListener(e -> fill(new Values(RunLimits.DEFAULTS, Style.DEFAULT_CODE_SIZE, Theme.SYSTEM)));
+        defaults.addActionListener(e -> fill(new Values(RunLimits.DEFAULTS, Style.DEFAULT_CODE_SIZE, Theme.SYSTEM, true)));
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBackground(Style.BAR);
         footer.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
@@ -122,12 +127,13 @@ public class SettingsDialog extends JDialog {
         memory.setValue(values.limits().memoryMb());
         textSize.setValue(values.textSize());
         (values.theme() == Theme.LIGHT ? light : values.theme() == Theme.DARK ? dark : system).setSelected(true);
+        updates.setSelected(values.checkUpdates());
     }
 
     Values read() {
         RunLimits limits = new RunLimits((Integer) steps.getValue(), (Integer) timeout.getValue(), (Integer) memory.getValue());
         Theme theme = light.isSelected() ? Theme.LIGHT : dark.isSelected() ? Theme.DARK : Theme.SYSTEM;
-        return new Values(limits, (Integer) textSize.getValue(), theme);
+        return new Values(limits, (Integer) textSize.getValue(), theme, updates.isSelected());
     }
 
     private static JSpinner spinner(int min, int max, int step) {

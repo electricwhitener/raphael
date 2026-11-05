@@ -1,0 +1,30 @@
+name: Bug report
+description: Something in Raphael doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: program
+    attributes:
+      label: The Java program
+      description: The program you ran, or a smaller one that shows the problem.
+      render: java
+  - type: input
+    id: version
+    attributes:
+      label: Raphael's version and your system
+      placeholder: "Raphael 1.0.0 on Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details from Raphael
+      description: If Raphael showed "Raphael ran into a problem", paste what "Copy details" copied.
+      render: text

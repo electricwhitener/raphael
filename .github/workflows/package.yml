@@ -116,3 +116,27 @@ jobs:
         with:
           name: screenshots-${{ matrix.os }}
           path: target/screenshots/
+
+  # For a version tag: once every installer has passed its self-test, publish them as a GitHub
+  # Release, with that version's part of CHANGELOG.md as the notes.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+          pattern: Raphael-*
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The notes: everything under "## <version>" in the changelog, up to the next version.
+          awk -v v="$version" '$0 ~ "^## "v" " {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" downloads/* --title "Raphael $version" --notes-file notes.md

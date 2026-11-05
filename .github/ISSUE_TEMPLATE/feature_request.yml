@@ -1,0 +1,16 @@
+name: Idea or feature request
+description: Something Raphael could do, or do better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Raphael to do?
+      description: For example a data structure it should draw, or something that would make it easier to teach with.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: Who would use it, and when.
