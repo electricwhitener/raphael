@@ -1,6 +1,6 @@
 # 5. Object-oriented design
 
-Raphael was built for an object-oriented programming course, so its design uses the course's concepts where they fit the problem, not for their own sake. Every class that shows a concept names it in an `// OOP:` comment at the top of its file. [docs/OOP-HIGHLIGHTS.md](../OOP-HIGHLIGHTS.md) goes through each one with the full code, commented line by line.
+Raphael was built for an object-oriented programming course, so its design uses the course's concepts where they fit the problem, not for their own sake. Every class that shows a concept names it in an `// OOP:` comment at the top of its file.
 
 ## 5.1 The class hierarchies
 Each of the central packages is built around one hierarchy (`→` means "is extended or implemented by"):

@@ -139,6 +139,12 @@ The user now wants Raphael to be **a real, production-grade product**:
 - Animation: steady 60 fps on a low-end laptop, measured by a frame-time test.
 - Startup time measured, with a target under 2 seconds.
 
+### 4b. Modern interface (with the chief UI designer)
+Added 2026-11-05: the interface still feels dated, for example the open dialog next to Windows' own.
+- The `raphael-ui-designer` agent (Sonnet) audits the running app in both themes and writes ranked, exact specs. Claude builds them. The `raphael-design-critic` checks that the animation still tells the truth.
+- Known first item: **the system's own file dialogs.** `java.awt.FileDialog` gives the real Explorer dialog on Windows and Finder's on macOS. On Linux it's GTK's if available, otherwise a fallback. This replaces Swing's `JFileChooser`.
+- Likely areas: toolbar hierarchy (run as the clear primary action, grouped controls, icons), a macOS menu bar, the first-run and empty states, dialog wording and button order per platform, spacing on a 4 px grid, and focus and contrast in both themes.
+
 ### 5. Installers
 - `jlink` makes a small private Java runtime with only the modules Raphael needs:
   - `java.desktop`, `java.compiler`, `jdk.compiler`, `jdk.jdi`, `jdk.jdwp.agent`, `java.prefs`, `java.logging`

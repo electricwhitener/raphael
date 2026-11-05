@@ -7,7 +7,7 @@
 3. Records a snapshot of variables and objects at each step.
 4. Draws arrays, linked lists and binary trees in a Swing window, with step forward/back and animation.
 
-Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raphael into an open-source product. Its stages are in [ROADMAP.md](ROADMAP.md): follow them in order and don't jump ahead.
+Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, docs/OOP-HIGHLIGHTS.md, exercises/) were removed on 2026-11-05 and are in git history. Version 2 turns Raphael into an open-source product. Its stages are in [ROADMAP.md](ROADMAP.md): follow them in order and don't jump ahead.
 
 ## Progress
 - **Stage 0 (Setup): done, 2026-10-17.** JDK 21 and Maven 3.8.7 are installed in WSL. `pom.xml` exists (JUnit 5, compiler, surefire and exec plugins). `App.java` prints Hello World. VS Code is connected to WSL with the Java extensions. The Stage 0 entry is in `DECISIONS.md`.
@@ -87,7 +87,11 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
   - Silent catches that hide real failures are now logged.
   - Checked in the real app: draft restore, the settings dialog, the safety-net dialog and the log file.
   - 167 tests.
-- **Next:** ROADMAP Stage 4, fast (profile recording; 500-node list under 5 s; memory, frame rate, startup).
+- **Clean-up and designer: 2026-11-05.**
+  - Removed the viva-era files (PLAN.md, DEMO.md, docs/OOP-HIGHLIGHTS.md, exercises/); they're in git history.
+  - Added the `raphael-ui-designer` agent (Sonnet) and refreshed the critic's rules.
+  - ROADMAP gained stage 4b (modern interface).
+- **Next:** ROADMAP Stage 4, fast (profile recording; 500-node list under 5 s; memory, frame rate, startup), then 4b.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
@@ -102,10 +106,10 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
 - **Keep replies concise.** No recap summaries, and don't repeat the same point in different sections.
 
 ## How to work here (from 2026-10-26)
-- **Claude writes the code**, stage by stage in ROADMAP.md order, without stopping between stages. There are no mini-exercises, and PLAN.md's "How each stage works" no longer applies.
+- **Claude writes the code**, stage by stage in ROADMAP.md order.
 - **After each stage:** `mvn test` passes, the Progress section and the report chapter in `docs/report/` are updated, and Claude posts a short "for your teacher" note in chat (new files, key methods, OOP concepts).
 - **Decision log:** Claude writes each stage's `DECISIONS.md` entry in the user's style: their question headings, short plain paragraphs, no repetition and no extra sections.
-- **README.md is the teacher-facing guide:** how it works (the pipeline), a file map (file → job → key methods) and an OOP map (concept → where). Keep it up to date.
+- **README.md is the public guide:** what Raphael does, how to get it, how it works (the pipeline), a file map (file → job → key methods) and an OOP map (concept → where). Keep it up to date.
 - **Java style is mostly classic:** private fields with constructors and getters. Use records only for tiny data holders, and no sealed types or pattern-matching switch.
 - **OOP tags:** each class that shows an OOP concept starts with a short `// OOP: ...` comment.
 - **Dependencies (relaxed 2026-11-04):** new libraries and build plugins are allowed. Before adding one, name it and say why. Today the app uses the JDK and FlatLaf, and the tests use JUnit 5. The JetBrains Mono NL font files in `src/main/resources/fonts/` (SIL Open Font License, `OFL.txt` beside them) are a resource, not a code dependency.
@@ -124,7 +128,7 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
 
 ## Tech
 - JDK 21, Maven, Swing + FlatLaf, JUnit 5.
-- Package root is `raphael` (see the layout in PLAN.md).
+- Package root is `raphael`. Packages: `compile`, `trace`, `model`, `detect`, `render`, `ui`, `io`.
 - Compile student code with `-g`, so local variable names are available.
 - Tracing puts a breakpoint on every line of the student's classes. JDK classes (`java.*`, `javax.*`, `sun.*`, `jdk.*`) get none. Step requests aren't used, because "step to the next line" never finishes in a one-line loop.
 - Drain the debuggee's stdout/stderr on separate threads.
@@ -136,4 +140,7 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
 - Run: `mvn -q compile exec:java` (or the Run link above `main` in VS Code, or `Run Raphael.bat` on the Windows Desktop)
 - After any code change: `scripts/build-app.sh`, which updates `dist/` for the launcher. VS Code's Java extension also compiles into `target/classes` and can leave broken class files that Maven won't replace (they contain "Unresolved compilation problems"). If that happens, run `mvn clean compile`.
 - Windows app: `scripts/build-windows.sh`
-- Design review: the `raphael-design-critic` agent in `.claude/agents/`. It only reports; it never edits.
+- Design:
+  - `raphael-ui-designer` (Sonnet) is the chief UI designer: it audits the interface and writes exact specs, and Claude implements them.
+  - `raphael-design-critic` checks that animation frames don't confuse a learner.
+  - Both are in `.claude/agents/`, and neither edits the source.
