@@ -90,6 +90,18 @@ You should see the window open with the BSTInsert example loaded. Press **run**,
 3. **Press run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the button becomes **stop**, and you keep the steps recorded so far.
 4. **Move through the steps** with the keys below. Any manual move pauses playing. Click in the editor to type again.
 
+**If something goes wrong.**
+- Unsaved code is autosaved every 5 seconds. If Raphael doesn't close normally, it offers the code back the next time it starts.
+- If Raphael itself hits a problem, it says so, and keeps the details in its log file:
+
+| System | Log folder |
+|---|---|
+| Windows | `%LOCALAPPDATA%\Raphael\logs` |
+| macOS | `~/Library/Logs/Raphael` |
+| Linux | `~/.local/state/raphael/logs` |
+
+The log never leaves your computer.
+
 ### Examples
 | Example | Shows |
 |---|---|
@@ -124,6 +136,7 @@ You should see the window open with the BSTInsert example loaded. Press **run**,
 | Ctrl + wheel over the picture | Zoom the picture |
 | Ctrl+0 | Normal text size and zoom |
 | Ctrl+D | Dark or light |
+| Ctrl+, | Settings: step limit, timeout, memory, text size, theme |
 
 ### Reading the picture
 The status bar has a small key to these.
@@ -142,10 +155,10 @@ The status bar has a small key to these.
 ### Limits
 - The program must be one file with a `public static void main(String[] args)`.
 - A step is one line, so `for (...) sum += a[i];` written on one line runs as one step. Put one statement on each line to see each one.
-- A run stops after 2,000 steps, so keep inputs small. This is also what ends an infinite loop, and a recursion with no base case, which Raphael names.
-- A program that does nothing for 5 seconds is stopped, which includes a long `Thread.sleep`.
+- A run stops after 2,000 steps (change it in **settings**), so keep inputs small. This is also what ends an infinite loop, and a recursion with no base case, which Raphael names.
+- A program that does nothing for 5 seconds is stopped, which includes a long `Thread.sleep` (**settings** allows up to 60).
 - Each step keeps at most 300 objects, 64 cells per array and the newest 32 method calls.
-- A program may use at most 256 MB of memory. More than that ends it with an `OutOfMemoryError`.
+- A program may use at most 256 MB of memory (**settings** allows up to 2 GB). More than that ends it with an `OutOfMemoryError`.
 - Java's other classes (`Scanner`, `Random`…) appear by name only.
 - A program with many objects can take a while to record (a 500-node list takes about 35 seconds). The status bar counts the steps, and **stop** keeps what's recorded.
 
@@ -216,18 +229,26 @@ Safety:
 
 | File | Job | Key methods |
 |---|---|---|
-| `App` | Starts the app: the look (light or dark) and the saved settings, then the main window | `main()`, `setupLook()`, `setupLook(dark)` |
+| `App` | Starts the app: the log, the safety net, the look and the saved settings, then the main window | `main()`, `setupLook()`, `setupLook(dark)` |
+| `RaphaelException` | Abstract parent of every problem Raphael can explain (checked) | constructors |
 | **compile/** | | |
 | `SourceCompiler` | Compiles the editor's text with javac and finds the class with `main`; blanks the file rules first | `compile(source)`, `topLevelText()`, `withoutFileRules()` |
 | `CompileResult` | The result: success, errors (line + message), class folder, main class | record getters |
+| `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
 | **trace/** | | |
 | `Tracer` | Interface: "run this program and record every step" | `trace(program, input)`, `trace(program)`, `stop()`, `stepsSoFar()` |
 | `JdiTracer` | Runs the program with JDI: breakpoints, events, step limit, exceptions | `trace()`, `launch()`, `Run.handleEvents()`, `Run.classLoaded()`, `Run.lineReached()`, `Run.crashed()`, `stop()` |
 | `HeapReader` | Copies the paused program's memory into a `Snapshot` (BFS); asks a collection for its items | `capture()`, `readFrames()`, `readStatics()`, `readObject()`, `readCollection()`, `call()`, `toValue()` |
 | `OutputDrainer` | A thread that copies the program's printed output into a buffer | `run()` |
 | `TraceLimits` | Safety limits (2,000 steps, object and cell caps, timeout, memory) | constants |
+| `RunLimits` | The limits the user can change: steps, timeout, memory; refuses values out of range | record, `DEFAULTS` |
 | `ParentWatch` | A Java agent inside the student's program that ends it if Raphael is killed; writes its own agent jar | `premain()`, `jar()` |
-| `TraceException` | Custom exception: the program couldn't be traced | — |
+| `TraceException` | The program couldn't be traced (a `RaphaelException`) | constructor |
+| **io/** | | |
+| `AppFolders` | Where Raphael keeps its files on each system | `data()`, `logs()` |
+| `AppLog` | The log file: java.util.logging, 3 files of 1 MB, one line per message | `setup()`, `folder()`, `LineFormatter.format()` |
+| `SafeFiles` | Saving that never leaves a half-written file; reading that refuses huge or binary files; plain reasons for file errors | `write()`, `readCode()`, `describe()` |
+| `DraftStore` | The autosaved draft | `save()`, `load()`, `clear()` |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
 | `HeapObject` → `ObjectNode`, `ArrayNode` | An object in memory: one with fields, or an array (or a collection) | `describe(snapshot)`, `shortName()`, `getFields()`, `getElements()` |
@@ -274,6 +295,8 @@ Safety:
 | `Section` | Terminal-style section headers and thin borders | `header()`, `wrap()`, `hairline()` |
 | `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
+| `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
+| `SettingsDialog` | The settings window | `ask()`, `read()` |
 | **resources/examples/** | The nine example programs in the examples menu | — |
 | **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
 
@@ -286,31 +309,31 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Concept | Where | In one sentence |
 |---|---|---|
 | Encapsulation | `TraceModel` (`setStep` keeps the step valid), `Spring`, `Snapshot`, `Trace`, `HeapObject`, `Animator` | Fields are private, read through getters, and changed only through methods that check them, so nothing can be put in an impossible state. |
-| Abstraction | `Tracer`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
-| Interfaces | `Tracer` (`stop()` and `stepsSoFar()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
+| Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
+| Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
 | Composition | `MainWindow` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
-| Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `TraceException` extends `Exception` | Subclasses reuse the parent's fields and methods and add their own. |
+| Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog` | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
-| Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
+| Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
 | Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
-| Exception handling | `TraceException`; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
+| Exception handling | a family of checked exceptions under the abstract `RaphaelException`, each keeping its cause; `MainWindow.runFailed()` tells expected problems from bugs; `ErrorReporter` catches what nothing else did, on every thread; `SafeFiles.describe()` turns `NoSuchFileException` and `AccessDeniedException` into plain reasons; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
-| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
-| Records and enums | `CompileResult`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
+| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
+| Records and enums | `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
 | Design pattern: Factory | `StructureRenderer.forStructure()` | One method decides which renderer class to create, so no one else has to. |
-| Packages | `compile`, `trace`, `model`, `detect`, `render`, `ui` | One package per job. |
+| Packages | `compile`, `trace`, `model`, `detect`, `render`, `ui`, `io` | One package per job. |
 
 ## Tests
 
-`mvn test` runs 150 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
+`mvn test` runs 167 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
 - `ExamplesTest`: every program in the examples menu runs to its expected end.
 - `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
 - `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
-- `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, and no program left running after Raphael quits or is killed.
+- `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
 - `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, a cycle that doesn't hang, and a count field found on a Turkish-language computer.
 - `IndexUsageTest`: which variables index which arrays, reads vs writes, `x.keys[i]` and `keys[j + T]`, constants and comments.
@@ -343,6 +366,10 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `MainWindowTest`: no panel around the picture takes the shortcut keys for itself.
 - `ShortcutsTest`: Ctrl becomes Cmd and Alt becomes Option on a Mac, in the keys and in the text; the keys screen stays in two columns.
 - `SystemThemeTest`: the dark-mode answers of Windows, macOS and Linux are read correctly, and asking never fails.
+- `ErrorReporterTest`: an exception nothing caught, on another thread, ends up in the log; the details have the versions and the stack trace.
+- `SettingsDialogTest`: the dialog hands back what it was opened with.
+- `RunLimitsTest`, `RaphaelExceptionTest`: limits out of range can't exist; Raphael's exceptions are one family and keep their cause.
+- `AppFoldersTest`, `AppLogTest`, `SafeFilesTest`, `DraftStoreTest`: the right folders on each system; the log's line format; no half-written files, refusing huge or binary files, plain reasons; the draft saved, read and cleared.
 
 ## Project documents and scripts
 

@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.IntSupplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import raphael.model.ArrayNode;
 import raphael.model.FrameSnapshot;
 import raphael.model.HeapObject;
@@ -191,6 +193,7 @@ public class HeapReader {
             }
             return new ArrayNode(collection.uniqueID(), type, "java.lang.Object", cells, array.length());
         } catch (Exception e) {
+            Logger.getLogger(HeapReader.class.getName()).log(Level.FINE, "Couldn't list the items of a " + type, e);
             return new ArrayNode(collection.uniqueID(), type, "java.lang.Object", List.of(), 0); // couldn't ask it
         }
     }

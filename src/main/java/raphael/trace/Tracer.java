@@ -16,6 +16,10 @@ public interface Tracer {
     default void stop() {
     }
 
+    // The limits for the next run (the user's settings). By default a tracer has its own fixed limits.
+    default void setLimits(RunLimits limits) {
+    }
+
     // How many steps the run in progress has recorded so far (0 if none is running).
     default int stepsSoFar() {
         return 0;

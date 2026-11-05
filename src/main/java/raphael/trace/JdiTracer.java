@@ -31,6 +31,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import raphael.compile.CompileResult;
 import raphael.model.EndReason;
 import raphael.model.FrameSnapshot;
@@ -54,7 +56,10 @@ public class JdiTracer implements Tracer {
     private static final String RAPHAEL_PACKAGE = "raphael.";
     private static final long POLL_MS = 100; // how often to look up from waiting, to see if stop was pressed
 
+    private static final Logger LOG = Logger.getLogger(JdiTracer.class.getName());
+
     private volatile Run current; // the run in progress, or null; volatile because the window's thread reads it
+    private volatile RunLimits limits = RunLimits.DEFAULTS;
 
     // When Raphael quits, Java runs this hook on its way out. It ends every program Raphael
     // started, even one still starting up, whose Process isn't known until launch() returns.
@@ -67,9 +72,10 @@ public class JdiTracer implements Tracer {
 
     @Override
     public Trace trace(CompileResult program, String input) throws TraceException {
-        VirtualMachine vm = launch(program);
+        RunLimits runLimits = limits; // one set of limits for the whole run, even if settings change meanwhile
+        VirtualMachine vm = launch(program, runLimits);
         Process process = vm.process();
-        current = new Run(vm);
+        current = new Run(vm, runLimits);
         try {
             return current.record(input);
         } finally {
@@ -78,6 +84,11 @@ public class JdiTracer implements Tracer {
                 process.destroyForcibly();
             }
         }
+    }
+
+    @Override
+    public void setLimits(RunLimits limits) {
+        this.limits = limits;
     }
 
     @Override
@@ -105,7 +116,7 @@ public class JdiTracer implements Tracer {
     }
 
     // Starts the program in a new JVM, paused before it does anything.
-    private VirtualMachine launch(CompileResult program) throws TraceException {
+    private VirtualMachine launch(CompileResult program, RunLimits runLimits) throws TraceException {
         LaunchingConnector connector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = connector.defaultArguments();
         arguments.get("main").setValue(program.mainClass());
@@ -113,11 +124,12 @@ public class JdiTracer implements Tracer {
         // -Xmx caps the memory the program may use; the agent ends it if Raphael is killed.
         String options = "-cp \"" + program.classDir() + "\""
                 + " -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
-                + " -Xmx" + TraceLimits.MAX_MEMORY_MB + "m";
+                + " -Xmx" + runLimits.memoryMb() + "m";
         try {
             options += " -javaagent:\"" + ParentWatch.jar() + "\"";
         } catch (IOException e) {
             // Without the agent the program still runs; only the "Raphael was killed" safety net is missing.
+            LOG.log(Level.WARNING, "Couldn't write the ParentWatch agent jar", e);
         }
         arguments.get("options").setValue(options);
         try {
@@ -132,6 +144,7 @@ public class JdiTracer implements Tracer {
     private static class Run {
 
         private final VirtualMachine vm;
+        private final RunLimits limits;
         private final EventRequestManager requests;
         private final StringBuffer output = new StringBuffer();
         private final List<ReferenceType> studentClasses = new ArrayList<>();
@@ -142,8 +155,9 @@ public class JdiTracer implements Tracer {
         private volatile boolean stopRequested;
         private volatile int steps;
 
-        Run(VirtualMachine vm) {
+        Run(VirtualMachine vm, RunLimits limits) {
             this.vm = vm;
+            this.limits = limits;
             this.requests = vm.eventRequestManager();
         }
 
@@ -194,9 +208,9 @@ public class JdiTracer implements Tracer {
                 }
                 EventSet events = queue.remove(POLL_MS);
                 if (events == null) {
-                    if (System.currentTimeMillis() - lastEvent >= TraceLimits.EVENT_TIMEOUT_MS) {
+                    if (System.currentTimeMillis() - lastEvent >= limits.timeoutSeconds() * 1000L) {
                         end(EndReason.TIMEOUT, "Stopped: the program did nothing for "
-                                + TraceLimits.EVENT_TIMEOUT_MS / 1000 + " seconds.");
+                                + limits.timeoutSeconds() + " seconds.");
                         stopProgram();
                         return;
                     }
@@ -247,13 +261,13 @@ public class JdiTracer implements Tracer {
         private void lineReached(ThreadReference thread) {
             snapshots.add(reader.capture(thread, output::length, null));
             steps = snapshots.size();
-            if (snapshots.size() >= TraceLimits.MAX_STEPS) {
+            if (snapshots.size() >= limits.maxSteps()) {
                 String method = recursingMethod(snapshots.get(snapshots.size() - 1));
                 end(EndReason.STEP_LIMIT, method != null
-                        ? "Stopped after " + TraceLimits.MAX_STEPS + " steps, with " + method
+                        ? "Stopped after " + limits.maxSteps() + " steps, with " + method
                                 + " calling itself again and again. Is its base case missing?"
-                        : "Stopped after " + TraceLimits.MAX_STEPS
-                                + " steps. If it isn't an infinite loop, try a smaller input.");
+                        : "Stopped after " + limits.maxSteps()
+                                + " steps. If it isn't an infinite loop, try a smaller input, or allow more steps in settings.");
                 stopProgram();
             }
         }

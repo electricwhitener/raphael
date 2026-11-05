@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 // Every colour, size, font and timing used for drawing, kept in one place.
 // The look: plain like a terminal (white or dark), one monospace font, thin lines, a blue accent for
@@ -191,6 +193,7 @@ public final class Style {
             fonts.registerFont(Font.createFont(Font.TRUETYPE_FONT, bold));
             return font.getFamily();
         } catch (IOException | FontFormatException | NullPointerException e) {
+            Logger.getLogger(Style.class.getName()).log(Level.WARNING, "The bundled font didn't load; using another monospace font", e);
             return null; // the files are missing or damaged
         }
     }
