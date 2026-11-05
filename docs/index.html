@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raphael</title>
+<meta name="description" content="See your Java program's data structures change while it runs. Free and open source, for Windows, macOS and Linux.">
+<link rel="icon" href="icon.png">
+<style>
+  :root { --bg: #ffffff; --ink: #1f2328; --soft: #57606a; --line: #d0d7de; --bar: #f6f8fa; --accent: #0969da; --on-accent: #ffffff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --ink: #e6edf3; --soft: #a0a9b4; --line: #30363d; --bar: #161b22; --accent: #4493f8; --on-accent: #0d1117; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 16px 64px; }
+  header { display: flex; align-items: center; gap: 16px; }
+  header img { width: 64px; height: 64px; }
+  h1 { font-size: 40px; margin: 0; letter-spacing: -0.02em; }
+  .lead { font-size: 20px; color: var(--soft); margin: 16px 0 28px; max-width: 680px; }
+  .demo { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  .downloads { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 8px; }
+  .button { display: inline-block; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: 600;
+            border: 1px solid var(--line); color: var(--ink); background: var(--bar); }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .note { color: var(--soft); font-size: 14px; margin: 0 0 40px; }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+  .features h2 { font-size: 17px; margin: 0 0 4px; }
+  .features p { margin: 0; color: var(--soft); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--soft); font-size: 14px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.png" alt="">
+    <h1>Raphael</h1>
+  </header>
+  <p class="lead">See your Java program's data structures change while it runs. Paste a program, press Run, and step through it as a picture.</p>
+  <img class="demo" src="demo.gif" alt="Raphael reversing a linked list: the code on the left, the list's nodes and arrows on the right, the arrows turning around as each line runs.">
+  <div class="downloads">
+    <a class="button primary" href="https://github.com/electricwhitener/raphael/releases/latest">Download for Windows, macOS or Linux</a>
+    <a class="button" href="https://github.com/electricwhitener/raphael">Source code</a>
+  </div>
+  <p class="note">Free and open source (MIT License). Java is included, so there's nothing else to install. Your code never leaves your computer.</p>
+  <section class="features">
+    <div><h2>Your own code</h2><p>Any single-file Java program: paste it, open it, or drop it on the window.</p></div>
+    <div><h2>Textbook pictures</h2><p>Arrays, grids, linked lists, binary trees, B-trees, tries, Java's collections and your own objects.</p></div>
+    <div><h2>Every step, both ways</h2><p>Play at any speed, step forward and back, skip or finish calls, or jump to a line.</p></div>
+    <div><h2>What the next line will do</h2><p>i and j markers under the cells they index, and outlines on the cells each line reads and writes.</p></div>
+    <div><h2>Problems explained</h2><p>Compile errors, crashes, missing input, endless loops and runaway recursion, at the right line.</p></div>
+    <div><h2>Windows, macOS and Linux</h2><p>Native installers, the system's own file dialogs, light and dark themes, and full keyboard control.</p></div>
+  </section>
+  <footer>Raphael began as an object-oriented programming course project. <a href="https://github.com/electricwhitener/raphael/blob/main/README.md">How it works</a> · <a href="https://github.com/electricwhitener/raphael/blob/main/PRIVACY.md">Privacy</a> · <a href="https://github.com/electricwhitener/raphael/issues">Report a problem</a></footer>
+</main>
+</body>
+</html>

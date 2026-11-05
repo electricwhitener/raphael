@@ -62,6 +62,7 @@ import raphael.io.AppFolders;
 import raphael.io.AppLog;
 import raphael.io.DraftStore;
 import raphael.io.SafeFiles;
+import raphael.io.UpdateCheck;
 import raphael.model.EndReason;
 import raphael.model.Trace;
 import raphael.render.SceneList;
@@ -285,6 +286,7 @@ public class MainWindow extends JFrame {
             @Override
             public void windowOpened(WindowEvent e) {
                 code.getEditor().requestFocusInWindow(); // ready to type or paste, not on the first toolbar button
+                checkForUpdatesQuietly();
             }
         });
     }
@@ -683,11 +685,12 @@ public class MainWindow extends JFrame {
         view.add(item("Switch light or dark", "control D", this::toggleTheme));
         JMenu help = menu("Help", KeyEvent.VK_H);
         help.add(item("Keyboard shortcuts", "F1", this::showHelp));
+        help.add(item("Check for updates…", null, this::checkForUpdatesNow));
         if (AppLog.folder() != null) {
             help.add(item("Open log folder", null, this::openLogFolder));
         }
-        help.add(item("About Raphael", null, () -> Dialogs.tell(this, "Raphael",
-                "See your Java program's data structures change while it runs. Free and open source.")));
+        help.add(item("About Raphael", null, () -> Dialogs.tell(this, "Raphael " + versionText(),
+                "See your Java program's data structures change while it runs. Free and open source, under the MIT License.")));
         for (JMenu menu : new JMenu[] {file, edit, run, view, help}) {
             bar.add(menu);
         }
@@ -710,6 +713,76 @@ public class MainWindow extends JFrame {
         }
         item.addActionListener(e -> action.run());
         return item;
+    }
+
+    // At most once a day, if allowed in settings: ask GitHub in the background whether a newer
+    // Raphael exists, and if so, say it in the status bar. Silent when there's nothing to say.
+    private void checkForUpdatesQuietly() {
+        String current = UpdateCheck.currentVersion();
+        long last = App.SETTINGS.getLong("lastUpdateCheck", 0);
+        if (current == null || !App.SETTINGS.getBoolean("checkUpdates", true)
+                || System.currentTimeMillis() - last < java.util.concurrent.TimeUnit.DAYS.toMillis(1)) {
+            return;
+        }
+        App.SETTINGS.putLong("lastUpdateCheck", System.currentTimeMillis());
+        Thread asking = new Thread(() -> {
+            try {
+                UpdateCheck.Release release = UpdateCheck.newer(current);
+                if (release != null) {
+                    SwingUtilities.invokeLater(() -> say("Raphael " + release.version()
+                            + " is available · Help → Check for updates", Style.ACCENT));
+                }
+            } catch (IOException e) {
+                LOG.log(Level.FINE, "Couldn't check for updates", e); // offline: nothing to report
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "update check");
+        asking.setDaemon(true);
+        asking.start();
+    }
+
+    // Help → Check for updates…: ask now, and say what was found.
+    private void checkForUpdatesNow() {
+        String current = UpdateCheck.currentVersion();
+        if (current == null) {
+            Dialogs.tell(this, "This Raphael was built from the source code",
+                    "It has no version number to compare. The newest release is on " + UpdateCheck.RELEASES_PAGE);
+            return;
+        }
+        new SwingWorker<UpdateCheck.Release, Void>() {
+            @Override
+            protected UpdateCheck.Release doInBackground() throws Exception {
+                return UpdateCheck.newer(current);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    UpdateCheck.Release release = get();
+                    if (release == null) {
+                        Dialogs.tell(MainWindow.this, "Raphael is up to date", "You have the newest version, " + current + ".");
+                    } else if ("Download".equals(Dialogs.question(MainWindow.this, "Raphael " + release.version() + " is available")
+                            .body("You have " + current + ". The new version's installers are on its release page.")
+                            .buttons("Download", "Later").ask())) {
+                        Desktop.getDesktop().browse(java.net.URI.create(release.page()));
+                    }
+                } catch (ExecutionException e) {
+                    LOG.log(Level.INFO, "Couldn't check for updates", e.getCause());
+                    Dialogs.tell(MainWindow.this, "Couldn't reach GitHub", "Check your internet connection, or look at "
+                            + UpdateCheck.RELEASES_PAGE);
+                } catch (IOException | UnsupportedOperationException e) {
+                    Dialogs.tell(MainWindow.this, "The page couldn't be opened", "It's at " + UpdateCheck.RELEASES_PAGE);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }.execute();
+    }
+
+    private static String versionText() {
+        String version = UpdateCheck.currentVersion();
+        return version != null ? version : "(built from the source)";
     }
 
     private void openLogFolder() {
@@ -917,7 +990,7 @@ public class MainWindow extends JFrame {
         SettingsDialog.Theme theme = saved == null ? SettingsDialog.Theme.SYSTEM
                 : Boolean.parseBoolean(saved) ? SettingsDialog.Theme.DARK : SettingsDialog.Theme.LIGHT;
         SettingsDialog.Values chosen = SettingsDialog.ask(this,
-                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), theme));
+                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), theme, App.SETTINGS.getBoolean("checkUpdates", true)));
         if (chosen == null) {
             return;
         }
@@ -926,6 +999,7 @@ public class MainWindow extends JFrame {
         App.SETTINGS.putInt("timeoutSeconds", limits.timeoutSeconds());
         App.SETTINGS.putInt("memoryMb", limits.memoryMb());
         tracer.setLimits(limits);
+        App.SETTINGS.putBoolean("checkUpdates", chosen.checkUpdates());
         boolean wantDark = chosen.theme() == SettingsDialog.Theme.SYSTEM ? SystemTheme.isDark()
                 : chosen.theme() == SettingsDialog.Theme.DARK;
         if (wantDark != Style.isDark()) {

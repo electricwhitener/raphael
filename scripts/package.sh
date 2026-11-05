@@ -19,7 +19,8 @@ java -Djava.awt.headless=true -cp target/classes scripts/AppIcon.java target/ico
 rm -rf target/runtime target/installer
 # java.se: everything a student's program may import. jdk.compiler: javac, for javax.tools.
 # jdk.jdi and jdk.jdwp.agent: the debugger, on both sides. jdk.charsets: files in older encodings.
-jlink --add-modules java.se,jdk.compiler,jdk.jdi,jdk.jdwp.agent,jdk.charsets \
+# jdk.crypto.ec: the encryption HTTPS needs, for the update check.
+jlink --add-modules java.se,jdk.compiler,jdk.jdi,jdk.jdwp.agent,jdk.charsets,jdk.crypto.ec \
       --strip-debug --no-header-files --no-man-pages --compress=zip-6 \
       --output target/runtime
 

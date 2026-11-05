@@ -8,6 +8,15 @@
     <groupId>raphael</groupId>
     <artifactId>raphael</artifactId>
     <version>1.0.0</version>
+    <name>Raphael</name>
+    <description>See data structures change while Java code runs</description>
+    <url>https://github.com/electricwhitener/raphael</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+        </license>
+    </licenses>
 
     <properties>
         <!-- Compile for Java 21 -->
@@ -81,6 +90,8 @@
                     <archive>
                         <manifest>
                             <mainClass>raphael.App</mainClass>
+                            <!-- Implementation-Version: the version Raphael reports and compares when checking for updates -->
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>
                     </archive>
                 </configuration>
