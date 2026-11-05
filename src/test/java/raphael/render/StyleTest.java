@@ -22,6 +22,21 @@ class StyleTest {
         assertTrue(contrast(Style.INK, Style.CHANGE) > 3);
     }
 
+    // WCAG AA in both themes: 4.5:1 for text, 3:1 for the edges of controls.
+    @Test
+    void hintsButtonsAndControlsAreReadableInBothThemes() {
+        for (boolean dark : new boolean[] {false, true}) {
+            Style.useTheme(dark);
+            String theme = dark ? "dark" : "light";
+            assertTrue(contrast(Style.MUTED, Style.BACKGROUND) >= 4.5, theme + ": hints");
+            assertTrue(contrast(Style.MUTED, Style.BAR) >= 4.5, theme + ": hints on the bars");
+            assertTrue(contrast(Style.ON_ACCENT, Style.ACCENT) >= 4.5, theme + ": the run button's text");
+            assertTrue(contrast(Style.CONTROL_BORDER, Style.BACKGROUND) >= 3, theme + ": edges of fields");
+            assertTrue(contrast(Style.INK, Style.BAR) >= 7, theme + ": text on the bars");
+        }
+        Style.useTheme(false);
+    }
+
     @Test
     void textSizeStaysWithinLimits() {
         Style.setCodeSize(500);

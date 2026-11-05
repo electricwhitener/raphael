@@ -30,7 +30,7 @@ public class CallStackPanel extends JPanel implements TraceListener {
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                           boolean selected, boolean focused) {
                 super.getListCellRendererComponent(list, value, index, false, false);
-                setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+                setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
                 setFont(list.getFont().deriveFont(index == 0 ? Font.BOLD : Font.PLAIN));
                 setForeground(index == 0 ? Style.ACCENT : Style.INK_SOFT);
                 return this;

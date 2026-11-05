@@ -13,12 +13,17 @@ import javax.swing.KeyStroke;
 public final class Shortcuts {
 
     private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("mac");
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
 
     private Shortcuts() {
     }
 
     public static boolean isMac() {
         return MAC;
+    }
+
+    public static boolean isWindows() {
+        return WINDOWS;
     }
 
     // "control S" → the KeyStroke for Ctrl+S here, or Cmd+S on a Mac.

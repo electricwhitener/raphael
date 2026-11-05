@@ -34,7 +34,7 @@ public final class Section {
             }
         };
         label.setFont(Style.SECTION_FONT.deriveFont(Map.of(TextAttribute.TRACKING, 0.08)));
-        label.setBorder(BorderFactory.createEmptyBorder(6, 8, 4, 8));
+        label.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         return label;
     }
 

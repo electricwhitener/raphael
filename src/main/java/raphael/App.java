@@ -12,6 +12,7 @@ import raphael.io.AppLog;
 import raphael.render.Style;
 import raphael.ui.ErrorReporter;
 import raphael.ui.MainWindow;
+import raphael.ui.Shortcuts;
 import raphael.ui.SystemTheme;
 
 // Starts Raphael: sets up the look, then opens the main window on Swing's event dispatch thread
@@ -22,6 +23,10 @@ public class App {
     public static final Preferences SETTINGS = Preferences.userNodeForPackage(App.class);
 
     public static void main(String[] args) {
+        if (Shortcuts.isMac()) { // read by Java when the window system starts, so first of all
+            System.setProperty("apple.awt.application.appearance", "system"); // the title bar follows dark mode
+            System.setProperty("apple.awt.application.name", "Raphael");
+        }
         AppLog.setup();          // the log file first, so everything after can write to it
         ErrorReporter.install(); // then the safety net, so even a problem while starting up is caught
         setupLook();
@@ -45,23 +50,35 @@ public class App {
     public static void setupLook(boolean dark) {
         Style.useTheme(dark);
         FlatLaf.setGlobalExtraDefaults(Map.of(
-                "@background", String.format("#%06x", Style.BACKGROUND.getRGB() & 0xFFFFFF),
-                "@accentColor", String.format("#%06x", Style.ACCENT.getRGB() & 0xFFFFFF)));
+                "@background", hex(Style.BACKGROUND),
+                "@accentColor", hex(Style.ACCENT),
+                "Component.borderColor", hex(Style.CONTROL_BORDER),
+                "Button.toolbar.hoverBackground", hex(Style.HOVER),
+                "Button.toolbar.pressedBackground", hex(Style.PRESSED),
+                "TitlePane.background", hex(Style.BAR), // Windows: the title bar matches the toolbar
+                "TitlePane.inactiveBackground", hex(Style.BAR),
+                "TitlePane.foreground", hex(Style.INK),
+                "TitlePane.inactiveForeground", hex(Style.MUTED)));
         UIManager.put("defaultFont", Style.UI_FONT);
         if (dark) {
             FlatDarkLaf.setup();
         } else {
             FlatLightLaf.setup();
         }
-        UIManager.put("Component.arc", 0);
-        UIManager.put("Button.arc", 0);
-        UIManager.put("TextComponent.arc", 0);
-        UIManager.put("ScrollBar.width", 10);
+        UIManager.put("Component.arc", Style.ARC);
+        UIManager.put("Button.arc", Style.ARC);
+        UIManager.put("TextComponent.arc", Style.ARC);
+        UIManager.put("Component.focusWidth", Style.FOCUS_WIDTH); // a visible ring on the focused control
+        UIManager.put("ScrollBar.width", 12);
         UIManager.put("ScrollBar.thumbArc", 0);
         UIManager.put("ScrollBar.showButtons", false);
-        UIManager.put("SplitPane.dividerSize", 6);
+        UIManager.put("SplitPane.dividerSize", 8);
         UIManager.put("SplitPaneDivider.style", "plain");
         UIManager.put("ToolTip.font", Style.UI_FONT);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
+    }
+
+    private static String hex(java.awt.Color color) {
+        return String.format("#%06x", color.getRGB() & 0xFFFFFF);
     }
 }
