@@ -56,7 +56,7 @@ public final class UpdateCheck {
     }
 
     // "1.10.0" is newer than "1.9.2": the numbers are compared one by one, not as text.
-    static boolean isNewer(String candidate, String current) {
+    public static boolean isNewer(String candidate, String current) {
         String[] a = candidate.split("[.-]");
         String[] b = current.split("[.-]");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {

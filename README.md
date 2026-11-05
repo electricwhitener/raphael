@@ -6,9 +6,9 @@
 
 **See your Java program's data structures change while it runs.** Paste or open a Java program and press **Run**. Raphael records every line, then plays it back as a picture: arrays, linked lists, trees and objects, animated as each line changes them. Step forward and back through the whole run.
 
-![Raphael reversing a linked list](docs/demo.gif)
+**[Download Raphael](https://github.com/electricwhitener/raphael/releases/latest)** for Windows, macOS or Linux. It's free, open source, and has its own Java inside, so there's nothing else to install. ([Which file, and the first-run warnings](#install-it).)
 
-**[Download Raphael](https://github.com/electricwhitener/raphael/releases/latest)** for Windows, macOS or Linux. It's free, open source, and has its own Java inside, so there's nothing else to install.
+![Raphael reversing a linked list](docs/demo.gif)
 
 It began as an object-oriented programming course project and is now an open-source tool. The [project report](docs/report/) explains how it works and where each OOP concept is used.
 
@@ -38,9 +38,40 @@ A B-tree is drawn the way textbooks draw it: each node is a row of keys (faded p
 
 ![A B-tree](docs/btree.png)
 
-## Requirements and dependencies
+## Getting started
 
-**To run it, you need:**
+### Install it
+Raphael comes as an installer for each system, with its own Java inside, so there's nothing else to install.
+
+| System | Download | Notes |
+|---|---|---|
+| Windows 10 and 11 | `Raphael-1.0.0-windows-x64.msi` | The installer isn't signed yet, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**. |
+| macOS, Apple Silicon | `Raphael-1.0.0-mac-arm64.dmg` | Not signed yet: the first time, right-click Raphael in Applications and choose **Open**. |
+| macOS, Intel | `Raphael-1.0.0-mac-x64.dmg` | The same. |
+| Ubuntu 24.04 and newer | `Raphael-1.0.0-linux-x64.deb` | `sudo apt install ./Raphael-1.0.0-linux-x64.deb` |
+| Any other Linux | `Raphael-1.0.0-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
+
+They're all on the [latest release](https://github.com/electricwhitener/raphael/releases/latest) page. Raphael says in its status bar when a newer version is out (it checks once a day; you can turn that off in Settings).
+
+### Build it yourself
+You need JDK 21 and Maven 3.8 or newer (details below). Every push runs the full test suite on fresh Windows, macOS and Linux machines (the badge above shows the result).
+
+```bash
+git clone https://github.com/electricwhitener/raphael.git
+cd raphael
+mvn test                       # optional: runs the tests
+mvn -q compile exec:java       # opens the window
+scripts/package.sh             # a ready-to-run folder in target/installer/Raphael
+scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, deb on Linux
+```
+
+`Raphael --self-test` (for example `target/installer/Raphael/bin/Raphael --self-test`) checks, with no window, that this copy can compile and record a program, and prints what it did.
+
+**From Windows, with the project in WSL** (how it's developed): run `scripts/build-app.sh`, then copy `scripts/Run Raphael.bat` to your Desktop and double-click it. It expects the project at `~/raphael` in a WSL distribution called `Ubuntu`. Keep its black window open while you use Raphael. Run `scripts/build-app.sh` again after changing the code, because `dist/` is what the launcher runs.
+
+#### Requirements and dependencies
+
+**To build it, you need:**
 
 | What | Version | Why |
 |---|---|---|
@@ -65,37 +96,6 @@ A B-tree is drawn the way textbooks draw it: each node is a row of keys (faded p
 | `java.util.prefs` (`java.prefs`) | Remembering dark mode and text size |
 
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
-
-## Getting started
-
-### Install it
-Raphael comes as an installer for each system, with its own Java inside, so there's nothing else to install.
-
-| System | Download | Notes |
-|---|---|---|
-| Windows 10 and 11 | `Raphael-1.0.0-windows-x64.msi` | The installer isn't signed yet, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**. |
-| macOS, Apple Silicon | `Raphael-1.0.0-mac-arm64.dmg` | Not signed yet: the first time, right-click Raphael in Applications and choose **Open**. |
-| macOS, Intel | `Raphael-1.0.0-mac-x64.dmg` | The same. |
-| Ubuntu 24.04 and newer | `Raphael-1.0.0-linux-x64.deb` | `sudo apt install ./Raphael-1.0.0-linux-x64.deb` |
-| Any other Linux | `Raphael-1.0.0-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
-
-They're all on the [latest release](https://github.com/electricwhitener/raphael/releases/latest) page. Raphael says in its status bar when a newer version is out (it checks once a day; you can turn that off in Settings).
-
-### Build it yourself
-You need JDK 21 and Maven 3.8 or newer. Every push runs the full test suite on fresh Windows, macOS and Linux machines (the badge above shows the result).
-
-```bash
-git clone https://github.com/electricwhitener/raphael.git
-cd raphael
-mvn test                       # optional: runs the tests
-mvn -q compile exec:java       # opens the window
-scripts/package.sh             # a ready-to-run folder in target/installer/Raphael
-scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, deb on Linux
-```
-
-`Raphael --self-test` (for example `target/installer/Raphael/bin/Raphael --self-test`) checks, with no window, that this copy can compile and record a program, and prints what it did.
-
-**From Windows, with the project in WSL** (how it's developed): run `scripts/build-app.sh`, then copy `scripts/Run Raphael.bat` to your Desktop and double-click it. It expects the project at `~/raphael` in a WSL distribution called `Ubuntu`. Keep its black window open while you use Raphael. Run `scripts/build-app.sh` again after changing the code, because `dist/` is what the launcher runs.
 
 ## Using Raphael
 1. **Choose a program.** Click an example in the guide that fills the picture area at first (or **Examples** in the toolbar), press **New** to type or paste your own (Ctrl+A then Ctrl+V replaces everything), **Open** a `.java` file with your system's own file dialog, or drop one onto the window.
