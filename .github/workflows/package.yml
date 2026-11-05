@@ -61,6 +61,8 @@ jobs:
       - name: Install and self-test (Linux)
         if: runner.os == 'Linux'
         run: |
+          # The package adds Raphael to the desktop's menu; a CI server has no menu folders yet.
+          sudo mkdir -p /usr/share/applications /usr/share/desktop-directories
           sudo apt-get install -y ./dist-installers/*.deb
           /opt/raphael/bin/Raphael --self-test
 
