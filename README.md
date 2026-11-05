@@ -4,7 +4,7 @@
 
 Raphael shows data structures changing while a Java program runs. Type, paste or open a single-file Java program and press **run**. Raphael plays it back line by line and draws its arrays, linked lists, trees and objects, so you can see what the code does. You can step forward and back through the whole run.
 
-It was built as an object-oriented programming course project in Java. [docs/OOP-HIGHLIGHTS.md](docs/OOP-HIGHLIGHTS.md) shows where each OOP concept is used in its code.
+It began as an object-oriented programming course project in Java, and is now an open-source tool. The [project report](docs/report/) explains how it works and where each OOP concept is used.
 
 ![Raphael reversing a linked list](docs/window-reverse.png)
 
@@ -302,7 +302,7 @@ Safety:
 
 ## OOP concepts
 
-This table lists where each concept is used. [docs/OOP-HIGHLIGHTS.md](docs/OOP-HIGHLIGHTS.md) goes through the main ones with the code.
+This table lists where each concept is used. [Chapter 5 of the report](docs/report/05-oop-and-design.md) goes through the main ones with the code.
 
 Each class also names its concept in an `// OOP:` comment at the top of the file.
 
@@ -375,10 +375,7 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 | File | What it is |
 |---|---|
-| [docs/OOP-HIGHLIGHTS.md](docs/OOP-HIGHLIGHTS.md) | Where the OOP concepts are used, with real code and a comment on each line |
-| [DEMO.md](DEMO.md) | The script for demonstrating Raphael |
 | [DECISIONS.md](DECISIONS.md) | Why things were built the way they were, stage by stage |
-| [PLAN.md](PLAN.md) | The original plan and stages (version 1, the course project) |
 | [ROADMAP.md](ROADMAP.md) | Version 2: the stages that turn Raphael into a product |
 | [docs/report/](docs/report/) | The project report, one chapter per file (a draft that grows with the roadmap) |
 | [CLAUDE.md](CLAUDE.md) | Project notes and instructions for Claude Code, the AI coding assistant used to build Raphael |
@@ -386,7 +383,6 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | `scripts/build-app.sh` | Packages the app into `dist/` |
 | `scripts/Run Raphael.bat` | Starts `dist/` from Windows through WSL |
 | `scripts/build-windows.sh` | Builds a standalone `Raphael.exe` (experimental, untested) |
-| `exercises/` | Early practice programs |
 
 ## Licences
 The bundled font is under the SIL Open Font License (`src/main/resources/fonts/OFL.txt`). FlatLaf and JUnit keep their own licences, listed above. No licence has been chosen yet for Raphael's own code.
