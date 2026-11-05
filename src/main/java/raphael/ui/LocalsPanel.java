@@ -54,7 +54,7 @@ public class LocalsPanel extends JPanel implements TraceListener {
                 setBackground(changed ? Style.CHANGE_TINT : Style.BACKGROUND);
                 setForeground(Style.INK);
                 setFont(table.getFont().deriveFont(changed ? Font.BOLD : Font.PLAIN));
-                setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+                setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
                 return this;
             }
         });

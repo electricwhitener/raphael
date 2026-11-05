@@ -34,9 +34,9 @@ public class ConsolePanel extends JPanel implements TraceListener {
         output.setLineWrap(true);
         output.setWrapStyleWord(true);
         output.setFont(Style.CODE_FONT);
-        output.setMargin(new java.awt.Insets(2, 8, 2, 8));
+        output.setMargin(new java.awt.Insets(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         input.setFont(Style.CODE_FONT);
-        input.setMargin(new java.awt.Insets(2, 8, 2, 8));
+        input.setMargin(new java.awt.Insets(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
 
         JScrollPane outputScroll = new JScrollPane(output);
         outputScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -47,7 +47,7 @@ public class ConsolePanel extends JPanel implements TraceListener {
         inputArea.setBackground(Style.BACKGROUND);
         JLabel inputHeader = Section.header("stdin · for Scanner, type before run");
         inputHeader.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(6, 8, 4, 8)));
+                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
         inputArea.add(inputHeader, BorderLayout.NORTH);
         inputArea.add(inputScroll, BorderLayout.CENTER);
 

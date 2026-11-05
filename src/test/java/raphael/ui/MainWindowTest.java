@@ -1,6 +1,8 @@
 package raphael.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import java.awt.Container;
@@ -28,5 +30,27 @@ class MainWindowTest {
             }
         }
         window.dispose();
+    }
+
+    // Save As offers the public class's name, which Java expects the file to have.
+    @Test
+    void saveSuggestsThePublicClassName() {
+        assertEquals("BSTInsert.java", MainWindow.suggestedName("class Node {}\npublic class BSTInsert { }"));
+        assertEquals("Node.java", MainWindow.suggestedName("class Node {}"));
+        assertEquals("Main.java", MainWindow.suggestedName("// nothing yet"));
+    }
+
+    @Test
+    void theLegendDrawsInBothThemes() {
+        for (boolean dark : new boolean[] {false, true}) {
+            raphael.render.Style.useTheme(dark);
+            Legend legend = new Legend();
+            legend.setSize(legend.getPreferredSize());
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(legend.getWidth(), legend.getHeight(),
+                    java.awt.image.BufferedImage.TYPE_INT_RGB);
+            legend.paint(image.getGraphics());
+            assertTrue(legend.getPreferredSize().width < 520, "the key fits beside the status message");
+        }
+        raphael.render.Style.useTheme(false);
     }
 }

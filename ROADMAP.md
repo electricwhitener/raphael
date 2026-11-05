@@ -141,9 +141,48 @@ The user now wants Raphael to be **a real, production-grade product**:
 
 ### 4b. Modern interface (with the chief UI designer)
 Added 2026-11-05: the interface still feels dated, for example the open dialog next to Windows' own.
-- The `raphael-ui-designer` agent (Sonnet) audits the running app in both themes and writes ranked, exact specs. Claude builds them. The `raphael-design-critic` checks that the animation still tells the truth.
-- Known first item: **the system's own file dialogs.** `java.awt.FileDialog` gives the real Explorer dialog on Windows and Finder's on macOS. On Linux it's GTK's if available, otherwise a fallback. This replaces Swing's `JFileChooser`.
-- Likely areas: toolbar hierarchy (run as the clear primary action, grouped controls, icons), a macOS menu bar, the first-run and empty states, dialog wording and button order per platform, spacing on a 4 px grid, and focus and contrast in both themes.
+
+**First design pass**, specified by `raphael-ui-designer` on 2026-11-05. Mockups are in `docs/design/`.
+
+Already built (the end-of-Stage-4 pass):
+- the system's own Open and Save dialogs (`FileDialog`), with Save As (Ctrl+Shift+S)
+- contrast fixes (`MUTED`, a themed `ON_ACCENT`)
+- the `BAR`, `HOVER`, `PRESSED` and `CONTROL_BORDER` colours
+- a 2 px focus ring, 8 px control corners, and spacing on a 4 px grid
+- the title with an unsaved dot, a themed title bar, and Mac app-menu Quit and Settings
+- the status bar with a swatch legend
+
+To build in this stage:
+1. **Toolbar** (`main-after-*.png`):
+   - 48 px high on `BAR`, with 32×32 icon buttons and 16 px icons drawn with `Path2D` in a new `ui/Icons` class (no library)
+   - groups split by 1×24 px dividers; icon colours `INK_SOFT`, with `HOVER` and `PRESSED` fills and an `ICON_DISABLED` colour (BBC2CA / 4A525C)
+   - Run is a filled button with an icon and the text "Run"; while recording it becomes Stop, filled `INK`
+   - "Examples ▾"; sentence-case labels; an accessible name on every icon-only button
+   - minimum window 960×600, so everything fits at 200% scaling
+   - tooltips such as "Step over (skip call)  Alt+↓"
+2. **One dialog style** (`ui/Dialogs`):
+   - a heading (sans, bold, 15 px) and a body (sans 13 px, wrapped at 360 px)
+   - a footer on `BAR` with verb buttons in each platform's order: Windows primary first; macOS and GNOME Cancel first, primary last
+   - restore: "Restore your unsaved code?", with the draft's time and line count, and the buttons Restore and Discard it
+   - unsaved changes: "Save changes to X?", with the buttons Save, Don't save and Cancel
+   - errors: a scrollable details box and the buttons Copy details, Open log folder and Close
+   - one style for file errors, find, and keys
+3. **A sans font for the interface:**
+   - the system font on Windows and macOS (stop forcing mono as `defaultFont`)
+   - bundled Inter (OFL) on Linux, **which needs the user's OK**
+   - the monospace font stays for code, the picture and the panels
+4. **First-run panel** (`main-before-*.png`):
+   - "Watch your program run", three numbered steps with key chips, and example chips that load an example; hints in the empty bottom panels
+   - while recording, "Recording… N steps" with a 2 px moving bar under the toolbar (`main-recording-light.png`)
+5. **Settings** (`settings-*.png`):
+   - 520 px wide, in two groups (run limits, appearance), with the hints under the labels and units beside the fields
+   - System / Light / Dark as a segmented control
+   - Restore defaults, Cancel and Save
+6. **Menu bar and keyboard:**
+   - File, Edit, Run, View and Help menus built from shared `Action`s; the screen menu bar on macOS, mnemonics on Windows and Linux
+   - toolbar buttons reachable with Tab (`setRequestFocusEnabled(false)` instead of not focusable)
+   - F6 to move between regions
+7. **Drag and drop** a `.java` file onto the window. It must keep the editor's own text drag and drop working.
 
 ### 5. Installers
 - `jlink` makes a small private Java runtime with only the modules Raphael needs:

@@ -50,9 +50,18 @@ public final class Style {
     public static final int MAX_BOX_ROW_W = 900;  // objects stay together longer, so arrows don't run behind them
     public static final double ARROW_OVER_BOX = 0.35; // how strongly an array's arrow shows across a box
 
+    // The window around the picture: gaps on a 4 px grid, and how round controls are. (The
+    // picture's cells and nodes stay square.)
+    public static final int SPACE_1 = 4;
+    public static final int SPACE_2 = 8;
+    public static final int SPACE_3 = 12;
+    public static final int STATUS_H = 28;   // the status bar
+    public static final int ARC = 8;         // corners of buttons and fields
+    public static final int FOCUS_WIDTH = 2; // the ring around the focused control
+
     // Colours. These aren't final, because dark mode swaps them all at once in useTheme().
     // Everything reads them when it paints, so the next repaint uses the new ones.
-    public static final Color ON_ACCENT = Color.WHITE;  // text on a filled blue button
+    public static Color ON_ACCENT;     // text on a filled blue button (dark text in dark mode: white on that blue is too faint)
     public static final double WRITE_TINT = 0.16;       // how much blue fills a cell being written
     public static final double READ_TINT = 0.07;        // how much blue fills a cell being read
     public static Color BACKGROUND;
@@ -61,6 +70,10 @@ public final class Style {
     public static Color OUTLINE;       // the edges of boxes and circles
     public static Color MUTED;         // index numbers, hints
     public static Color HAIRLINE;      // thin separators
+    public static Color BAR;           // the toolbar and status bar
+    public static Color HOVER;         // a button under the mouse
+    public static Color PRESSED;       // a button being pressed
+    public static Color CONTROL_BORDER; // edges of fields and buttons (3:1 against the background, as WCAG asks)
     public static Color FILL;          // inside a cell
     public static Color FILL_ALT;      // pointer slots, title bars
     public static Color ACCENT;        // variables, the next line
@@ -126,8 +139,13 @@ public final class Style {
         INK = pick(0x1F2328, 0xE6EDF3);
         INK_SOFT = pick(0x57606A, 0xA0A9B4);
         OUTLINE = pick(0x6E7781, 0x768390);
-        MUTED = pick(0x8C959F, 0x7D8590);
+        MUTED = pick(0x656D76, 0x9198A1); // 5.3:1 and 6.5:1, readable for hints and small numbers
         HAIRLINE = pick(0xD0D7DE, 0x30363D);
+        BAR = pick(0xF6F8FA, 0x161B22);
+        HOVER = pick(0xEAEEF2, 0x262C36);
+        PRESSED = pick(0xD8DEE4, 0x30363D);
+        CONTROL_BORDER = pick(0x87909A, 0x656D76);
+        ON_ACCENT = pick(0xFFFFFF, 0x0D1117);
         FILL = pick(0xFFFFFF, 0x161B22);
         FILL_ALT = pick(0xF6F8FA, 0x21262D);
         ACCENT = pick(0x0969DA, 0x4493F8);

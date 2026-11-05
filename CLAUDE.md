@@ -98,7 +98,16 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Pictures are built on demand: `SceneBuilder.build` learns the run (sizes, markers, `ListOrder` with the step each node was placed), then returns a `SceneList`, an LRU of 64. `TraceModel.load(trace, scenes, runSize)`.
   - Results: 500-node list 20.6 s → 1.9 s (285,857 → 856 object reads); empty run 380 → 66 ms; picture memory 155 MB → under 1 MB; frames about 2 ms; window open in about 0.5 s.
   - `RememberingTest` (38 programs, remembering on vs off) and `SceneListTest`. Lambdas display as `lambda`. 213 tests.
-- **Next:** the Stage 4 UI pass (`raphael-ui-designer`), then ROADMAP stage 4b.
+- **Stage 4 UI pass: done, 2026-11-05.**
+  - The designer's first audit is saved in ROADMAP 4b, with mockups in `docs/design/`.
+  - Built so far:
+    - `FileDialog` for Open and Save (`chooseFile`, `lastFolder`, `suggestedName`) plus Save As (Ctrl+Shift+S); it's GTK on Linux and WSL
+    - `MUTED` 656D76 / 9198A1 and a themed `ON_ACCENT`; new `BAR`, `HOVER`, `PRESSED`, `CONTROL_BORDER`, `SPACE_*`, `ARC` = 8, `FOCUS_WIDTH` = 2, `STATUS_H`
+    - FlatLaf border, hover and title-pane colours; controls now have rounded corners while the picture stays square
+    - the title "● name — Raphael" (on a Mac, `Window.documentModified`); Mac `apple.awt.application.appearance`; `Desktop` Quit and Preferences handlers
+    - `ui/Legend` (swatches) and a 28 px status bar on `BAR`
+  - 216 tests.
+- **Next:** ROADMAP stage 4b (the rest of the designer's spec). The Inter font for Linux needs the user's OK.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
@@ -123,7 +132,7 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
 - **Dependencies (relaxed 2026-11-04):** new libraries and build plugins are allowed. Before adding one, name it and say why. Today the app uses the JDK and FlatLaf, and the tests use JUnit 5. The JetBrains Mono NL font files in `src/main/resources/fonts/` (SIL Open Font License, `OFL.txt` beside them) are a resource, not a code dependency.
 - **Explain before doing:** explain each stage (what, why, which concepts) before building it, so the user can write about it. New classes are fine (relaxed 2026-11-04).
 - **The look (decided 2026-10-26, dark mode added 2026-11-01):** a plain terminal feel, white or dark. All colours, sizes, fonts and timings go in `render/Style`.
-  - One monospace font (JetBrains Mono NL, which ships inside the app), square thin lines, lowercase terminal-style labels.
+  - One monospace font (JetBrains Mono NL, which ships inside the app) for code, the picture and the panels; thin lines; the picture's shapes are square. From 2026-11-05, controls (buttons, fields) have 8 px corners, the toolbar and status bar use `BAR`, and stage 4b moves the interface's own text to the system's sans font.
   - The editor's code is coloured as in an IDE (the user asked, 2026-10-31). Those colours avoid the blue, amber and red below.
   - Blue (`ACCENT`) means "about to happen": the next line, variables, markers, outlines. Amber (`CHANGE`) means "just changed". Grey is the line that just ran. Red is an error.
 - **Motion:** shapes move on critically damped springs (no bounce) that keep their speed when retargeted. Text is drawn as glyph outlines. Leaving is faster than arriving. Don't go back to fixed-duration tweens.

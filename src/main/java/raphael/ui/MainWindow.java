@@ -5,7 +5,9 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.FileDialog;
 import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -32,7 +34,6 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -49,7 +50,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.JToolBar;
 import javax.swing.SwingWorker;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.JTextComponent;
 import raphael.App;
 import raphael.RaphaelException;
@@ -97,6 +97,7 @@ public class MainWindow extends JFrame {
 
             the editor
               Ctrl+N, O, S       new, open, save
+              Ctrl+Shift+S       save as
               Ctrl+Z, Ctrl+Y     undo, redo
               Ctrl+F, F3         find, find next
               Ctrl+/             comment or uncomment lines
@@ -120,7 +121,10 @@ public class MainWindow extends JFrame {
     private final ConsolePanel console = new ConsolePanel();
     private final JButton runButton = new JButton("run");
     private final JLabel status = new JLabel(" ");
-    private final JLabel legend = new JLabel();
+    private final Legend legend = new Legend();
+    private final JPanel statusBar = new JPanel(new BorderLayout());
+    private JToolBar toolBar;
+    private boolean legendWanted = true; // false while the status bar shows an error
     private final JButton themeButton = toolButton("dark", "switch between dark and light  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
     private final Tracer tracer = new JdiTracer();
@@ -130,6 +134,7 @@ public class MainWindow extends JFrame {
     private Timer progress;
     private String lastSearch = "";
     private RunLimits limits = savedLimits();
+    private String documentName = "new program"; // shown in the title
 
     // Autosave: every few seconds, unsaved code is copied to a draft file (see DraftStore). The
     // writing happens on a background thread, so a slow disk never pauses the window.
@@ -163,7 +168,8 @@ public class MainWindow extends JFrame {
             }
         });
         getContentPane().setBackground(Style.BACKGROUND);
-        add(buildToolBar(), BorderLayout.NORTH);
+        toolBar = buildToolBar();
+        add(toolBar, BorderLayout.NORTH);
 
         JScrollPane picture = new JScrollPane(visual);
         picture.setBorder(Section.hairline(0, 1, 0, 0));
@@ -190,17 +196,19 @@ public class MainWindow extends JFrame {
         middle.setBorder(Section.hairline(1, 0, 0, 0));
         add(middle, BorderLayout.CENTER);
 
-        status.setFont(Style.UI_FONT);
-        status.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
-        JPanel statusBar = new JPanel(new BorderLayout());
-        statusBar.setBackground(Style.BACKGROUND);
+        status.setFont(Style.UI_FONT.deriveFont(12f));
+        status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
+        statusBar.setBorder(Section.hairline(1, 0, 0, 0));
+        statusBar.setPreferredSize(new Dimension(0, Style.STATUS_H));
         statusBar.add(status, BorderLayout.CENTER);
-        legend.setFont(Style.CAPTION_FONT);
-        legend.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
         statusBar.add(legend, BorderLayout.EAST);
         add(statusBar, BorderLayout.SOUTH);
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                showLegendIfRoom();
+            }
+        });
 
         // Scroll panes and split panes take the arrow keys, Home and End for themselves whenever
         // something inside them has focus. Without these lines our shortcuts would never hear them.
@@ -210,6 +218,7 @@ public class MainWindow extends JFrame {
 
         // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
+            updateTitle();
             console.showInput(code.getCode().contains("System.in"));
             if (model.getTrace() == null) { // an old compile error no longer applies
                 visual.setMessage(null, null);
@@ -228,6 +237,28 @@ public class MainWindow extends JFrame {
         loadExample("BSTInsert");
         tracer.setLimits(limits);
         autosave.start();
+        useAppMenu();
+    }
+
+    // On a Mac, Quit (Cmd+Q) and Settings… live in the app's own menu. Route them through the
+    // same unsaved-code question and the same settings dialog as everywhere else.
+    private void useAppMenu() {
+        if (!Desktop.isDesktopSupported()) {
+            return;
+        }
+        Desktop desktop = Desktop.getDesktop();
+        if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
+            desktop.setQuitHandler((event, response) -> {
+                if (okToLoseCode("quit without saving your code?")) {
+                    quit();
+                } else {
+                    response.cancelQuit();
+                }
+            });
+        }
+        if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
+            desktop.setPreferencesHandler(event -> showSettings());
+        }
     }
 
     // Adds a panel that takes this share of the row's width. With no preferred width of its own,
@@ -267,11 +298,8 @@ public class MainWindow extends JFrame {
         runButton.putClientProperty("FlatLaf.style",
                 "toolbar.hoverBackground: " + pressed + "; toolbar.pressedBackground: " + pressed);
         themeButton.setText(Style.isDark() ? "light" : "dark");
-        // A small key to the picture, so nobody needs the manual. Each word is in the colour it explains.
-        legend.setText(String.format("<html><font color='%s'>blue: next</font> · grey: just ran · "
-                + "<font color='%s'>amber: just changed</font> · solid box: writes · dashed box: reads · faded: not in use</html>",
-                hex(Style.ACCENT), hex(Style.CODE_NUMBER)));
-        legend.setForeground(Style.INK_SOFT);
+        toolBar.setBackground(Style.BAR); // the bars frame the work area in a slightly different shade
+        statusBar.setBackground(Style.BAR);
         repaint();
     }
 
@@ -388,8 +416,8 @@ public class MainWindow extends JFrame {
     private JToolBar buildToolBar() {
         JToolBar bar = new JToolBar();
         bar.setFloatable(false);
-        bar.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
-        bar.setBackground(Style.BACKGROUND);
+        bar.setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
 
         JButton newProgram = toolButton("new", "start a new program, or paste one in  (Ctrl+N)");
         newProgram.addActionListener(e -> newProgram());
@@ -444,6 +472,7 @@ public class MainWindow extends JFrame {
         bind("control ENTER", this::run);
         bind("F5", this::run);
         bind("control S", this::save);
+        bind("shift control S", this::saveAs);
         bind("control O", this::open);
         bind("control N", this::newProgram);
         bind("control F", this::find);
@@ -603,9 +632,15 @@ public class MainWindow extends JFrame {
     }
 
     private void say(String message, Color color) {
-        legend.setVisible(!Style.ERROR.equals(color)); // during an error, the message outranks the key
+        legendWanted = !Style.ERROR.equals(color); // during an error, the message outranks the key
+        showLegendIfRoom();
         status.setText(message);
         status.setForeground(color);
+    }
+
+    // The key to the picture, unless there's an error to show or the window is too narrow for both.
+    private void showLegendIfRoom() {
+        legend.setVisible(legendWanted && getWidth() >= 1100);
     }
 
     // Where to put the divider so the longest line isn't cut off, keeping room for the picture.
@@ -704,7 +739,7 @@ public class MainWindow extends JFrame {
             code.markUnsaved();
             top.setDividerLocation(dividerForCode());
             currentFile = null;
-            setTitle("raphael · restored code");
+            setDocument("restored code");
             say(Shortcuts.label("restored your unsaved code · ctrl+s saves it"), Style.INK_SOFT);
         } else {
             lastDraft = "";  // differs from "no draft", so the next autosave removes the file
@@ -741,7 +776,7 @@ public class MainWindow extends JFrame {
         code.setCode(NEW_PROGRAM);
         code.startTypingAt(3, 8);
         currentFile = null;
-        setTitle("raphael · new program");
+        setDocument("new program");
         say(Shortcuts.label("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
@@ -753,7 +788,7 @@ public class MainWindow extends JFrame {
             code.setCode(new String(in.readAllBytes(), StandardCharsets.UTF_8));
             top.setDividerLocation(dividerForCode());
             currentFile = null;
-            setTitle("raphael · " + name + ".java (example)");
+            setDocument(name + ".java (example)");
             say("loaded " + name + Shortcuts.label(".java · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException | NullPointerException e) { // the examples are inside Raphael, so this is a bug
             ErrorReporter.report(e);
@@ -776,47 +811,125 @@ public class MainWindow extends JFrame {
     }
 
     private void open() {
-        JFileChooser chooser = new JFileChooser(currentFile != null ? currentFile : startFolder());
-        chooser.setFileFilter(new FileNameExtensionFilter("Java files", "java"));
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION || !okToReplaceCode()) {
+        if (!okToReplaceCode()) { // ask before the file dialog, not after picking a file
+            return;
+        }
+        File file = chooseFile(false);
+        if (file == null) {
             return;
         }
         try {
-            code.setCode(SafeFiles.readCode(chooser.getSelectedFile().toPath()));
+            code.setCode(SafeFiles.readCode(file.toPath()));
             top.setDividerLocation(dividerForCode());
-            currentFile = chooser.getSelectedFile();
-            setTitle("raphael · " + currentFile.getName());
-            say("opened " + currentFile.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
+            currentFile = file;
+            setDocument(file.getName());
+            say("opened " + file.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
-            LOG.log(Level.INFO, "Couldn't open " + chooser.getSelectedFile(), e);
-            JOptionPane.showMessageDialog(this, "Couldn't open " + chooser.getSelectedFile().getName() + ":\n"
-                    + SafeFiles.describe(e), "raphael", JOptionPane.WARNING_MESSAGE);
+            LOG.log(Level.INFO, "Couldn't open " + file, e);
+            JOptionPane.showMessageDialog(this, "Couldn't open " + file.getName() + ":\n"
+                    + SafeFiles.describe(e), "Raphael", JOptionPane.WARNING_MESSAGE);
         }
     }
 
-    private void save() {
-        if (currentFile == null) {
-            JFileChooser chooser = new JFileChooser(startFolder());
-            chooser.setFileFilter(new FileNameExtensionFilter("Java files", "java"));
-            if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
-                return;
-            }
-            currentFile = chooser.getSelectedFile();
-            if (!currentFile.getName().endsWith(".java")) {
-                currentFile = new File(currentFile.getPath() + ".java");
+    // Saves to the current file, or asks where if there isn't one yet. True if it was saved.
+    private boolean save() {
+        return currentFile != null ? saveTo(currentFile) : saveAs();
+    }
+
+    private boolean saveAs() {
+        File file = chooseFile(true);
+        return file != null && saveTo(file);
+    }
+
+    private boolean saveTo(File file) {
+        try {
+            SafeFiles.write(file.toPath(), code.getCode());
+            currentFile = file;
+            code.markSaved();
+            setDocument(file.getName());
+            say("[saved] " + file.getName(), Style.INK_SOFT);
+            return true;
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Couldn't save " + file, e);
+            JOptionPane.showMessageDialog(this, "Couldn't save " + file.getName() + ":\n"
+                    + SafeFiles.describe(e) + "\nYour code is still here; try saving somewhere else.",
+                    "Raphael", JOptionPane.WARNING_MESSAGE);
+            currentFile = null; // so the next save asks where
+            return false;
+        }
+    }
+
+    // The computer's own Open or Save dialog: Explorer's on Windows, Finder's on macOS, GTK's on
+    // Linux (and inside WSL). Swing's JFileChooser looks and works like neither. Null if cancelled.
+    private File chooseFile(boolean forSaving) {
+        FileDialog dialog = new FileDialog(this, forSaving ? "Save As" : "Open", forSaving ? FileDialog.SAVE : FileDialog.LOAD);
+        dialog.setDirectory(lastFolder());
+        if (forSaving) {
+            dialog.setFile(currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
+        } else {
+            dialog.setFilenameFilter((folder, name) -> name.toLowerCase(Locale.ROOT).endsWith(".java"));
+            if (Shortcuts.isWindows()) {
+                dialog.setFile("*.java"); // Windows ignores the filter above; this pattern filters instead
             }
         }
-        try {
-            SafeFiles.write(currentFile.toPath(), code.getCode());
-            code.markSaved();
-            setTitle("raphael · " + currentFile.getName());
-            say("saved " + currentFile.getName(), Style.INK_SOFT);
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't save " + currentFile, e);
-            JOptionPane.showMessageDialog(this, "Couldn't save " + currentFile.getName() + ":\n"
-                    + SafeFiles.describe(e) + "\nYour code is still here; try saving somewhere else.",
-                    "raphael", JOptionPane.WARNING_MESSAGE);
-            currentFile = null; // so the next save asks where
+        dialog.setVisible(true); // waits until the user picks or cancels
+        String name = dialog.getFile();
+        if (name == null) {
+            return null;
+        }
+        App.SETTINGS.put("lastFolder", dialog.getDirectory());
+        if (forSaving && name.indexOf('.') < 0) {
+            name += ".java";
+            File file = new File(dialog.getDirectory(), name);
+            // The dialog only asked about replacing the name that was typed, without ".java".
+            if (file.exists() && JOptionPane.showConfirmDialog(this, file.getName() + " already exists. Replace it?",
+                    "Raphael", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
+                return null;
+            }
+            return file;
+        }
+        return new File(dialog.getDirectory(), name);
+    }
+
+    // Where the file dialogs open: the current file's folder, the last folder used, or the Desktop.
+    private String lastFolder() {
+        if (currentFile != null && currentFile.getParent() != null) {
+            return currentFile.getParent();
+        }
+        String last = App.SETTINGS.get("lastFolder", null);
+        if (last != null && new File(last).isDirectory()) {
+            return last;
+        }
+        File start = startFolder();
+        return start != null ? start.getPath() : System.getProperty("user.home");
+    }
+
+    // A file name for code that has none yet: its public class (or first class), then .java.
+    static String suggestedName(String code) {
+        java.util.regex.Matcher publicClass = java.util.regex.Pattern
+                .compile("public\\s+(?:final\\s+|abstract\\s+)?class\\s+(\\w+)").matcher(code);
+        if (publicClass.find()) {
+            return publicClass.group(1) + ".java";
+        }
+        java.util.regex.Matcher anyClass = java.util.regex.Pattern.compile("\\bclass\\s+(\\w+)").matcher(code);
+        return anyClass.find() ? anyClass.group(1) + ".java" : "Main.java";
+    }
+
+    // The window's title: the document's name, with a dot while it has unsaved changes. On a
+    // Mac, the title is just the name, and the dot goes in the close button, as Mac apps do it.
+    private void setDocument(String name) {
+        documentName = name;
+        updateTitle();
+    }
+
+    private void updateTitle() {
+        boolean unsaved = code.isDirty();
+        if (Shortcuts.isMac()) {
+            setTitle(documentName);
+            getRootPane().putClientProperty("Window.documentModified", unsaved);
+            getRootPane().putClientProperty("Window.documentFile", currentFile);
+        } else {
+            setTitle((unsaved ? "● " : "") + documentName + " — Raphael");
         }
     }
 

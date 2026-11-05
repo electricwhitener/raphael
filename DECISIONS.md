@@ -559,3 +559,17 @@ The catch was list positions. `ListOrder` learned them while building the steps 
 
 A timing test would be flaky on CI's shared machines, so the test counts work instead: the 500-node list must read fewer than two objects per step.
 
+## The first UI pass (after Stage 4)
+
+- Why a design agent?
+
+The interface still looked dated next to today's apps: Swing's own file chooser beside Windows' Explorer dialog was the clearest example. I added a "chief UI designer" agent (`raphael-ui-designer`, running on Sonnet, which costs less). It builds Raphael, takes screenshots of the real window and every dialog in both themes and at 200% scaling, and writes exact specs. It doesn't edit code. Claude builds its specs, so the code stays in one style I can explain. From now on, every stage ends with a pass like this.
+
+- What did it find?
+
+Nine things. They're ranked, with mockups in `docs/design/`, and the ones not built yet are listed in ROADMAP stage 4b. The ones built now:
+- **The system's own file dialogs.** `java.awt.FileDialog` opens Explorer's dialog on Windows, Finder's on a Mac and GTK's on Linux, with the sidebar, search and recent folders people know. I checked that Java picks the GTK one here, inside WSL. Windows ignores a file-name filter, so the dialog is given `*.java` there instead. Save As (Ctrl+Shift+S) suggests the public class's name, because Java expects the file to be named after it. Raphael remembers the last folder. Open now asks about unsaved code *before* the dialog, not after you've picked a file.
+- **Contrast.** Hint text was 3:1 on white, and white text on the dark theme's blue run button was 3.1:1. WCAG asks for 4.5:1. `MUTED` is darker in light mode and lighter in dark mode, and the run button's text is dark in dark mode. A test now checks these ratios in both themes.
+- **Controls.** Fields and buttons have borders you can see (3:1), a 2 px ring shows which one has the keyboard, and they have 8 px corners. Square corners on buttons were the strongest "old" signal after the missing icons. The picture's cells and nodes stay square. Gaps are on a 4 px grid.
+- **The bars and the title.** The toolbar and status bar are a slightly different shade (`BAR`) that frames the work area. The legend is now a swatch for each mark, so it doesn't rely on colour alone (filled, outlined and dashed squares), and it hides when the window is too narrow. The title reads "● BSTInsert.java — Raphael" while there are unsaved changes. A Mac shows that in the close button instead, as Mac apps do. On Windows, FlatLaf draws the title bar, so it follows dark mode. On a Mac, Cmd+Q and the app menu's Settings… go through the same question about unsaved code and the same settings dialog.
+

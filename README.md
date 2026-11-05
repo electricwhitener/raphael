@@ -127,7 +127,8 @@ The log never leaves your computer.
 | Home, End | First, last step |
 | Alt+Down, Alt+Up | **skip call** (don't go inside calls on this line), **finish call** (run until this method returns) |
 | Click a line number | Jump to the next time that line runs |
-| Ctrl+N, Ctrl+O, Ctrl+S | New, open, save |
+| Ctrl+N, Ctrl+O, Ctrl+S | New, open, save (open and save use your system's own file dialog) |
+| Ctrl+Shift+S | Save as |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | Ctrl+F, F3 | Find, find next |
 | Ctrl+/ | Comment or uncomment lines |
@@ -139,7 +140,7 @@ The log never leaves your computer.
 | Ctrl+, | Settings: step limit, timeout, memory, text size, theme |
 
 ### Reading the picture
-The status bar has a small key to these.
+The status bar has a key to these: a swatch for each mark, from "Next" to "Reads".
 
 - **Blue means "about to happen".**
   - The line that runs next is blue, with a ▶ in the gutter.
@@ -284,7 +285,7 @@ Safety:
 | `Diff` | What changed between two scenes: added, removed, moved, changed | `between(before, after)` |
 | `Style` | Every colour, size, font and timing; swaps all the colours for dark mode; loads the bundled font | constants, `useTheme(dark)`, `setCodeSize()`, `textWidth()`, `pickMono()` |
 | **ui/** | | |
-| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `open()`, `save()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
+| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
 | `TraceModel` | Holds the run and the current step; tells listeners when it changes | `load()`, `setStep()`, `next()`, `stepOver()`, `stepOut()`, `jumpToLine()`, `getRunSize()` |
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks and undo | `showErrors()`, `stepChanged()`, `undo()`, `isDirty()`, `widthForLongestLine()`, `pasteHere()`, `ColoredView.drawUnselectedText()` |
@@ -294,6 +295,7 @@ Safety:
 | `ControlsBar` | Step buttons, skip call and finish call, slider, play and speed; a step made by hand pauses playing | `stepChanged()`, `togglePlay()`, `play()` |
 | `CallStackPanel`, `LocalsPanel`, `ConsolePanel` | Running methods; variables (changed ones tinted); output (new output tinted) and a stdin box that appears when needed | `stepChanged()`, `showInput()` |
 | `Section` | Terminal-style section headers and thin borders | `header()`, `wrap()`, `hairline()` |
+| `Legend` | The key to the picture's marks in the status bar: a swatch and a name for each | `paintComponent()` |
 | `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
