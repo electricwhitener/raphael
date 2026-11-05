@@ -60,7 +60,7 @@ import raphael.io.DraftStore;
 import raphael.io.SafeFiles;
 import raphael.model.EndReason;
 import raphael.model.Trace;
-import raphael.render.Scene;
+import raphael.render.SceneList;
 import raphael.render.SceneBuilder;
 import raphael.render.Style;
 import raphael.trace.JdiTracer;
@@ -587,7 +587,7 @@ public class MainWindow extends JFrame {
         }
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
-        model.load(trace, result.scenes());
+        model.load(trace, result.scenes(), result.scenes().getRunSize());
         visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         controls.play();
         String steps = "recorded " + trace.size() + " steps · space pauses";
@@ -821,6 +821,6 @@ public class MainWindow extends JFrame {
     }
 
     // What one press of run produced: the compile result, and the trace and pictures if it ran.
-    private record RunResult(CompileResult program, Trace trace, List<Scene> scenes) {
+    private record RunResult(CompileResult program, Trace trace, SceneList scenes) {
     }
 }

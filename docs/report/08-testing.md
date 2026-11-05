@@ -1,7 +1,5 @@
 # 8. Quality and testing
 
-*Section 8.6 is written when ROADMAP stage 4 is done.*
-
 ## 8.1 The test suite
 Raphael has 150 JUnit 5 tests in its normal run (version 1 had 107), plus a separate soak test (8.4). Each package is tested on its own:
 - **Compiling:** errors on the right line, file rules, invisible characters.
@@ -94,4 +92,27 @@ JaCoCo, a Maven plugin, records which lines and branches of Raphael the tests ex
 The engine, from compiling to drawing, is almost fully exercised. The window code is lower, because much of it only runs in response to clicks and menus.
 
 ## 8.6 Performance
-*Stage 4.*
+Performance work started with measurement. A timing program recorded three typical programs and timed compiling, recording and layout separately. Nearly all the time went to recording: reading the paused program's memory at every step.
+
+**Remembering unchanged objects.** Reading an object is a round trip between the two JVMs. Version 1 read every reachable object at every step, so building a 500-node list (2,000 steps) made 285,857 reads.
+- JDI can report every write to a field (a modification watchpoint). Raphael asks for this on every field of the student's classes, with the `SUSPEND_NONE` policy, so the program is not stopped.
+- Objects are then remembered between steps, and only those whose fields were written are read again.
+- Arrays (whose cell writes cannot be watched) and multi-threaded programs (where a write may be pending) are always read in full.
+- A test records 38 programs both ways and requires identical steps.
+
+**Ending runs promptly.** After the program finished, its JVM waited about 320 ms for the attached debugger before exiting. Raphael now detaches as soon as the program reports its end.
+
+**Building pictures on demand.** Building every step's picture up front used 155 MB for 2,000 steps. The pictures are now built when shown and kept in a 64-entry least-recently-used cache (`SceneList`), with list positions learned for the whole run beforehand, so a step looks the same however it is reached.
+
+| Measurement | Version 1 | Now |
+|---|---|---|
+| Recording a 500-node list (2,000 steps) | 20.6 s | 1.9 s |
+| Objects read for that run | 285,857 | 856 |
+| Recording an empty program | 380 ms | 66 ms |
+| Recording BubbleSort | 434 ms | 114 ms |
+| Recording 604 steps with an `ArrayList` and a `HashMap` | 2.6 s | 1.7 s |
+| Memory for the pictures of 2,000 steps | 155 MB | under 1 MB |
+| Drawing one animation frame of the largest picture (574 shapes) | — | 2 ms average, 7 ms worst |
+| Opening Raphael's window | — | about 0.5 s |
+
+Measured on the development laptop (WSL 2). Because CI machines vary in speed, the regression test counts reads rather than time: the 500-node list must read fewer than two objects per step.

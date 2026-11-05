@@ -6,6 +6,7 @@ import com.sun.jdi.ArrayType;
 import com.sun.jdi.CharValue;
 import com.sun.jdi.ClassType;
 import com.sun.jdi.Field;
+import com.sun.jdi.IntegerValue;
 import com.sun.jdi.InterfaceType;
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.LocalVariable;
@@ -52,12 +53,23 @@ public class HeapReader {
             "java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte",
             "java.lang.Character", "java.lang.Boolean", "java.lang.Double", "java.lang.Float");
     private static final int MAX_STRING_LENGTH = 40;
+    // Lists whose items are in an "elementData" array: the name of their size field.
+    private static final Map<String, String> LIST_SIZE_FIELDS = Map.of(
+            "java.util.ArrayList", "size", "java.util.Vector", "elementCount", "java.util.Stack", "elementCount");
 
     private final List<ReferenceType> studentClasses; // filled in by JdiTracer as classes load
     private final Map<ReferenceType, List<Field>> fieldsByType = new HashMap<>();
-    // Holding on to every object we've seen stops JDI from recycling its id,
-    // so object #12 is still #12 at every step.
-    private final Set<ObjectReference> seen = new HashSet<>();
+    // Every object we've seen, by id. Holding on to them stops JDI from recycling an id, so
+    // object #12 is still #12 at every step, and lets the walk continue from a remembered object.
+    private final Map<Long, ObjectReference> seen = new HashMap<>();
+    // The student's objects as they were last read. Reading an object means a round trip to the
+    // paused program, and a big list has hundreds, so an object is only read again once one of
+    // its fields has been written (JdiTracer is told about every write; see fieldWritten).
+    // Arrays and Java's collections are always read again: a write to an array cell can't be watched.
+    private final Map<Long, ObjectNode> remembered = new HashMap<>();
+    private final Set<Long> written = new HashSet<>(); // remembered objects that may have changed
+    private boolean remembering = true;
+    private int objectsRead; // round trips for objects, counted so a test can check remembering works
     private ThreadReference thread; // the paused thread, which runs the calls we make into the program
     // A boxed number (an Integer…) can never change, so each one is only read once. Asking the
     // paused program costs time, and a list of 64 Integers would otherwise ask 64 times per step.
@@ -65,6 +77,22 @@ public class HeapReader {
 
     public HeapReader(List<ReferenceType> studentClasses) {
         this.studentClasses = studentClasses;
+    }
+
+    int objectsRead() {
+        return objectsRead;
+    }
+
+    // A field of this object was written, so the next capture must read it again.
+    public void fieldWritten(ObjectReference object) {
+        written.add(object.uniqueID());
+    }
+
+    // Read every object at every step from now on. For a program with several threads: another
+    // thread can be paused just before a write, so "nothing was written" can't be trusted.
+    public void stopRemembering() {
+        remembering = false;
+        remembered.clear();
     }
 
     // Takes a Snapshot of a paused thread. outputLength is asked for last, so the output
@@ -161,6 +189,18 @@ public class HeapReader {
         if (isCollection(object) || isMap(object)) {
             return readCollection(object, toVisit);
         }
+        long id = object.uniqueID();
+        ObjectNode before = remembered.get(id);
+        if (remembering && before != null && !written.contains(id)) {
+            for (Value value : before.getFields().values()) { // unchanged: just keep walking from it
+                if (value instanceof ReferenceValue) {
+                    toVisit.add(seen.get(((ReferenceValue) value).id()));
+                }
+            }
+            return before;
+        }
+        written.remove(id);
+        objectsRead++;
 
         List<Field> fields = fieldsByType.computeIfAbsent(object.referenceType(), HeapReader::studentFields);
         Map<Field, com.sun.jdi.Value> values = object.getValues(fields);
@@ -170,8 +210,12 @@ public class HeapReader {
             fieldValues.put(field.name(), toValue(values.get(field), toVisit));
             fieldTypes.put(field.name(), field.typeName());
         }
-        return new ObjectNode(object.uniqueID(), object.referenceType().name(), fieldValues, fieldTypes,
+        ObjectNode node = new ObjectNode(id, object.referenceType().name(), fieldValues, fieldTypes,
                 parentOf(object.referenceType()));
+        if (remembering) {
+            remembered.put(id, node);
+        }
+        return node;
     }
 
     // Every Java collection can list its items with toArray(), whichever way it stores them, so
@@ -180,6 +224,10 @@ public class HeapReader {
         // List.of() and friends use hidden class names like ImmutableCollections$List12: just say List.
         String type = collection.referenceType().name().replaceAll("ImmutableCollections\\$(List|Set|Map).*", "$1");
         try {
+            ArrayNode direct = readListFields(collection, type, toVisit);
+            if (direct != null) {
+                return direct;
+            }
             boolean map = isMap(collection);
             ObjectReference items = map ? (ObjectReference) call(collection, "entrySet", "()Ljava/util/Set;") : collection;
             ArrayReference array = (ArrayReference) call(items, "toArray", "()[Ljava/lang/Object;");
@@ -187,8 +235,9 @@ public class HeapReader {
             if (map) {
                 for (int i = 0; i < cells.size(); i++) {
                     ObjectReference entry = (ObjectReference) array.getValue(i);
-                    cells.set(i, new PrimitiveValue(toValue(entryPart(entry, "key", "getKey"), toVisit).display()
-                            + "=" + toValue(entryPart(entry, "value", "getValue"), toVisit).display()));
+                    com.sun.jdi.Value[] keyAndValue = entryParts(entry);
+                    cells.set(i, new PrimitiveValue(toValue(keyAndValue[0], toVisit).display()
+                            + "=" + toValue(keyAndValue[1], toVisit).display()));
                 }
             }
             return new ArrayNode(collection.uniqueID(), type, "java.lang.Object", cells, array.length());
@@ -198,11 +247,33 @@ public class HeapReader {
         }
     }
 
-    // A map entry's key or value. Reading its field is far quicker than calling a method in the
-    // program, so we only call the method for the few kinds of map whose entries have no such field.
-    private com.sun.jdi.Value entryPart(ObjectReference entry, String field, String getter) throws Exception {
-        Field direct = entry.referenceType().fieldByName(field);
-        return direct != null ? entry.getValue(direct) : call(entry, getter, "()Ljava/lang/Object;");
+    // The lists DSA code uses most keep their items in an array field and their size in an int
+    // field. Reading those two fields is much quicker than calling toArray() inside the paused
+    // program. Null for any other kind of collection, which is then asked with toArray().
+    private ArrayNode readListFields(ObjectReference list, String type, Deque<ObjectReference> toVisit) {
+        String sizeField = LIST_SIZE_FIELDS.get(list.referenceType().name());
+        Field data = sizeField == null ? null : list.referenceType().fieldByName("elementData");
+        Field size = sizeField == null ? null : list.referenceType().fieldByName(sizeField);
+        if (data == null || size == null) {
+            return null;
+        }
+        Map<Field, com.sun.jdi.Value> values = list.getValues(List.of(data, size));
+        int count = ((IntegerValue) values.get(size)).value();
+        List<Value> cells = readCells((ArrayReference) values.get(data), count, toVisit);
+        return new ArrayNode(list.uniqueID(), type, "java.lang.Object", cells, count);
+    }
+
+    // A map entry's key and value, in one round trip when they're fields (most maps). Only the
+    // few kinds of map whose entries have no such fields are asked with getKey() and getValue().
+    private com.sun.jdi.Value[] entryParts(ObjectReference entry) throws Exception {
+        Field key = entry.referenceType().fieldByName("key");
+        Field value = entry.referenceType().fieldByName("value");
+        if (key != null && value != null) {
+            Map<Field, com.sun.jdi.Value> both = entry.getValues(List.of(key, value));
+            return new com.sun.jdi.Value[] {both.get(key), both.get(value)};
+        }
+        return new com.sun.jdi.Value[] {call(entry, "getKey", "()Ljava/lang/Object;"),
+                call(entry, "getValue", "()Ljava/lang/Object;")};
     }
 
     // Calls a method with no arguments inside the paused program.
@@ -299,7 +370,7 @@ public class HeapReader {
         if (!(object instanceof ArrayReference) && !isCollection(object) && !isMap(object) && JdiTracer.isJdkClass(type)) {
             return new PrimitiveValue(Names.simple(type)); // Java's own objects are shown by name only
         }
-        seen.add(object);
+        seen.put(object.uniqueID(), object);
         toVisit.add(object);
         return new ReferenceValue(object.uniqueID());
     }

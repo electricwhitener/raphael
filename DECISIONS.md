@@ -519,3 +519,43 @@ Every 5 seconds, if the code has unsaved changes, it's copied to `draft.java` in
 
 The step limit (100 to 20,000), how long a program may sit idle (1 to 60 seconds), its memory (64 MB to 2 GB), the text size and dark mode. `RunLimits` is a record whose compact constructor refuses values outside those ranges, so a bad setting can't exist. If the saved settings were changed by hand and are out of range, Raphael falls back to the defaults and logs it. The window only knows the `Tracer` interface, so `setLimits()` became one of its default methods, like `stop()`. Each run keeps one set of limits from start to end, even if settings change while it records.
 
+## Stage 4: Fast
+
+- Where did the time go?
+
+I measured before changing anything. Building a 500-node list (2,000 steps) took 20.6 seconds to record, and less than a second to lay out. So the recording was the problem. At every step, `HeapReader` read every reachable object again: up to 286 per step, each one a round trip between the two JVMs. That's 285,857 reads for a run where each step changes one or two objects.
+
+- How does Raphael avoid reading everything again?
+
+It remembers. Each object of the student's classes is kept as it was last read, and only read again once one of its fields has been written. JDI can report every write to a field (a *modification watchpoint*). `JdiTracer` asks for one on every field of the student's classes when they load, with `SUSPEND_NONE`, so the program doesn't stop for them. The reports arrive in order, before the breakpoint on the next line, and `HeapReader.fieldWritten()` marks those objects. The same run now reads 856 objects and takes 1.9 seconds, eleven times faster.
+
+Two cases can't be trusted, so they're read every time as before. An array cell's write can't be watched, so arrays and Java's collections are always read again. And in a program with several threads, another thread can be paused just before a write, so remembering stops as soon as a second thread runs the student's code.
+
+To be sure nothing changed, `RememberingTest` records 38 programs twice, once remembering and once reading everything, and every step must match. It found nothing wrong with remembering. It did find that a lambda's hidden class name (`Main$$Lambda/0x0000…`) was shown as is. `Names.simple()` now says `lambda`.
+
+- What else was slow?
+
+Every run waited about a third of a second at the end. The program's JVM sends "I'm finished" (`VMDeath`), and then, while a debugger is still attached, waits before it exits. Now `JdiTracer` lets go (`vm.dispose()`) as soon as `VMDeath` arrives, and the JVM exits about 10 ms later. An empty program went from 380 ms to 66 ms, and BubbleSort from 434 ms to 114 ms. The program's output isn't lost, because its JVM still exits normally, and Raphael reads until the pipe closes.
+
+`ArrayList`, `Vector` and `Stack` keep their items in an array field called `elementData`. Reading that field directly is quicker than calling `toArray()` inside the paused program. Calling a method there is the slowest thing JDI does. A map entry's key and value now come in one round trip instead of two.
+
+- Why build the pictures only when they're shown?
+
+Memory. The pictures for all 2,000 steps took 155 MB, while the recording itself takes only 17 MB, since unchanged objects are now shared. Settings allow 20,000 steps, which would have needed about 1.5 GB. Now `SceneBuilder.build()` learns what the pictures need from the whole run (widths, markers and where each list node goes) and returns a `SceneList`. It extends `AbstractList`, so to the rest of Raphael it's an ordinary `List<Scene>`, but `get(step)` builds a picture when it's asked for, and only the 64 most recently shown are kept (a `LinkedHashMap` in access order, as a least-recently-used cache). Building one takes about a quarter of a millisecond.
+
+The catch was list positions. `ListOrder` learned them while building the steps in order, and a node not yet linked into a list waited at the end. Built out of order, it would have jumped straight to its final place. So `ListOrder` now also remembers the step at which each node got its place, and only counts it as placed from that step on. `SceneListTest` builds runs twice, reads one forwards and one backwards (which also forces rebuilds after the cache lets steps go), and every step must be the same.
+
+- What did it come to?
+
+| | Before | After |
+|---|---|---|
+| Recording a 500-node list (2,000 steps) | 20.6 s | 1.9 s |
+| Objects read for it | 285,857 | 856 |
+| An empty program | 380 ms | 66 ms |
+| BubbleSort | 434 ms | 114 ms |
+| Memory for the pictures of 2,000 steps | 155 MB | under 1 MB |
+| Drawing a frame of the biggest picture | — | 2 ms on average, 7 ms at worst (60 fps needs under 16.7) |
+| Opening Raphael's window | — | about 0.5 s |
+
+A timing test would be flaky on CI's shared machines, so the test counts work instead: the 500-node list must read fewer than two objects per step.
+

@@ -68,7 +68,9 @@ public class SceneBuilder {
         this.indexes = new IndexUsage(source);
     }
 
-    public List<Scene> build(Trace trace) {
+    // Learns everything about the run that the pictures need, in two passes over the steps, and
+    // returns the pictures as a SceneList, which builds each one when it's asked for.
+    public SceneList build(Trace trace) {
         RenderContext context = new RenderContext();
         List<Map<Long, List<RenderContext.Marker>>> markers = new ArrayList<>();
         for (int i = 0; i < trace.size(); i++) { // measure the whole run first
@@ -78,34 +80,37 @@ public class SceneBuilder {
             context.makeRoomFor(stepMarkers);
             markers.add(stepMarkers);
         }
-        for (Snapshot snapshot : trace.getSnapshots()) { // arrays are on top: keep room for the most they need
-            List<Structure> arrays = new ArrayList<>(detector.detect(snapshot));
+        for (int i = 0; i < trace.size(); i++) {
+            List<Structure> structures = detector.detect(trace.get(i));
+            for (Structure structure : structures) { // where each list node goes, in step order
+                if (structure instanceof LinkedListStructure) {
+                    context.getOrder().learn((LinkedListStructure) structure, i);
+                }
+            }
+            List<Structure> arrays = new ArrayList<>(structures); // arrays are on top: keep room for the most they need
             arrays.removeIf(structure -> !isArray(structure));
             context.reserveArrays(layOut(arrays, new Scene(), context));
         }
-        List<Scene> scenes = new ArrayList<>();
-        for (int i = 0; i < trace.size(); i++) {
-            context.setMarkers(markers.get(i));
-            // The run is already recorded, so we know whether this step really leads to a crash.
-            crashAhead = trace.getEndReason() == EndReason.EXCEPTION && i >= trace.size() - 2;
-            Scene scene = build(trace.get(i), context);
-            if (i > 0) {
-                addMoves(scene, trace.get(i - 1));
-            }
-            scenes.add(scene);
-        }
-        return scenes;
+        return new SceneList(trace.size(), i -> buildStep(trace, i, context, markers.get(i)));
     }
 
-    public Scene build(Snapshot snapshot, RenderContext context) {
+    // The picture of step i. Everything it uses was learned for the whole run beforehand, so steps
+    // can be built in any order and always come out the same.
+    private Scene buildStep(Trace trace, int i, RenderContext context, Map<Long, List<RenderContext.Marker>> markers) {
+        context.setMarkers(markers);
+        context.getOrder().showStep(i);
+        // The run is already recorded, so we know whether this step really leads to a crash.
+        crashAhead = trace.getEndReason() == EndReason.EXCEPTION && i >= trace.size() - 2;
+        Scene scene = build(trace.get(i), context);
+        if (i > 0) {
+            addMoves(scene, trace.get(i - 1));
+        }
+        return scene;
+    }
+
+    private Scene build(Snapshot snapshot, RenderContext context) {
         Scene scene = new Scene();
         List<Structure> structures = detector.detect(snapshot);
-        for (Structure structure : structures) {
-            if (structure instanceof LinkedListStructure) {
-                context.getOrder().learn((LinkedListStructure) structure);
-            }
-        }
-
         layOut(structures, scene, context);
         addFocus(scene, snapshot);
         addLabels(scene, snapshot);

@@ -11,6 +11,6 @@ Project report, draft. Each chapter is its own file, and each ROADMAP stage adds
 | 5 | [Object-oriented design](05-oop-and-design.md) | Drafted |
 | 6 | [Features](06-features.md) | Outline. Grows with ROADMAP stages 7–12 |
 | 7 | [Exception handling and file handling](07-exceptions-and-files.md) | 7.1 drafted. 7.2 and 7.3 come with stages 7 and 8 |
-| 8 | [Quality and testing](08-testing.md) | Drafted, except 8.6 (performance, stage 4) |
+| 8 | [Quality and testing](08-testing.md) | Drafted |
 | 9 | [Results](09-results.md) | Outline. Written last |
 | 10 | [Limits and future work](10-limits-and-future.md) | Outline. Written last |

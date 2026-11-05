@@ -160,7 +160,7 @@ The status bar has a small key to these.
 - Each step keeps at most 300 objects, 64 cells per array and the newest 32 method calls.
 - A program may use at most 256 MB of memory (**settings** allows up to 2 GB). More than that ends it with an `OutOfMemoryError`.
 - Java's other classes (`Scanner`, `Random`…) appear by name only.
-- A program with many objects can take a while to record (a 500-node list takes about 35 seconds). The status bar counts the steps, and **stop** keeps what's recorded.
+- Recording is quick for typical programs (building a 500-node list, 2,000 steps, takes about 2 seconds). A long run can still take a while: the status bar counts the steps, and **stop** keeps what's recorded.
 
 ## How it works
 
@@ -185,8 +185,8 @@ VisualPanel in the window           every panel follows the TraceModel (Observer
 
 1. **Compile.** `SourceCompiler` saves the editor's text to a temp folder and calls the JDK's compiler (`javax.tools.JavaCompiler`) with `-g`, so variable names are kept. Errors come back with their line numbers. Pasted code has no file name of its own, so the file rules don't apply to it: the top-level `public` and `package` are replaced by spaces in the copy javac sees. The same number of spaces keeps every line number right.
 2. **Trace.** `JdiTracer` starts the program in a second JVM in debug mode, using JDI (Java Debug Interface). It puts a breakpoint on every line of the student's classes, so the program pauses before each line. Java's own classes are skipped.
-3. **Snapshot.** At every pause, `HeapReader` copies the program's state into a `Snapshot`. It starts from the local variables and static fields and follows every reference to the objects behind them (a breadth-first search). Every Java collection can list its items with `toArray()`, whichever way it stores them, so `HeapReader` calls that inside the paused program and stores the result as an ordinary array, which is then drawn like any other.
-4. **Rewind.** The `Trace` keeps every `Snapshot`, so stepping back just means showing the previous one (the Memento pattern).
+3. **Snapshot.** At every pause, `HeapReader` copies the program's state into a `Snapshot`. It starts from the local variables and static fields and follows every reference to the objects behind them (a breadth-first search). Every Java collection can list its items with `toArray()`, whichever way it stores them, so `HeapReader` calls that inside the paused program and stores the result as an ordinary array, which is then drawn like any other. (`ArrayList`, `Vector` and `Stack` are read straight from their fields, which is quicker.) Reading an object is a round trip to the paused program, so `HeapReader` remembers the student's objects between steps. JDI reports every write to their fields, and only the objects that were written are read again.
+4. **Rewind.** The `Trace` keeps every `Snapshot`, so stepping back just means showing the previous one (the Memento pattern). An object that didn't change is shared by the snapshots instead of copied.
 5. **Recognise.** `StructureDetector` looks at each class's fields:
    - one field of its own type (`Node next`) → linked list
    - `prev`/`next` → doubly linked list
@@ -238,7 +238,7 @@ Safety:
 | **trace/** | | |
 | `Tracer` | Interface: "run this program and record every step" | `trace(program, input)`, `trace(program)`, `stop()`, `stepsSoFar()` |
 | `JdiTracer` | Runs the program with JDI: breakpoints, events, step limit, exceptions | `trace()`, `launch()`, `Run.handleEvents()`, `Run.classLoaded()`, `Run.lineReached()`, `Run.crashed()`, `stop()` |
-| `HeapReader` | Copies the paused program's memory into a `Snapshot` (BFS); asks a collection for its items | `capture()`, `readFrames()`, `readStatics()`, `readObject()`, `readCollection()`, `call()`, `toValue()` |
+| `HeapReader` | Copies the paused program's memory into a `Snapshot` (BFS); remembers unchanged objects; asks a collection for its items | `capture()`, `fieldWritten()`, `stopRemembering()`, `readListFields()`, `readFrames()`, `readStatics()`, `readObject()`, `readCollection()`, `call()`, `toValue()` |
 | `OutputDrainer` | A thread that copies the program's printed output into a buffer | `run()` |
 | `TraceLimits` | Safety limits (2,000 steps, object and cell caps, timeout, memory) | constants |
 | `RunLimits` | The limits the user can change: steps, timeout, memory; refuses values out of range | record, `DEFAULTS` |
@@ -256,7 +256,7 @@ Safety:
 | `Snapshot` | Everything at one pause | `getLine()`, `getFrames()`, `getHeap()`, `getObject(id)` |
 | `Trace` | The whole run: snapshots, output, why it ended | `size()`, `get(step)`, `getOutputAt(step)`, `getEndReason()` |
 | `EndReason` | Finished, step limit, exception, timeout or stopped | enum |
-| `Names` | Shortens type names: `Main$Node` → `Node` | `simple(name)` |
+| `Names` | Shortens type names: `Main$Node` → `Node`, a lambda's hidden class → `lambda` | `simple(name)` |
 | **detect/** | | |
 | `StructureDetector` | Decides what each object is (array, grid, list, tree or box) from its fields' types and names | `detect(snapshot)`, `shapeOf()`, `buildTrees()`, `buildGrid()` |
 | `IndexUsage` | Reads the code: which variables index which arrays (also `x.keys[i]` and `keys[j + T]`), and which cells a line reads or writes | `rowVariables()`, `columnVariables()`, `accessesOnLine()`, `accessesIn()` |
@@ -267,7 +267,7 @@ Safety:
 | `BinaryTreeStructure` | One tree: its root and left/right links | `getRoot()`, `getLeft(id)`, `getRight(id)` |
 | `MultiwayTreeStructure` | A tree whose children are in an array (a B-tree): keys, children, count | `getChildren(id)`, `getKeysArray(id)`, `getUsedKeys(id)` |
 | **render/** | | |
-| `SceneBuilder` | Builds one `Scene` per step: measures the run, lays out structures in rows, adds markers, outlines, labels and moves | `build(trace)`, `rowOf()`, `markersAt()`, `addFocus()`, `addMoves()`, `addLabels()` |
+| `SceneBuilder` | Learns the whole run (sizes, markers, list order), then builds any step's `Scene`: lays out structures in rows, adds markers, outlines, labels and moves | `build(trace)`, `rowOf()`, `markersAt()`, `addFocus()`, `addMoves()`, `addLabels()` |
 | `RenderContext` | What renderers share: list order, fixed widths for the run, this step's markers | `cellWidth()`, `nodeWidth()`, `markersFor()` |
 | `StructureRenderer` | Abstract parent of the renderers; its factory picks the right one | `render(scene, x, y)`, `forStructure()`, `addMarkers()` |
 | `ArrayRenderer`, `GridRenderer` | A row of cells with indexes and markers; a table with row/column numbers and markers | `render()` |
@@ -275,7 +275,8 @@ Safety:
 | `BinaryTreeRenderer` | x = in-order position, y = depth | `render()`, `walk()` |
 | `MultiwayTreeRenderer` | A B-tree: rows of keys, child pointers underneath, parents centred over children | `render()`, `place()`, `drawNode()` |
 | `BoxRenderer` | Any other object: class name, then one line per field | `render()`, `linesOf()`, `widthOf()` |
-| `ListOrder` | Remembers each list node's left-to-right place for the whole run | `learn()`, `arrange()` |
+| `ListOrder` | Remembers each list node's left-to-right place for the whole run, and the step it got it | `learn()`, `showStep()`, `arrange()` |
+| `SceneList` | The run's pictures, each built when first shown; keeps the 64 most recent | `get(step)`, `getRunSize()` |
 | `Scene`, `SceneNode`, `SceneEdge` | The shapes, arrows and copied values of one step, with stable keys and a "look" for animation | `add()`, `getNode(key)`, `getEdge(key)`, `getSize()` |
 | `ScenePainter` | Draws a `Scene` with Java 2D: outline text, Bézier arrows that bend and swing, then the dots on top of their slots | `paint(g, scene)`, `route()`, `paintArrowStart()` |
 | `Spring` | One number pulled to its target by a critically damped spring | `step(dt, omega)`, `setTarget()` |
@@ -312,7 +313,7 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
 | Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
 | Composition | `MainWindow` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
-| Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog` | Subclasses reuse the parent's fields and methods and add their own. |
+| Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
 | Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
@@ -328,13 +329,16 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 ## Tests
 
-`mvn test` runs 167 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
+`mvn test` runs 213 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
 - `ExamplesTest`: every program in the examples menu runs to its expected end.
 - `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
 - `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
 - `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
+- `RememberingTest`: 38 programs recorded twice, once remembering unchanged objects and once reading everything, give the same steps; a 500-node list reads each node about once.
+- `SceneListTest`: a step's picture is the same however the user got there: forwards, backwards, or built again after the cache let it go.
+- `NamesTest`: short type names, including lambdas.
 - `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, a cycle that doesn't hang, and a count field found on a Turkish-language computer.
 - `IndexUsageTest`: which variables index which arrays, reads vs writes, `x.keys[i]` and `keys[j + T]`, constants and comments.
 - `SceneBuilderTest`:

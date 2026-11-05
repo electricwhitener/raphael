@@ -132,7 +132,7 @@ The user now wants Raphael to be **a real, production-grade product**:
 - **Draft autosave** and recovery after a crash.
 - **Settings dialog** for the step limit, the timeout, the debuggee memory, the theme and the text size (stored in `Preferences`, as now).
 
-### 4. Fast
+### 4. Fast (done, 2026-11-05)
 - Profile recording first. The target is a 500-node list in under 5 seconds (it takes about 35 today).
   - Candidates: read only the objects that changed since the last step, batch the JDI calls, and cache class layouts.
 - Memory: a long run's heap kept compact, with a test that a 2,000-step run stays under a set size.

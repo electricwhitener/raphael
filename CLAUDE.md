@@ -91,7 +91,14 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Removed the viva-era files (PLAN.md, DEMO.md, docs/OOP-HIGHLIGHTS.md, exercises/); they're in git history.
   - Added the `raphael-ui-designer` agent (Sonnet) and refreshed the critic's rules.
   - ROADMAP gained stage 4b (modern interface).
-- **Next:** ROADMAP Stage 4, fast (profile recording; 500-node list under 5 s; memory, frame rate, startup), then 4b.
+- **Stage 4 (fast): done, 2026-11-05.**
+  - `HeapReader` remembers student objects between steps. `JdiTracer` sets `SUSPEND_NONE` modification watchpoints on every student instance field and calls `fieldWritten()`, so only written objects are read again. Arrays and collections are always re-read, and remembering is off once a second thread runs student code.
+  - `ArrayList`, `Vector` and `Stack` are read from `elementData` plus their size field; map entries come in one round trip.
+  - `JdiTracer` calls `vm.dispose()` at `VMDeath`, which saves about 320 ms per run.
+  - Pictures are built on demand: `SceneBuilder.build` learns the run (sizes, markers, `ListOrder` with the step each node was placed), then returns a `SceneList`, an LRU of 64. `TraceModel.load(trace, scenes, runSize)`.
+  - Results: 500-node list 20.6 s → 1.9 s (285,857 → 856 object reads); empty run 380 → 66 ms; picture memory 155 MB → under 1 MB; frames about 2 ms; window open in about 0.5 s.
+  - `RememberingTest` (38 programs, remembering on vs off) and `SceneListTest`. Lambdas display as `lambda`. 213 tests.
+- **Next:** the Stage 4 UI pass (`raphael-ui-designer`), then ROADMAP stage 4b.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
@@ -107,6 +114,7 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
 
 ## How to work here (from 2026-10-26)
 - **Claude writes the code**, stage by stage in ROADMAP.md order.
+- **UI pass at the end of every stage (from 2026-11-05):** run `raphael-ui-designer` on what the stage changed and on the interface in general, then build its top items before calling the stage done.
 - **After each stage:** `mvn test` passes, the Progress section and the report chapter in `docs/report/` are updated, and Claude posts a short "for your teacher" note in chat (new files, key methods, OOP concepts).
 - **Decision log:** Claude writes each stage's `DECISIONS.md` entry in the user's style: their question headings, short plain paragraphs, no repetition and no extra sections.
 - **README.md is the public guide:** what Raphael does, how to get it, how it works (the pipeline), a file map (file → job → key methods) and an OOP map (concept → where). Keep it up to date.
