@@ -7,7 +7,7 @@
     <!-- Coordinates: who made it, what it's called, which version -->
     <groupId>raphael</groupId>
     <artifactId>raphael</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.9.0</version>
 
     <properties>
         <!-- Compile for Java 21 -->
@@ -15,7 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Tests tagged "soak" (hundreds of repeated runs) are left out of a normal "mvn test".
              Run them with: mvn test -Dgroups=soak -DexcludedGroups= -->
-        <excludedGroups>soak</excludedGroups>
+        <excludedGroups>soak,screenshots</excludedGroups>
     </properties>
 
     <dependencies>
@@ -67,6 +67,39 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- "mvn package" puts Raphael's jar and the libraries it needs into target/app/, which
+                 jpackage turns into the installers (see .github/workflows/package.yml) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+                <configuration>
+                    <outputDirectory>${project.build.directory}/app</outputDirectory>
+                    <archive>
+                        <manifest>
+                            <mainClass>raphael.App</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-libraries</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <outputDirectory>${project.build.directory}/app</outputDirectory>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -1,0 +1,116 @@
+# Builds Raphael's installers on each system, installs each one on a fresh machine, and checks
+# that the installed copy works (raphael --self-test compiles and records an example with the
+# Java that comes inside the installer). Also takes screenshots of the real window on Windows at
+# 150% scaling and on a Mac. Runs for a version tag (v1.0.0), or from "Run workflow" on GitHub.
+name: installers
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, type: msi, label: windows-x64 }
+          - { os: macos-latest, type: dmg, label: mac-arm64 }        # Apple Silicon
+          - { os: macos-15-intel, type: dmg, label: mac-x64 }        # Intel Macs
+          - { os: ubuntu-latest, type: deb, label: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # jpackage needs the WiX Toolset (v3) to make an .msi.
+      - name: WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            choco install wixtoolset --version 3.14.1 -y --no-progress
+            Add-Content $env:GITHUB_PATH "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          }
+
+      - name: Build the installer
+        shell: bash
+        run: |
+          scripts/package.sh ${{ matrix.type }}
+          version=$(sed -n 's:^    <version>\([0-9.]*\)</version>.*:\1:p' pom.xml | head -1)
+          mkdir -p dist-installers
+          for f in target/installer/*.${{ matrix.type }}; do
+            cp "$f" "dist-installers/Raphael-$version-${{ matrix.label }}.${{ matrix.type }}"
+          done
+
+      # Linux also gets a folder to unpack anywhere, for systems that don't use .deb packages.
+      - name: Portable folder (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          scripts/package.sh app-image
+          version=$(sed -n 's:^    <version>\([0-9.]*\)</version>.*:\1:p' pom.xml | head -1)
+          tar -czf "dist-installers/Raphael-$version-linux-x64.tar.gz" -C target/installer Raphael
+          target/installer/Raphael/bin/Raphael --self-test
+
+      - name: Install and self-test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y ./dist-installers/*.deb
+          /opt/raphael/bin/Raphael --self-test
+
+      - name: Install and self-test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil attach dist-installers/*.dmg -mountpoint /Volumes/Raphael -nobrowse
+          /Volumes/Raphael/Raphael.app/Contents/MacOS/Raphael --self-test
+          hdiutil detach /Volumes/Raphael
+
+      - name: Install and self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem dist-installers\*.msi | Select-Object -First 1).FullName
+          $install = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /l*v install.log" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { Get-Content install.log -Tail 60; exit 1 }
+          $test = Start-Process "C:\Program Files\Raphael\Raphael.exe" -ArgumentList "--self-test" -Wait -PassThru
+          if ($test.ExitCode -ne 0) { Write-Error "self-test failed"; exit 1 }
+          Write-Output "installed and self-tested"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Raphael-${{ matrix.label }}
+          path: dist-installers/
+
+  screenshots:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, scale: '1.5' }
+          - { os: macos-latest, scale: '' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Screenshots
+        shell: bash
+        run: |
+          scale="${{ matrix.scale }}"
+          mvn -B test -Dgroups=screenshots -DexcludedGroups= -Djacoco.skip=true \
+              ${scale:+-DargLine=-Dsun.java2d.uiScale=$scale}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.os }}
+          path: target/screenshots/

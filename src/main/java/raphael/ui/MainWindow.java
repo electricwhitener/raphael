@@ -165,7 +165,8 @@ public class MainWindow extends JFrame {
     private String lastDraft; // what the draft file holds now; null means no draft
 
     public MainWindow() {
-        super("raphael");
+        super("Raphael");
+        setIconImages(Logo.windowIcons()); // the title bar and the taskbar
         model.addListener(code);
         model.addListener(visual);
         model.addListener(controls);
