@@ -13,7 +13,7 @@ class SettingsDialogTest {
     @Test
     void showsAndReturnsTheCurrentValues() {
         assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
-        SettingsDialog.Values current = new SettingsDialog.Values(new RunLimits(5000, 12, 512), 16, true);
+        SettingsDialog.Values current = new SettingsDialog.Values(new RunLimits(5000, 12, 512), 16, SettingsDialog.Theme.DARK);
         SettingsDialog dialog = new SettingsDialog(null, current);
         assertEquals(current, dialog.read());
         dialog.dispose();

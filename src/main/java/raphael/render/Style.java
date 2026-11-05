@@ -55,6 +55,7 @@ public final class Style {
     public static final int SPACE_1 = 4;
     public static final int SPACE_2 = 8;
     public static final int SPACE_3 = 12;
+    public static final int SPACE_6 = 24;
     public static final int STATUS_H = 28;   // the status bar
     public static final int ARC = 8;         // corners of buttons and fields
     public static final int FOCUS_WIDTH = 2; // the ring around the focused control
@@ -74,6 +75,7 @@ public final class Style {
     public static Color HOVER;         // a button under the mouse
     public static Color PRESSED;       // a button being pressed
     public static Color CONTROL_BORDER; // edges of fields and buttons (3:1 against the background, as WCAG asks)
+    public static Color ICON_DISABLED; // an icon on a button that can't be used now
     public static Color FILL;          // inside a cell
     public static Color FILL_ALT;      // pointer slots, title bars
     public static Color ACCENT;        // variables, the next line
@@ -145,6 +147,7 @@ public final class Style {
         HOVER = pick(0xEAEEF2, 0x262C36);
         PRESSED = pick(0xD8DEE4, 0x30363D);
         CONTROL_BORDER = pick(0x87909A, 0x656D76);
+        ICON_DISABLED = pick(0xBBC2CA, 0x4A525C);
         ON_ACCENT = pick(0xFFFFFF, 0x0D1117);
         FILL = pick(0xFFFFFF, 0x161B22);
         FILL_ALT = pick(0xF6F8FA, 0x21262D);
@@ -203,16 +206,47 @@ public final class Style {
 
     // Registers the regular and bold font files with Java, and returns their family name.
     private static String loadBundledMono() {
-        try (InputStream regular = Style.class.getResourceAsStream("/fonts/JetBrainsMonoNL-Regular.ttf");
-             InputStream bold = Style.class.getResourceAsStream("/fonts/JetBrainsMonoNL-Bold.ttf")) {
+        Font[] mono = loadBundled("JetBrainsMonoNL-Regular.ttf", "JetBrainsMonoNL-Bold.ttf");
+        return mono == null ? null : mono[0].getFamily();
+    }
+
+    // Loads a regular and a bold font file that ship inside the app, and registers them with Java.
+    // Null (and a line in the log) if the files are missing or damaged.
+    private static Font[] loadBundled(String regularFile, String boldFile) {
+        try (InputStream regular = Style.class.getResourceAsStream("/fonts/" + regularFile);
+             InputStream bold = Style.class.getResourceAsStream("/fonts/" + boldFile)) {
             GraphicsEnvironment fonts = GraphicsEnvironment.getLocalGraphicsEnvironment();
-            Font font = Font.createFont(Font.TRUETYPE_FONT, regular);
-            fonts.registerFont(font);
-            fonts.registerFont(Font.createFont(Font.TRUETYPE_FONT, bold));
-            return font.getFamily();
+            Font[] loaded = {Font.createFont(Font.TRUETYPE_FONT, regular), Font.createFont(Font.TRUETYPE_FONT, bold)};
+            fonts.registerFont(loaded[0]);
+            fonts.registerFont(loaded[1]);
+            return loaded;
         } catch (IOException | FontFormatException | NullPointerException e) {
-            Logger.getLogger(Style.class.getName()).log(Level.WARNING, "The bundled font didn't load; using another monospace font", e);
-            return null; // the files are missing or damaged
+            Logger.getLogger(Style.class.getName()).log(Level.WARNING, "The bundled font " + regularFile + " didn't load", e);
+            return null;
         }
+    }
+
+    // The interface's own text (buttons, menus, dialogs, tooltips) is in a sans font: the
+    // system's own on Windows (Segoe UI) and macOS (SF), which FlatLaf picks, and Inter on Linux,
+    // where the usual system font looks dated. Inter ships inside the app (SIL Open Font License).
+    // Code, the picture and the panels stay in the monospace font.
+    private static final boolean LINUX = !System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).matches("(windows|mac).*");
+    private static final Font[] INTER = LINUX ? loadBundled("Inter-Regular.ttf", "Inter-SemiBold.ttf") : null;
+    public static final float UI_SIZE = 13f;
+
+    // The interface font at a size, regular or bold. Read after the look is set up, because on
+    // Windows and macOS it's FlatLaf's choice.
+    public static Font sans(boolean bold, float size) {
+        if (INTER != null) {
+            return INTER[bold ? 1 : 0].deriveFont(size);
+        }
+        Font system = javax.swing.UIManager.getFont("defaultFont");
+        Font base = system != null ? system : new Font(Font.SANS_SERIF, Font.PLAIN, (int) UI_SIZE);
+        return base.deriveFont(bold ? Font.BOLD : Font.PLAIN, size);
+    }
+
+    // The font to give FlatLaf as everyone's default, or null to keep FlatLaf's (the system's).
+    public static Font defaultUiFont() {
+        return INTER != null ? INTER[0].deriveFont(UI_SIZE) : null;
     }
 }

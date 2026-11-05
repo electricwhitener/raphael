@@ -85,9 +85,9 @@ You should see the window open with the BSTInsert example loaded. Press **run**,
 **A standalone Windows app (experimental):** `scripts/build-windows.sh`, run in WSL, downloads a portable Windows JDK and uses `jpackage` to build a `Raphael.exe` that carries its own private Java. This script hasn't been run yet, so treat it as untested.
 
 ## Using Raphael
-1. **Choose a program.** Pick one from **examples**, press **new** to type or paste your own (Ctrl+A then Ctrl+V replaces everything), or **open** a `.java` file.
+1. **Choose a program.** Click an example in the guide that fills the picture area at first (or **Examples** in the toolbar), press **New** to type or paste your own (Ctrl+A then Ctrl+V replaces everything), **Open** a `.java` file with your system's own file dialog, or drop one onto the window.
 2. **Give it input, if it needs some.** A **stdin** box appears when the code mentions `System.in`. Type the input there before running.
-3. **Press run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the button becomes **stop**, and you keep the steps recorded so far.
+3. **Press Run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the picture counts the steps and the button becomes **Stop**; stopping keeps the steps recorded so far.
 4. **Move through the steps** with the keys below. Any manual move pauses playing. Click in the editor to type again.
 
 **If something goes wrong.**
@@ -116,7 +116,7 @@ The log never leaves your computer.
 | BankAccounts | OOP: an interface, an abstract class, inheritance, polymorphism and a caught exception |
 
 ### Keyboard shortcuts
-**keys** (or F1) shows these in the app. On a Mac, use Cmd where this table says Ctrl, and Option where it says Alt; the app shows the Mac names there.
+Every command is also in the menus (File, Edit, Run, View, Help), with its shortcut beside it. The **?** button (or F1) shows the keys in the app. On a Mac, use Cmd where this table says Ctrl, and Option where it says Alt; the app shows the Mac names there.
 
 | Keys | Action |
 |---|---|
@@ -137,7 +137,9 @@ The log never leaves your computer.
 | Ctrl + wheel over the picture | Zoom the picture |
 | Ctrl+0 | Normal text size and zoom |
 | Ctrl+D | Dark or light |
-| Ctrl+, | Settings: step limit, timeout, memory, text size, theme |
+| Ctrl+, | Settings: step limit, timeout, memory, text size, theme (System, Light or Dark) |
+| F6, Shift+F6 | Move the keyboard between the toolbar, the code and the picture |
+| Ctrl+Q | Quit (on a Mac, Cmd+Q) |
 
 ### Reading the picture
 The status bar has a key to these: a swatch for each mark, from "Next" to "Reads".
@@ -296,10 +298,15 @@ Safety:
 | `CallStackPanel`, `LocalsPanel`, `ConsolePanel` | Running methods; variables (changed ones tinted); output (new output tinted) and a stdin box that appears when needed | `stepChanged()`, `showInput()` |
 | `Section` | Terminal-style section headers and thin borders | `header()`, `wrap()`, `hairline()` |
 | `Legend` | The key to the picture's marks in the status bar: a swatch and a name for each | `paintComponent()` |
+| `Icons` | The toolbar's icons, drawn with Java 2D; each `Glyph` (an enum) draws itself | `of(glyph, role)`, `Glyph.draw()` |
+| `Dialogs` | One look for every question and message, with buttons in each system's order (Builder pattern) | `question()`, `tell()`, `Question.ask()`, `order()` |
+| `EmptyState` | The guide in the picture area before the first run: three steps and example chips | constructor |
+| `FileDrop` | Opens a `.java` file dropped onto the window; wraps the editor's own copy and paste | `canImport()`, `importData()` |
+| `WindowsFileDialog` | Inside WSL, shows Windows' own Open and Save dialog through PowerShell | `available()`, `choose()`, `script()` |
 | `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
-| `SettingsDialog` | The settings window | `ask()`, `read()` |
+| `SettingsDialog` | The settings window: run limits, text size, and a System / Light / Dark theme switch | `ask()`, `read()` |
 | **resources/examples/** | The nine example programs in the examples menu | — |
 | **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
 
@@ -323,9 +330,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
 | Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
-| Records and enums | `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
+| Records and enums | `Icons.Glyph` (an enum whose constants each override `draw()`), `SettingsDialog.Theme`, `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
+| Design pattern: Builder | `Dialogs.question(...).body(...).buttons(...).ask()` | Builds a dialog step by step, so its many optional parts don't need one method with a dozen parameters. |
+| Design pattern: Decorator | `FileDrop` wraps the editor's `TransferHandler` | Adds dropping files, and passes copy and paste on to the handler it wraps. |
 | Design pattern: Factory | `StructureRenderer.forStructure()` | One method decides which renderer class to create, so no one else has to. |
 | Packages | `compile`, `trace`, `model`, `detect`, `render`, `ui`, `io` | One package per job. |
 

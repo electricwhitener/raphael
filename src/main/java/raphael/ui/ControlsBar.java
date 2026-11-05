@@ -10,40 +10,44 @@ import javax.swing.JSlider;
 import javax.swing.Timer;
 import raphael.render.Style;
 
-// The step controls, in terminal style:  |<  <  >  >|  skip call  finish call  play  ──●──  step 046/067  1x
-// "skip call" skips the inside of method calls on this line; "finish call" runs until this method returns.
+// The step controls: first, back, play/pause, forward, last, then skip call and finish call, the
+// slider, "step 46 of 67" and the speed. "Skip call" (step over) skips the inside of method calls
+// on this line; "finish call" (step out) runs until this method returns.
 // Playing uses a Swing Timer that moves one step at a time. Moving to a step any other way (a
 // key, a button, the slider, a line number) pauses it, so you stay on the step you asked for.
 // OOP: inheritance (extends JPanel); implements TraceListener (Observer pattern).
 public class ControlsBar extends JPanel implements TraceListener {
 
-    private static final String[] SPEEDS = {"0.5x", "1x", "2x", "4x", "8x"};
+    private static final String[] SPEEDS = {"0.5×", "1×", "2×", "4×", "8×"};
     private static final double[] SPEED_VALUES = {0.5, 1, 2, 4, 8};
 
     private final TraceModel model;
-    private final JButton first = button("|<", "first step  (Home)");
-    private final JButton back = button("<", "step back  (← or Alt+←)");
-    private final JButton forward = button(">", "step forward  (→ or Alt+→)");
-    private final JButton last = button(">|", "last step  (End)");
-    private final JButton over = button("skip call", "step over: don't go inside the calls on this line  (Alt+↓)");
-    private final JButton out = button("finish call", "step out: run until this method returns  (Alt+↑)");
-    private final JButton play = button("play", "play / pause  (Space)");
+    private final JButton first = button(Icons.Glyph.FIRST, "First step", "First step  (Home)");
+    private final JButton back = button(Icons.Glyph.BACK, "Step back", "Step back  (← or Alt+←)");
+    private final JButton forward = button(Icons.Glyph.FORWARD, "Step forward", "Step forward  (→ or Alt+→)");
+    private final JButton last = button(Icons.Glyph.LAST, "Last step", "Last step  (End)");
+    private final JButton over = button(Icons.Glyph.STEP_OVER, "Skip call",
+            "Skip call (step over): don't go inside the calls on this line  (Alt+↓)");
+    private final JButton out = button(Icons.Glyph.STEP_OUT, "Finish call",
+            "Finish call (step out): run until this method returns  (Alt+↑)");
+    private final JButton play = button(Icons.Glyph.PLAY, "Play", "Play or pause  (Space)");
     private final JSlider slider = new JSlider(0, 0, 0);
-    private final JLabel stepLabel = new JLabel("step ---/---");
+    private final JLabel stepLabel = new JLabel("step – of –");
     private final JComboBox<String> speed = new JComboBox<>(SPEEDS);
     private final Timer playTimer;
     private boolean movingSlider; // true while we move the slider ourselves
     private boolean timerMoving;  // true while the play timer is moving to the next step
 
     public ControlsBar(TraceModel model) {
-        super(new BorderLayout(10, 0)); // the slider in the centre gets all the spare width
+        super(new BorderLayout(Style.SPACE_3, 0)); // the slider in the centre gets all the spare width
         this.model = model;
         setOpaque(false);
         speed.setSelectedIndex(1);
         speed.setToolTipText("playing speed");
         speed.setFocusable(false);
         slider.setFocusable(false);
-        stepLabel.setToolTipText("step / steps");
+        stepLabel.setToolTipText("this step, and how many the run has");
+        stepLabel.setFont(Style.UI_FONT.deriveFont(12f));
 
         first.addActionListener(e -> model.first());
         back.addActionListener(e -> model.previous());
@@ -71,16 +75,17 @@ public class ControlsBar extends JPanel implements TraceListener {
             playTimer.setDelay((int) (Style.PLAY_STEP_MS / model.getSpeed()));
         });
 
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setOpaque(false);
         buttons.add(first);
         buttons.add(back);
+        buttons.add(play);
         buttons.add(forward);
         buttons.add(last);
+        buttons.add(javax.swing.Box.createHorizontalStrut(Style.SPACE_2));
         buttons.add(over);
         buttons.add(out);
-        buttons.add(play);
-        JPanel position = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel position = new JPanel(new FlowLayout(FlowLayout.RIGHT, Style.SPACE_2, 0));
         position.setOpaque(false);
         position.add(stepLabel);
         position.add(speed);
@@ -107,7 +112,7 @@ public class ControlsBar extends JPanel implements TraceListener {
     public void play() {
         if (model.hasSteps() && !model.isLastStep()) {
             playTimer.start();
-            play.setText("pause");
+            show(play, Icons.Glyph.PAUSE, "Pause");
         }
     }
 
@@ -135,7 +140,11 @@ public class ControlsBar extends JPanel implements TraceListener {
         slider.setMaximum(Math.max(model.size() - 1, 0));
         slider.setValue(model.getStep());
         movingSlider = false;
-        stepLabel.setText(has ? String.format("step %03d/%03d", model.getStep() + 1, model.size()) : "step ---/---");
+        stepLabel.setText(has ? "step " + (model.getStep() + 1) + " of " + model.size() : "step – of –");
+        // As wide as the run's last step needs, so the label doesn't grow while it counts.
+        String widest = "step " + model.size() + " of " + model.size();
+        stepLabel.setPreferredSize(new java.awt.Dimension(stepLabel.getFontMetrics(stepLabel.getFont()).stringWidth(widest),
+                stepLabel.getPreferredSize().height));
         boolean canGoBack = has && model.getStep() > 0;
         boolean canGoOn = has && !model.isLastStep();
         first.setEnabled(canGoBack);
@@ -150,15 +159,23 @@ public class ControlsBar extends JPanel implements TraceListener {
 
     private void stopPlaying() {
         playTimer.stop();
-        play.setText("play");
+        show(play, Icons.Glyph.PLAY, "Play");
     }
 
-    // A flat button that doesn't take the keyboard focus, so the shortcut keys keep working.
-    private static JButton button(String text, String tip) {
-        JButton button = new JButton(text);
+    // A flat 32 px icon button. Tab can reach it, but a click doesn't take the keyboard focus, so
+    // after clicking, Space and the arrow keys still step the program.
+    static JButton button(Icons.Glyph glyph, String name, String tip) {
+        JButton button = new JButton(Icons.of(glyph, Icons.Role.TOOL));
         button.setToolTipText(Shortcuts.label(tip));
-        button.setFocusable(false);
+        button.getAccessibleContext().setAccessibleName(name); // what a screen reader says
+        button.setRequestFocusEnabled(false);
         button.putClientProperty("JButton.buttonType", "toolBarButton"); // flat, like the toolbar's
+        button.setPreferredSize(new java.awt.Dimension(32, 32));
         return button;
+    }
+
+    private static void show(JButton button, Icons.Glyph glyph, String name) {
+        button.setIcon(Icons.of(glyph, Icons.Role.TOOL));
+        button.getAccessibleContext().setAccessibleName(name);
     }
 }

@@ -17,6 +17,7 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,8 +38,9 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
@@ -46,6 +48,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JViewport;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.JToolBar;
@@ -56,6 +59,7 @@ import raphael.RaphaelException;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
 import raphael.io.AppFolders;
+import raphael.io.AppLog;
 import raphael.io.DraftStore;
 import raphael.io.SafeFiles;
 import raphael.model.EndReason;
@@ -109,6 +113,7 @@ public class MainWindow extends JFrame {
               Ctrl+0             normal text size and zoom
               Ctrl+D             dark or light
               Ctrl+,             settings
+              F6, Shift+F6       move between toolbar, code and picture
             """;
     private static final String[] EXAMPLES = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts"};
 
@@ -119,13 +124,19 @@ public class MainWindow extends JFrame {
     private final CallStackPanel callStack = new CallStackPanel();
     private final LocalsPanel locals = new LocalsPanel();
     private final ConsolePanel console = new ConsolePanel();
-    private final JButton runButton = new JButton("run");
+    private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final Legend legend = new Legend();
     private final JPanel statusBar = new JPanel(new BorderLayout());
     private JToolBar toolBar;
+    private JButton examplesButton;
+    // The picture area shows either the picture or, before the first run, a short guide.
+    private final java.awt.CardLayout pictureCards = new java.awt.CardLayout();
+    private final JPanel pictureArea = new JPanel(pictureCards);
+    // A thin moving bar under the toolbar while a program is being recorded.
+    private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private boolean legendWanted = true; // false while the status bar shows an error
-    private final JButton themeButton = toolButton("dark", "switch between dark and light  (Ctrl+D)");
+    private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
     private final Tracer tracer = new JdiTracer();
     private JSplitPane top;
@@ -162,19 +173,36 @@ public class MainWindow extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                if (okToLoseCode("quit without saving your code?")) {
+                if (okToLoseCode()) {
                     quit();
                 }
             }
         });
         getContentPane().setBackground(Style.BACKGROUND);
+        setJMenuBar(buildMenuBar());
         toolBar = buildToolBar();
-        add(toolBar, BorderLayout.NORTH);
+        busy.setIndeterminate(true);
+        busy.setBorder(BorderFactory.createEmptyBorder());
+        busy.setPreferredSize(new Dimension(0, 2));
+        busy.setVisible(false);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(toolBar, BorderLayout.CENTER);
+        north.add(busy, BorderLayout.SOUTH);
+        add(north, BorderLayout.NORTH);
 
         JScrollPane picture = new JScrollPane(visual);
-        picture.setBorder(Section.hairline(0, 1, 0, 0));
+        picture.setBorder(BorderFactory.createEmptyBorder());
         picture.getViewport().setBackground(Style.BACKGROUND);
-        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, code, picture);
+        pictureArea.setBorder(Section.hairline(0, 1, 0, 0));
+        pictureArea.add(picture, "picture");
+        pictureArea.add(new EmptyState(EXAMPLES, !WindowsFileDialog.available(), this::loadExample,
+                () -> examplesMenu.show(examplesButton, 0, examplesButton.getHeight())), "empty");
+        model.addListener(m -> showPictureOrGuide());
+        // Drop a .java file anywhere on the window to open it.
+        setTransferHandler(new FileDrop(null, this::openDropped));
+        visual.setTransferHandler(new FileDrop(null, this::openDropped));
+        code.getEditor().setTransferHandler(new FileDrop(code.getEditor().getTransferHandler(), this::openDropped));
+        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, code, pictureArea);
         top.setResizeWeight(0.4);
         top.setBorder(BorderFactory.createEmptyBorder());
         JPanel bottom = new JPanel(new GridBagLayout());
@@ -223,6 +251,7 @@ public class MainWindow extends JFrame {
             if (model.getTrace() == null) { // an old compile error no longer applies
                 visual.setMessage(null, null);
                 console.showMessage("");
+                showPictureOrGuide();
             }
         });
         code.setOnTextSizeWheel(this::changeTextSize);
@@ -231,6 +260,7 @@ public class MainWindow extends JFrame {
         // The usable part of the screen (without the taskbar), so the window always fits.
         Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
         setSize(Math.min(1300, screen.width), Math.min(840, screen.height));
+        setMinimumSize(new Dimension(Math.min(960, screen.width), Math.min(600, screen.height)));
         setLocationRelativeTo(null);
         applyTheme();
         applyTextSize();
@@ -249,7 +279,7 @@ public class MainWindow extends JFrame {
         Desktop desktop = Desktop.getDesktop();
         if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
             desktop.setQuitHandler((event, response) -> {
-                if (okToLoseCode("quit without saving your code?")) {
+                if (okToLoseCode()) {
                     quit();
                 } else {
                     response.cancelQuit();
@@ -292,12 +322,10 @@ public class MainWindow extends JFrame {
     // The colours Swing doesn't choose by itself. Most of the window is walked in one go.
     private void applyTheme() {
         recolor(getContentPane());
-        runButton.setBackground(Style.ACCENT);
-        runButton.setForeground(Style.ON_ACCENT);
-        String pressed = hex(Style.ACCENT_PRESSED);
-        runButton.putClientProperty("FlatLaf.style",
-                "toolbar.hoverBackground: " + pressed + "; toolbar.pressedBackground: " + pressed);
-        themeButton.setText(Style.isDark() ? "light" : "dark");
+        styleRunButton();
+        String mode = Style.isDark() ? "Light mode" : "Dark mode";
+        themeButton.setToolTipText(Shortcuts.label(mode + "  (Ctrl+D)"));
+        themeButton.getAccessibleContext().setAccessibleName(mode);
         toolBar.setBackground(Style.BAR); // the bars frame the work area in a slightly different shade
         statusBar.setBackground(Style.BAR);
         repaint();
@@ -361,9 +389,13 @@ public class MainWindow extends JFrame {
     }
 
     private void find() {
-        String text = JOptionPane.showInputDialog(this, "find:", lastSearch);
-        if (text != null) {
-            lastSearch = text;
+        javax.swing.JTextField field = new javax.swing.JTextField(lastSearch, 24);
+        field.putClientProperty("JTextField.placeholderText", "text to find in the code");
+        field.selectAll();
+        String answer = Dialogs.question(this, "Find in the code").title("Find").extra(field)
+                .buttons("Find", "Close").ask();
+        if ("Find".equals(answer)) {
+            lastSearch = field.getText();
             findNext();
         }
     }
@@ -377,10 +409,12 @@ public class MainWindow extends JFrame {
     private void showHelp() {
         JTextArea text = new JTextArea(helpText(Shortcuts.isMac()));
         text.setEditable(false);
+        text.setFocusable(false); // nothing to type or select here, so no text cursor
         text.setFont(Style.UI_FONT);
-        text.setBackground(Style.BACKGROUND);
+        text.setOpaque(false);
         text.setForeground(Style.INK);
-        JOptionPane.showMessageDialog(this, text, "raphael · keys", JOptionPane.PLAIN_MESSAGE);
+        Dialogs.question(this, "Keyboard shortcuts").title("Keyboard shortcuts").extra(text)
+                .buttons("Close", null).ask();
     }
 
     // HELP with this computer's key names. On a Mac "Ctrl" becomes "Cmd" and "Alt" becomes
@@ -413,19 +447,28 @@ public class MainWindow extends JFrame {
         return String.format("#%06x", color.getRGB() & 0xFFFFFF);
     }
 
+    // The toolbar, in groups split by thin dividers: the file buttons and examples; Run; the step
+    // controls; then theme, settings and help. All but Run and Examples are 32 px icon buttons.
     private JToolBar buildToolBar() {
         JToolBar bar = new JToolBar();
         bar.setFloatable(false);
         bar.setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
+                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_2, Style.SPACE_3)));
+        // A toolbar normally moves the keyboard focus with the arrow keys; here they step the program.
+        bar.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
 
-        JButton newProgram = toolButton("new", "start a new program, or paste one in  (Ctrl+N)");
+        JButton newProgram = ControlsBar.button(Icons.Glyph.NEW, "New program", "New program, or paste one in  (Ctrl+N)");
         newProgram.addActionListener(e -> newProgram());
-        JButton open = toolButton("open", "open a .java file  (Ctrl+O)");
+        JButton open = ControlsBar.button(Icons.Glyph.OPEN, "Open", "Open a .java file  (Ctrl+O)");
         open.addActionListener(e -> open());
-        JButton save = toolButton("save", "save the code  (Ctrl+S)");
+        JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
         save.addActionListener(e -> save());
-        JButton examples = toolButton("examples", "load an example program");
+        JButton examples = new JButton("Examples", Icons.of(Icons.Glyph.CHEVRON_DOWN, Icons.Role.TOOL));
+        examplesButton = examples;
+        examples.setHorizontalTextPosition(SwingConstants.LEADING); // the arrow after the word
+        examples.setToolTipText("Load an example program");
+        examples.setRequestFocusEnabled(false);
+        examples.putClientProperty("JButton.buttonType", "toolBarButton");
         for (String name : EXAMPLES) {
             JMenuItem item = new JMenuItem(name);
             item.addActionListener(e -> loadExample(name));
@@ -433,53 +476,70 @@ public class MainWindow extends JFrame {
         }
         examples.addActionListener(e -> examplesMenu.show(examples, 0, examples.getHeight()));
         themeButton.addActionListener(e -> toggleTheme());
-        JButton settings = toolButton("settings", "steps, timeout, memory, text size and theme  (Ctrl+,)");
+        JButton settings = ControlsBar.button(Icons.Glyph.SETTINGS, "Settings", "Settings: steps, time, memory, text size, theme  (Ctrl+,)");
         settings.addActionListener(e -> showSettings());
-        JButton help = toolButton("keys", "all the keyboard shortcuts  (F1)");
+        JButton help = ControlsBar.button(Icons.Glyph.HELP, "Keyboard shortcuts", "Keyboard shortcuts  (F1)");
         help.addActionListener(e -> showHelp());
-        runButton.setToolTipText(Shortcuts.label("compile and trace the program  (Ctrl+Enter or F5)"));
-        runButton.setFocusable(false);
-        // The one filled control in the window. applyTheme() sets its colours: FlatLaf would turn a
-        // toolbar button grey under the mouse, which white text can't be read on.
-        runButton.setFont(Style.UI_FONT.deriveFont(java.awt.Font.BOLD));
+        runButton.setRequestFocusEnabled(false);
+        runButton.setFont(Style.sans(true, Style.UI_SIZE));
+        runButton.setIconTextGap(Style.SPACE_2);
         runButton.addActionListener(e -> run());
 
         bar.add(newProgram);
         bar.add(open);
         bar.add(save);
         bar.add(examples);
-        bar.addSeparator();
+        bar.add(divider());
         bar.add(runButton);
-        bar.addSeparator();
+        bar.add(divider());
         bar.add(controls);
-        bar.addSeparator();
+        bar.add(divider());
         bar.add(themeButton);
         bar.add(settings);
         bar.add(help);
         return bar;
     }
 
-    private static JButton toolButton(String text, String tip) {
-        JButton button = new JButton(text);
-        button.setToolTipText(Shortcuts.label(tip));
-        button.setFocusable(false);
-        return button;
+    // A thin upright line between two groups of buttons, with a gap on each side.
+    private static JComponent divider() {
+        JComponent line = new JComponent() {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                g.setColor(Style.HAIRLINE);
+                g.fillRect(getWidth() / 2, (getHeight() - 24) / 2, 1, 24);
+            }
+        };
+        Dimension size = new Dimension(2 * Style.SPACE_2 + 1, 32);
+        line.setPreferredSize(size);
+        line.setMaximumSize(size);
+        return line;
+    }
+
+    // Run is the one filled button: blue with "Run", or, while recording, dark with "Stop". Its
+    // colours are set here because FlatLaf would turn a toolbar button grey under the mouse.
+    private void styleRunButton() {
+        java.awt.Color fill = running ? Style.INK : Style.ACCENT;
+        java.awt.Color text = running ? Style.BACKGROUND : Style.ON_ACCENT;
+        runButton.setText(running ? "Stop" : "Run");
+        runButton.setIcon(Icons.of(running ? Icons.Glyph.STOP : Icons.Glyph.PLAY,
+                running ? Icons.Role.ON_INK : Icons.Role.ON_ACCENT));
+        runButton.setToolTipText(Shortcuts.label(running ? "Stop recording; keep the steps so far  (Esc)"
+                : "Compile and record the program  (Ctrl+Enter or F5)"));
+        runButton.setBackground(fill);
+        runButton.setForeground(text);
+        String pressed = hex(running ? Style.INK_SOFT : Style.ACCENT_PRESSED);
+        runButton.putClientProperty("FlatLaf.style", "arc: " + Style.ARC + "; margin: 5,10,5,14; borderWidth: 0; focusWidth: "
+                + Style.FOCUS_WIDTH + "; hoverBackground: " + pressed + "; pressedBackground: " + pressed);
     }
 
     // Keyboard shortcuts that work anywhere in the window. (In the editor, the arrow keys and
     // Space still type; use the Alt versions there.)
     private void bindKeys() {
-        bind("control ENTER", this::run);
+        // The keys with a menu item (Ctrl+S, Ctrl+Enter, F1…) are that item's shortcut, set in
+        // buildMenuBar(). These are the others: plain keys, and second keys for the same command.
         bind("F5", this::run);
-        bind("control S", this::save);
-        bind("shift control S", this::saveAs);
-        bind("control O", this::open);
-        bind("control N", this::newProgram);
-        bind("control F", this::find);
-        bind("F3", this::findNext);
-        bind("F1", this::showHelp);
-        bind("control D", this::toggleTheme);
-        bind("control COMMA", this::showSettings);
+        bind("F6", () -> moveFocus(1));
+        bind("shift F6", () -> moveFocus(-1));
         bind("ESCAPE", () -> {
             if (running) {
                 tracer.stop();
@@ -487,13 +547,10 @@ public class MainWindow extends JFrame {
                 controls.pause();
             }
         });
-        for (String key : new String[] {"control EQUALS", "shift control EQUALS", "control PLUS", "control ADD"}) {
+        for (String key : new String[] {"shift control EQUALS", "control PLUS", "control ADD"}) {
             bind(key, () -> changeTextSize(1));
         }
-        for (String key : new String[] {"control MINUS", "control SUBTRACT"}) {
-            bind(key, () -> changeTextSize(-1));
-        }
-        bind("control 0", this::resetView);
+        bind("control SUBTRACT", () -> changeTextSize(-1));
         // Only heard when the keyboard is outside the editor; inside it, these keys already work.
         bind("control V", code::pasteHere);
         bind("control A", code::selectAllHere);
@@ -501,13 +558,113 @@ public class MainWindow extends JFrame {
         bind("alt RIGHT", model::next);
         bind("LEFT", model::previous);
         bind("alt LEFT", model::previous);
-        bind("alt DOWN", model::stepOver);
-        bind("alt UP", model::stepOut);
         bind("HOME", model::first);
         bind("alt HOME", model::first);
         bind("END", model::last);
         bind("alt END", model::last);
         bind("SPACE", controls::togglePlay);
+    }
+
+    // The menu bar: every command in one place, with its shortcut beside it. On a Mac it's the
+    // menu bar at the top of the screen, and Settings and Quit are in the app's own menu. On
+    // Windows and Linux it's in the window, with underlined letters (Alt+F opens File).
+    private JMenuBar buildMenuBar() {
+        JMenuBar bar = new JMenuBar();
+        JMenu file = menu("File", KeyEvent.VK_F);
+        file.add(item("New", "control N", this::newProgram));
+        file.add(item("Open…", "control O", this::open));
+        JMenu examples = menu("Open example", KeyEvent.VK_E);
+        for (String name : EXAMPLES) {
+            examples.add(item(name, null, () -> loadExample(name)));
+        }
+        file.add(examples);
+        file.addSeparator();
+        file.add(item("Save", "control S", this::save));
+        file.add(item("Save As…", "shift control S", this::saveAs));
+        if (!Shortcuts.isMac()) {
+            file.addSeparator();
+            file.add(item("Settings…", "control COMMA", this::showSettings));
+            file.addSeparator();
+            file.add(item("Quit", "control Q", () -> {
+                if (okToLoseCode()) {
+                    quit();
+                }
+            }));
+        }
+        JMenu edit = menu("Edit", KeyEvent.VK_E);
+        edit.add(item("Undo", "control Z", code::undo));
+        edit.add(item("Redo", "control Y", code::redo));
+        edit.addSeparator();
+        edit.add(item("Find…", "control F", this::find));
+        edit.add(item("Find next", "F3", this::findNext));
+        JMenu run = menu("Run", KeyEvent.VK_R);
+        run.add(item("Run or stop", "control ENTER", this::run));
+        run.add(item("Play or pause  (Space)", null, controls::togglePlay));
+        run.addSeparator();
+        run.add(item("Step forward  (→)", null, model::next));
+        run.add(item("Step back  (←)", null, model::previous));
+        run.add(item("Skip call", "alt DOWN", model::stepOver));
+        run.add(item("Finish call", "alt UP", model::stepOut));
+        run.add(item("First step  (Home)", null, model::first));
+        run.add(item("Last step  (End)", null, model::last));
+        JMenu view = menu("View", KeyEvent.VK_V);
+        view.add(item("Larger text", "control EQUALS", () -> changeTextSize(1)));
+        view.add(item("Smaller text", "control MINUS", () -> changeTextSize(-1)));
+        view.add(item("Normal size", "control 0", this::resetView));
+        view.addSeparator();
+        view.add(item("Switch light or dark", "control D", this::toggleTheme));
+        JMenu help = menu("Help", KeyEvent.VK_H);
+        help.add(item("Keyboard shortcuts", "F1", this::showHelp));
+        if (AppLog.folder() != null) {
+            help.add(item("Open log folder", null, this::openLogFolder));
+        }
+        help.add(item("About Raphael", null, () -> Dialogs.tell(this, "Raphael",
+                "See your Java program's data structures change while it runs. Free and open source.")));
+        for (JMenu menu : new JMenu[] {file, edit, run, view, help}) {
+            bar.add(menu);
+        }
+        return bar;
+    }
+
+    private static JMenu menu(String name, int letter) {
+        JMenu menu = new JMenu(name);
+        if (!Shortcuts.isMac()) {
+            menu.setMnemonic(letter);
+        }
+        return menu;
+    }
+
+    // A menu item with its shortcut (written the Windows way, as in bind(); null for none).
+    private static JMenuItem item(String name, String key, Runnable action) {
+        JMenuItem item = new JMenuItem(name);
+        if (key != null) {
+            item.setAccelerator(Shortcuts.key(key));
+        }
+        item.addActionListener(e -> action.run());
+        return item;
+    }
+
+    private void openLogFolder() {
+        try {
+            Desktop.getDesktop().open(AppLog.folder().toFile());
+        } catch (IOException | UnsupportedOperationException | IllegalArgumentException e) {
+            Dialogs.tell(this, "The log folder couldn't be opened", "It's here: " + AppLog.folder());
+        }
+    }
+
+    // F6 moves the keyboard to the next part of the window (toolbar, code, picture), and
+    // Shift+F6 back. In the code, Tab indents, so this is the way out of it.
+    private void moveFocus(int direction) {
+        JComponent[] regions = {(JComponent) toolBar.getComponentAtIndex(0), code.getEditor(), visual};
+        java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        int now = -1;
+        for (int i = 0; i < regions.length; i++) {
+            if (owner != null && (owner == regions[i] || SwingUtilities.isDescendingFrom(owner, regions[i]))) {
+                now = i;
+            }
+        }
+        int next = Math.floorMod(now + direction, regions.length);
+        regions[next].requestFocusInWindow();
     }
 
     private void bind(String key, Runnable action) {
@@ -532,9 +689,12 @@ public class MainWindow extends JFrame {
             top.setDividerLocation(dividerForCode()); // the code may have grown since it was loaded
         }
         running = true;
-        runButton.setText("stop");
+        styleRunButton();
         visual.setRecording(true);
+        busy.setVisible(true);
+        showPictureOrGuide();
         progress = new Timer(200, e -> {
+            visual.setRecordedSteps(tracer.stepsSoFar());
             if (tracer.stepsSoFar() > 0) {
                 say("recording your program: " + tracer.stepsSoFar() + " steps · esc stops", Style.INK_SOFT);
             }
@@ -568,7 +728,8 @@ public class MainWindow extends JFrame {
             protected void done() {
                 running = false;
                 progress.stop();
-                runButton.setText("run");
+                busy.setVisible(false);
+                styleRunButton();
                 visual.setRecording(false);
                 code.setEditable(true);
                 try {
@@ -578,8 +739,16 @@ public class MainWindow extends JFrame {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
+                showPictureOrGuide();
             }
         }.execute();
+    }
+
+    // The picture, or the guide when there's nothing to show yet: no recorded run, nothing being
+    // recorded, and no message (a compile error or a crash belongs in the picture area).
+    private void showPictureOrGuide() {
+        boolean nothingYet = !model.hasSteps() && !running && !visual.hasMessage();
+        pictureCards.show(pictureArea, nothingYet ? "empty" : "picture");
     }
 
     // A run that ended with an exception instead of a result. A RaphaelException is a problem
@@ -651,12 +820,15 @@ public class MainWindow extends JFrame {
 
     // Asks first if replacing the editor's text would lose changes that haven't been saved.
     private boolean okToReplaceCode() {
-        return okToLoseCode("replace your unsaved code?");
+        return okToLoseCode();
     }
 
     private void showSettings() {
+        String saved = App.SETTINGS.get("dark", null); // no choice saved: follow the computer
+        SettingsDialog.Theme theme = saved == null ? SettingsDialog.Theme.SYSTEM
+                : Boolean.parseBoolean(saved) ? SettingsDialog.Theme.DARK : SettingsDialog.Theme.LIGHT;
         SettingsDialog.Values chosen = SettingsDialog.ask(this,
-                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), Style.isDark()));
+                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), theme));
         if (chosen == null) {
             return;
         }
@@ -665,8 +837,15 @@ public class MainWindow extends JFrame {
         App.SETTINGS.putInt("timeoutSeconds", limits.timeoutSeconds());
         App.SETTINGS.putInt("memoryMb", limits.memoryMb());
         tracer.setLimits(limits);
-        if (chosen.dark() != Style.isDark()) {
-            toggleTheme();
+        boolean wantDark = chosen.theme() == SettingsDialog.Theme.SYSTEM ? SystemTheme.isDark()
+                : chosen.theme() == SettingsDialog.Theme.DARK;
+        if (wantDark != Style.isDark()) {
+            toggleTheme(); // also saves the choice
+        }
+        if (chosen.theme() == SettingsDialog.Theme.SYSTEM) {
+            App.SETTINGS.remove("dark"); // from now on, follow the computer
+        } else {
+            App.SETTINGS.putBoolean("dark", wantDark);
         }
         if (chosen.textSize() != Style.CODE_FONT.getSize()) {
             changeTextSize(chosen.textSize() - Style.CODE_FONT.getSize());
@@ -731,10 +910,19 @@ public class MainWindow extends JFrame {
         if (saved == null || saved.isBlank()) {
             return;
         }
-        int answer = JOptionPane.showConfirmDialog(this,
-                "Raphael didn't close normally last time.\nBring back the unsaved code you were working on?",
-                "raphael · restore your code", JOptionPane.YES_NO_OPTION);
-        if (answer == JOptionPane.YES_OPTION) {
+        String when;
+        try {
+            when = " from " + whenText(draft.savedAt(), java.time.LocalDateTime.now());
+        } catch (IOException e) {
+            when = "";
+        }
+        long lines = saved.lines().count();
+        String answer = Dialogs.question(this, "Restore your unsaved code?")
+                .body("Raphael didn't close normally last time. It kept a copy of your code" + when
+                        + " (" + lines + (lines == 1 ? " line" : " lines") + ").")
+                .buttons("Restore", null, "Discard it")
+                .ask();
+        if ("Restore".equals(answer)) {
             code.setCode(saved);
             code.markUnsaved();
             top.setDividerLocation(dividerForCode());
@@ -764,9 +952,20 @@ public class MainWindow extends JFrame {
         System.exit(0);
     }
 
-    private boolean okToLoseCode(String question) {
-        return !code.isDirty() || JOptionPane.showConfirmDialog(this, question, "raphael",
-                JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION;
+    // Before the code in the editor is replaced or Raphael quits: if there are unsaved changes,
+    // offer to save them. True if it's fine to go on.
+    private boolean okToLoseCode() {
+        if (!code.isDirty()) {
+            return true;
+        }
+        String answer = Dialogs.question(this, "Save changes to " + documentName + "?")
+                .body("Your changes will be lost if you don't save them.")
+                .buttons("Save", "Cancel", "Don't save")
+                .ask();
+        if ("Save".equals(answer)) {
+            return save(); // go on only if it really was saved
+        }
+        return "Don't save".equals(answer);
     }
 
     private void newProgram() {
@@ -815,9 +1014,23 @@ public class MainWindow extends JFrame {
             return;
         }
         File file = chooseFile(false);
-        if (file == null) {
+        if (file != null) {
+            openFile(file);
+        }
+    }
+
+    // A file dropped onto the window.
+    private void openDropped(File file) {
+        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".java")) {
+            Dialogs.tell(this, "Raphael opens .java files", file.getName() + " isn't one. Drop a file whose name ends in .java.");
             return;
         }
+        if (okToReplaceCode()) {
+            openFile(file);
+        }
+    }
+
+    private void openFile(File file) {
         try {
             code.setCode(SafeFiles.readCode(file.toPath()));
             top.setDividerLocation(dividerForCode());
@@ -826,8 +1039,7 @@ public class MainWindow extends JFrame {
             say("opened " + file.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
             LOG.log(Level.INFO, "Couldn't open " + file, e);
-            JOptionPane.showMessageDialog(this, "Couldn't open " + file.getName() + ":\n"
-                    + SafeFiles.describe(e), "Raphael", JOptionPane.WARNING_MESSAGE);
+            Dialogs.tell(this, "Couldn't open " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
         }
     }
 
@@ -851,9 +1063,8 @@ public class MainWindow extends JFrame {
             return true;
         } catch (IOException e) {
             LOG.log(Level.WARNING, "Couldn't save " + file, e);
-            JOptionPane.showMessageDialog(this, "Couldn't save " + file.getName() + ":\n"
-                    + SafeFiles.describe(e) + "\nYour code is still here; try saving somewhere else.",
-                    "Raphael", JOptionPane.WARNING_MESSAGE);
+            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e)
+                    + ". Your code is still here; try saving it somewhere else.");
             currentFile = null; // so the next save asks where
             return false;
         }
@@ -895,8 +1106,9 @@ public class MainWindow extends JFrame {
             name += ".java";
             File file = new File(dialog.getDirectory(), name);
             // The dialog only asked about replacing the name that was typed, without ".java".
-            if (file.exists() && JOptionPane.showConfirmDialog(this, file.getName() + " already exists. Replace it?",
-                    "Raphael", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) {
+            if (file.exists() && !"Replace".equals(Dialogs.question(this, "Replace " + file.getName() + "?")
+                    .body("A file with that name is already in this folder. Replacing it overwrites what's in it.")
+                    .buttons("Cancel", null, "Replace").ask())) {
                 return null;
             }
             return file;
@@ -926,6 +1138,19 @@ public class MainWindow extends JFrame {
         }
         java.util.regex.Matcher anyClass = java.util.regex.Pattern.compile("\\bclass\\s+(\\w+)").matcher(code);
         return anyClass.find() ? anyClass.group(1) + ".java" : "Main.java";
+    }
+
+    // "today at 14:32", "yesterday at 09:05" or "3 Nov at 18:40", for the restore question.
+    static String whenText(java.time.Instant saved, java.time.LocalDateTime now) {
+        java.time.LocalDateTime then = java.time.LocalDateTime.ofInstant(saved, java.time.ZoneId.systemDefault());
+        String time = then.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        if (then.toLocalDate().equals(now.toLocalDate())) {
+            return "today at " + time;
+        }
+        if (then.toLocalDate().equals(now.toLocalDate().minusDays(1))) {
+            return "yesterday at " + time;
+        }
+        return then.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)) + " at " + time;
     }
 
     // The window's title: the document's name, with a dot while it has unsaved changes. On a

@@ -11,3 +11,4 @@
 - 6.7 Synchronised views: trace table, history, memory, sequence diagram, flowchart, input (stage 9)
 - 6.8 Learning modes: predict, line counter, growth chart, side by side (stage 11)
 - 6.9 Exports (stage 12)
+- 6.10 The interface (stages 4 and 4b): system file dialogs (and Windows' own inside WSL), icon toolbar, one dialog style with platform button order, first-run guide, settings, menu bar, keyboard reach, drag and drop, fonts

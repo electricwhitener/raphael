@@ -573,3 +573,23 @@ Nine things. They're ranked, with mockups in `docs/design/`, and the ones not bu
 - **Controls.** Fields and buttons have borders you can see (3:1), a 2 px ring shows which one has the keyboard, and they have 8 px corners. Square corners on buttons were the strongest "old" signal after the missing icons. The picture's cells and nodes stay square. Gaps are on a 4 px grid.
 - **The bars and the title.** The toolbar and status bar are a slightly different shade (`BAR`) that frames the work area. The legend is now a swatch for each mark, so it doesn't rely on colour alone (filled, outlined and dashed squares), and it hides when the window is too narrow. The title reads "● BSTInsert.java — Raphael" while there are unsaved changes. A Mac shows that in the close button instead, as Mac apps do. On Windows, FlatLaf draws the title bar, so it follows dark mode. On a Mac, Cmd+Q and the app menu's Settings… go through the same question about unsaved code and the same settings dialog.
 
+## Stage 4b: A modern interface
+
+- Why does the file dialog go through PowerShell inside WSL?
+
+The system's own dialog looked right but didn't work right for me. Inside WSL, Raphael is a Linux program, so Java's "native" dialog is GTK's, and its Desktop button opened the empty Linux home folder instead of my Windows Desktop. A browser in the same position shows Explorer, so now Raphael does too. `WindowsFileDialog` writes a short PowerShell script that shows Windows' Open or Save dialog and prints the file chosen, runs it with `powershell.exe` (which WSL can start), and turns the Windows path into a Linux one with `wslpath` (`C:\Users\…` becomes `/mnt/c/Users/…`). The script is passed Base64-encoded (`-EncodedCommand`), so no file name with a quote or an accent can break it. While the dialog is open, Raphael's window ignores clicks but keeps repainting: a `SecondaryLoop` lets Swing go on handling events while the code waits for the answer. If anything fails, Raphael falls back to Java's own dialog. On a real Windows, Mac or Linux install, Java's dialog is already the system's own.
+
+- Which fonts, and why two?
+
+The monospace font (JetBrains Mono NL) stays for the code, the picture and the panels, where letters lining up matters. The interface itself (buttons, menus, dialogs) now uses a normal sans font, because monospace prose in dialogs was the biggest "old" signal left. On Windows and macOS that's the system's own font (Segoe UI and SF), which FlatLaf picks by itself. Linux's usual fonts look dated, so Raphael ships Inter there. It's free under the same licence as the code font (SIL OFL), and I approved adding it.
+
+- How was the rest built?
+
+Following the designer's spec (mockups in `docs/design/`):
+- **The toolbar** has 32 px icon buttons in groups, a filled Run button that turns into a dark Stop while recording, and "Examples ▾". The icons are drawn with Java 2D in `Icons`, so they stay sharp at any scaling and need no image files or library. Each `Glyph` is an enum constant that overrides `draw()`. Every icon-only button has a name for screen readers.
+- **One dialog style.** `Dialogs` uses the Builder pattern: `Dialogs.question(window, "Save changes to X?").body(…).buttons("Save", "Cancel", "Don't save").ask()`. The buttons say what they do, follow each system's order (main button first on Windows, last on macOS and Linux), and the keyboard starts on the safe one. The old "OK" that meant "throw my code away" is gone.
+- **A first-run guide** (`EmptyState`): "Watch your program run", three numbered steps with their keys, and example chips. While recording, the picture shows "Recording… N steps", with a thin moving bar under the toolbar.
+- **Settings** in two groups, each field with its unit and a line saying what it does. The theme is System / Light / Dark, so following the computer is a choice you can see.
+- **A menu bar** (File, Edit, Run, View, Help) with every command and its shortcut. On a Mac it's the bar at the top of the screen. Toolbar buttons can be reached with Tab, and F6 moves between the toolbar, the code and the picture.
+- **Dropping a `.java` file** onto the window opens it. `FileDrop` wraps the editor's own copy-and-paste handler and only takes over for files (the Decorator pattern). Windows can't drag files into Linux windows under WSL, so the guide doesn't promise it there.
+

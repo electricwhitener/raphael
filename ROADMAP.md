@@ -139,7 +139,7 @@ The user now wants Raphael to be **a real, production-grade product**:
 - Animation: steady 60 fps on a low-end laptop, measured by a frame-time test.
 - Startup time measured, with a target under 2 seconds.
 
-### 4b. Modern interface (with the chief UI designer)
+### 4b. Modern interface (with the chief UI designer) (done, 2026-11-05)
 Added 2026-11-05: the interface still feels dated, for example the open dialog next to Windows' own.
 
 **First design pass**, specified by `raphael-ui-designer` on 2026-11-05. Mockups are in `docs/design/`.
@@ -152,7 +152,7 @@ Already built (the end-of-Stage-4 pass):
 - the title with an unsaved dot, a themed title bar, and Mac app-menu Quit and Settings
 - the status bar with a swatch legend
 
-To build in this stage:
+Built in this stage (all seven), plus Windows' own file dialog inside WSL (`WindowsFileDialog`), after the user found the GTK dialog's Desktop opened the Linux home:
 1. **Toolbar** (`main-after-*.png`):
    - 48 px high on `BAR`, with 32×32 icon buttons and 16 px icons drawn with `Path2D` in a new `ui/Icons` class (no library)
    - groups split by 1×24 px dividers; icon colours `INK_SOFT`, with `HOVER` and `PRESSED` fills and an `ICON_DISABLED` colour (BBC2CA / 4A525C)

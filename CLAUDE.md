@@ -107,7 +107,18 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
     - the title "● name — Raphael" (on a Mac, `Window.documentModified`); Mac `apple.awt.application.appearance`; `Desktop` Quit and Preferences handlers
     - `ui/Legend` (swatches) and a 28 px status bar on `BAR`
   - 216 tests.
-- **Next:** ROADMAP stage 4b (the rest of the designer's spec). The Inter font for Linux needs the user's OK.
+- **Stage 4b (modern interface): done, 2026-11-05.**
+  - The user said the WSL file dialog's Desktop opened the Linux home, so `ui/WindowsFileDialog` shows Windows' own Open and Save dialog through PowerShell (`-EncodedCommand`, `wslpath`, a `SecondaryLoop` keeps the window painting), falling back to `FileDialog`.
+  - Inter 4.1 Regular and SemiBold (OFL, `fonts/Inter-OFL.txt`) is the UI font on Linux; Windows and macOS use FlatLaf's system font; `Style.sans()`.
+  - `ui/Icons` (Java 2D glyphs) and a 48 px toolbar with icon groups and dividers; Run/Stop is filled (`styleRunButton`); minimum window 960×600.
+  - `ui/Dialogs` (Builder, platform button order, keyboard on the safe button) now handles unsaved changes (Save / Don't save / Cancel), restore (time and line count via `DraftStore.savedAt`), find, keys, file errors, replace and the crash report.
+  - `ui/EmptyState` guide plus a `CardLayout`; "Recording… N steps" and a 2 px moving bar.
+  - Settings redesigned: two groups, units, a System / Light / Dark switch; `Values.theme`.
+  - A menu bar (File, Edit, Run, View, Help; the screen menu bar on a Mac, mnemonics elsewhere); accelerators replaced the duplicate binds.
+  - F6 cycles regions; toolbar buttons can be reached with Tab (`setRequestFocusEnabled(false)`).
+  - `ui/FileDrop` (Decorator) for dropping files; it isn't offered inside WSL.
+  - 222 tests.
+- **Next:** the stage 4b UI review with `raphael-ui-designer`, then ROADMAP stage 5 (installers).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
@@ -129,7 +140,7 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
 - **README.md is the public guide:** what Raphael does, how to get it, how it works (the pipeline), a file map (file → job → key methods) and an OOP map (concept → where). Keep it up to date.
 - **Java style is mostly classic:** private fields with constructors and getters. Use records only for tiny data holders, and no sealed types or pattern-matching switch.
 - **OOP tags:** each class that shows an OOP concept starts with a short `// OOP: ...` comment.
-- **Dependencies (relaxed 2026-11-04):** new libraries and build plugins are allowed. Before adding one, name it and say why. Today the app uses the JDK and FlatLaf, and the tests use JUnit 5. The JetBrains Mono NL font files in `src/main/resources/fonts/` (SIL Open Font License, `OFL.txt` beside them) are a resource, not a code dependency.
+- **Dependencies (relaxed 2026-11-04):** new libraries and build plugins are allowed. Before adding one, name it and say why. Today the app uses the JDK and FlatLaf, and the tests use JUnit 5. The font files in `src/main/resources/fonts/` are resources, not code dependencies, and both are under the SIL Open Font License: JetBrains Mono NL (`OFL.txt`) and Inter 4.1 (`Inter-OFL.txt`, approved 2026-11-05).
 - **Explain before doing:** explain each stage (what, why, which concepts) before building it, so the user can write about it. New classes are fine (relaxed 2026-11-04).
 - **The look (decided 2026-10-26, dark mode added 2026-11-01):** a plain terminal feel, white or dark. All colours, sizes, fonts and timings go in `render/Style`.
   - One monospace font (JetBrains Mono NL, which ships inside the app) for code, the picture and the panels; thin lines; the picture's shapes are square. From 2026-11-05, controls (buttons, fields) have 8 px corners, the toolbar and status bar use `BAR`, and stage 4b moves the interface's own text to the system's sans font.
