@@ -74,7 +74,9 @@ The first soak run (2026-11-04) passed on all three systems: 900 runs each, with
 | Linux | 900 | 0 | 8 minutes |
 | Windows | 900 | 0 | 41 minutes |
 
-Windows is much slower because starting a new JVM, which every run does, takes longer there. That is a lead for stage 4.
+Windows is much slower because starting a new JVM, which every run does, takes longer there. That was a lead for stage 4.
+
+After stage 4 (remembering unchanged objects, and detaching when the program ends), the soak run passed again on all three systems, with every run identical. It now takes 13 minutes on Windows (from 41) and under 3 minutes on Linux (from 8). On macOS it takes about 4 minutes, much as before.
 
 ## 8.5 Coverage
 JaCoCo, a Maven plugin, records which lines and branches of Raphael the tests execute.
