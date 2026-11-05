@@ -63,26 +63,35 @@ A B-tree is drawn the way textbooks draw it: each node is a row of keys (faded p
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
 
 ## Getting started
-Every push runs the full test suite on fresh Windows, macOS and Linux machines (GitHub Actions; the badge above shows the result). The app itself has been used day to day on Ubuntu 24.04 inside WSL 2 on Windows. Installers for each system come in a later stage (see [ROADMAP.md](ROADMAP.md)).
 
-**On Linux or WSL:**
+### Install it
+Raphael comes as an installer for each system, with its own Java inside, so there's nothing else to install.
+
+| System | Download | Notes |
+|---|---|---|
+| Windows 10 and 11 | `Raphael-1.0.0-windows-x64.msi` | The installer isn't signed yet, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**. |
+| macOS, Apple Silicon | `Raphael-1.0.0-mac-arm64.dmg` | Not signed yet: the first time, right-click Raphael in Applications and choose **Open**. |
+| macOS, Intel | `Raphael-1.0.0-mac-x64.dmg` | The same. |
+| Ubuntu 24.04 and newer | `Raphael-1.0.0-linux-x64.deb` | `sudo apt install ./Raphael-1.0.0-linux-x64.deb` |
+| Any other Linux | `Raphael-1.0.0-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
+
+Until the first public release, the installers are built by the [installers workflow](https://github.com/electricwhitener/raphael/actions/workflows/package.yml): open its latest run and download them from the bottom of the page.
+
+### Build it yourself
+You need JDK 21 and Maven 3.8 or newer. Every push runs the full test suite on fresh Windows, macOS and Linux machines (the badge above shows the result).
 
 ```bash
-sudo apt install openjdk-21-jdk maven
-git clone https://github.com/electricwhitener/raphael.git ~/raphael
-cd ~/raphael
-mvn test                      # optional: runs the tests
-scripts/build-app.sh          # packages the app into dist/
-java -cp 'dist/*' raphael.App # opens the window
+git clone https://github.com/electricwhitener/raphael.git
+cd raphael
+mvn test                       # optional: runs the tests
+mvn -q compile exec:java       # opens the window
+scripts/package.sh             # a ready-to-run folder in target/installer/Raphael
+scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, deb on Linux
 ```
 
-You should see the window open with the BSTInsert example loaded. Press **run**, and it plays by itself.
+`Raphael --self-test` (for example `target/installer/Raphael/bin/Raphael --self-test`) checks, with no window, that this copy can compile and record a program, and prints what it did.
 
-**From Windows, with the project in WSL:** copy `scripts/Run Raphael.bat` to your Desktop and double-click it. It expects the project at `~/raphael` in a WSL distribution called `Ubuntu`, and it needs `scripts/build-app.sh` to have been run. Keep its black window open while you use Raphael.
-
-**While changing the code:** run `mvn -q compile exec:java`. Run `scripts/build-app.sh` again afterwards to update `dist/`, because `dist/` is what the commands above and the launcher run.
-
-**A standalone Windows app (experimental):** `scripts/build-windows.sh`, run in WSL, downloads a portable Windows JDK and uses `jpackage` to build a `Raphael.exe` that carries its own private Java. This script hasn't been run yet, so treat it as untested.
+**From Windows, with the project in WSL** (how it's developed): run `scripts/build-app.sh`, then copy `scripts/Run Raphael.bat` to your Desktop and double-click it. It expects the project at `~/raphael` in a WSL distribution called `Ubuntu`. Keep its black window open while you use Raphael. Run `scripts/build-app.sh` again after changing the code, because `dist/` is what the launcher runs.
 
 ## Using Raphael
 1. **Choose a program.** Click an example in the guide that fills the picture area at first (or **Examples** in the toolbar), press **New** to type or paste your own (Ctrl+A then Ctrl+V replaces everything), **Open** a `.java` file with your system's own file dialog, or drop one onto the window.
@@ -232,7 +241,8 @@ Safety:
 
 | File | Job | Key methods |
 |---|---|---|
-| `App` | Starts the app: the log, the safety net, the look and the saved settings, then the main window | `main()`, `setupLook()`, `setupLook(dark)` |
+| `SelfTest` | `Raphael --self-test`: compiles and records an example with no window, for checking the installers | `run()` |
+| `App` | Starts the app: the log, the safety net, the look and the saved settings, then the main window; or the self-test | `main()`, `setupLook()`, `setupLook(dark)` |
 | `RaphaelException` | Abstract parent of every problem Raphael can explain (checked) | constructors |
 | **compile/** | | |
 | `SourceCompiler` | Compiles the editor's text with javac and finds the class with `main`; blanks the file rules first | `compile(source)`, `topLevelText()`, `withoutFileRules()` |
@@ -303,6 +313,7 @@ Safety:
 | `EmptyState` | The guide in the picture area before the first run: three steps and example chips | constructor |
 | `FileDrop` | Opens a `.java` file dropped onto the window; wraps the editor's own copy and paste | `canImport()`, `importData()` |
 | `WindowsFileDialog` | Inside WSL, shows Windows' own Open and Save dialog through PowerShell | `available()`, `choose()`, `script()` |
+| `Logo` | The app icon, drawn with Java 2D; the window and the installers use it | `draw(size)`, `windowIcons()` |
 | `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
@@ -395,9 +406,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | [docs/report/](docs/report/) | The project report, one chapter per file (a draft that grows with the roadmap) |
 | [CLAUDE.md](CLAUDE.md) | Project notes and instructions for Claude Code, the AI coding assistant used to build Raphael |
 | `.claude/agents/raphael-design-critic.md` | The design reviewer agent used during development |
+| `scripts/package.sh` | Builds the private Java runtime (`jlink`) and an installer (`jpackage`) for this system |
+| `scripts/AppIcon.java` | Writes the app icon in each system's format (`.ico`, `.icns` set, `.png`) |
+| `.github/workflows/package.yml` | Builds every installer, installs it on a fresh machine, runs `--self-test`, and takes screenshots |
 | `scripts/build-app.sh` | Packages the app into `dist/` |
 | `scripts/Run Raphael.bat` | Starts `dist/` from Windows through WSL |
-| `scripts/build-windows.sh` | Builds a standalone `Raphael.exe` (experimental, untested) |
 
 ## Licences
 The bundled font is under the SIL Open Font License (`src/main/resources/fonts/OFL.txt`). FlatLaf and JUnit keep their own licences, listed above. No licence has been chosen yet for Raphael's own code.
