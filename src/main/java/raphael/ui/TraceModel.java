@@ -26,14 +26,20 @@ public class TraceModel {
     }
 
     public void load(Trace trace, List<Scene> scenes) {
+        Dimension biggest = new Dimension();
+        for (Scene scene : scenes) {
+            biggest.width = Math.max(biggest.width, scene.getSize().width);
+            biggest.height = Math.max(biggest.height, scene.getSize().height);
+        }
+        load(trace, scenes, biggest);
+    }
+
+    // For pictures that are built when shown (SceneList), which already know the biggest size.
+    public void load(Trace trace, List<Scene> scenes, Dimension runSize) {
         this.trace = trace;
         this.scenes = scenes;
         this.step = 0;
-        runSize = new Dimension();
-        for (Scene scene : scenes) {
-            runSize.width = Math.max(runSize.width, scene.getSize().width);
-            runSize.height = Math.max(runSize.height, scene.getSize().height);
-        }
+        this.runSize = new Dimension(runSize);
         for (TraceListener listener : listeners) {
             listener.traceChanged(this);
         }

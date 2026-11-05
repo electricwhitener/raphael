@@ -3,6 +3,7 @@ package raphael.trace;
 import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.ClassType;
+import com.sun.jdi.Field;
 import com.sun.jdi.Location;
 import com.sun.jdi.Method;
 import com.sun.jdi.ObjectReference;
@@ -21,10 +22,14 @@ import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventQueue;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.ExceptionEvent;
+import com.sun.jdi.event.ModificationWatchpointEvent;
+import com.sun.jdi.event.VMDeathEvent;
 import com.sun.jdi.event.VMDisconnectEvent;
 import com.sun.jdi.request.ClassPrepareRequest;
+import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
 import com.sun.jdi.request.ExceptionRequest;
+import com.sun.jdi.request.ModificationWatchpointRequest;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -60,6 +65,8 @@ public class JdiTracer implements Tracer {
 
     private volatile Run current; // the run in progress, or null; volatile because the window's thread reads it
     private volatile RunLimits limits = RunLimits.DEFAULTS;
+    boolean remember = true; // tests turn this off to check that remembering objects changes nothing
+    int lastObjectsRead;     // how many objects the last run read from the program, for tests
 
     // When Raphael quits, Java runs this hook on its way out. It ends every program Raphael
     // started, even one still starting up, whose Process isn't known until launch() returns.
@@ -75,10 +82,11 @@ public class JdiTracer implements Tracer {
         RunLimits runLimits = limits; // one set of limits for the whole run, even if settings change meanwhile
         VirtualMachine vm = launch(program, runLimits);
         Process process = vm.process();
-        current = new Run(vm, runLimits);
+        current = new Run(vm, runLimits, remember);
         try {
             return current.record(input);
         } finally {
+            lastObjectsRead = current.reader.objectsRead();
             current = null;
             if (process.isAlive()) { // whatever happened above, the program never runs on
                 process.destroyForcibly();
@@ -152,12 +160,16 @@ public class JdiTracer implements Tracer {
         private final List<Snapshot> snapshots = new ArrayList<>();
         private EndReason endReason = EndReason.FINISHED;
         private String endMessage = "Program finished.";
+        private ThreadReference firstThread; // the thread of the first step
         private volatile boolean stopRequested;
         private volatile int steps;
 
-        Run(VirtualMachine vm, RunLimits limits) {
+        Run(VirtualMachine vm, RunLimits limits, boolean remember) {
             this.vm = vm;
             this.limits = limits;
+            if (!remember) {
+                reader.stopRemembering();
+            }
             this.requests = vm.eventRequestManager();
         }
 
@@ -221,6 +233,12 @@ public class JdiTracer implements Tracer {
                     if (event instanceof VMDisconnectEvent) {
                         return;
                     }
+                    if (event instanceof VMDeathEvent) {
+                        // The program has finished. Let go of it now: while a debugger is
+                        // attached, its JVM waits about a third of a second before exiting.
+                        vm.dispose();
+                        return;
+                    }
                     handle(event);
                 }
                 // Let the program run on. (If we just stopped it, this throws VMDisconnectedException.)
@@ -235,6 +253,11 @@ public class JdiTracer implements Tracer {
                 lineReached(((BreakpointEvent) event).thread());
             } else if (event instanceof ExceptionEvent) {
                 crashed((ExceptionEvent) event);
+            } else if (event instanceof ModificationWatchpointEvent) {
+                ObjectReference object = ((ModificationWatchpointEvent) event).object();
+                if (object != null) {
+                    reader.fieldWritten(object);
+                }
             }
         }
 
@@ -244,6 +267,20 @@ public class JdiTracer implements Tracer {
         // class header would seem to run.
         private void classLoaded(ReferenceType type) {
             studentClasses.add(type);
+            // Tell us about every write to this class's fields, so HeapReader only reads again the
+            // objects that changed. SUSPEND_NONE: the program doesn't stop for these, so they cost
+            // almost nothing; they arrive in order, before the next line's breakpoint.
+            if (vm.canWatchFieldModification()) {
+                for (Field field : type.fields()) {
+                    if (!field.isStatic()) {
+                        ModificationWatchpointRequest watch = requests.createModificationWatchpointRequest(field);
+                        watch.setSuspendPolicy(EventRequest.SUSPEND_NONE);
+                        watch.enable();
+                    }
+                }
+            } else {
+                reader.stopRemembering();
+            }
             for (Method method : type.methods()) {
                 if (method.isBridge()) {
                     continue;
@@ -259,6 +296,11 @@ public class JdiTracer implements Tracer {
         }
 
         private void lineReached(ThreadReference thread) {
+            if (firstThread == null) {
+                firstThread = thread;
+            } else if (!thread.equals(firstThread)) {
+                reader.stopRemembering(); // a second thread runs the student's code
+            }
             snapshots.add(reader.capture(thread, output::length, null));
             steps = snapshots.size();
             if (snapshots.size() >= limits.maxSteps()) {
