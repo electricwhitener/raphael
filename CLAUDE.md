@@ -126,7 +126,16 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - the status is accurate after edits and while drawing
   - the code view snaps to whole lines, the menu hints are plain, and the legend swatches have edges
   - 222 tests
-- **Next:** ROADMAP stage 5 (installers). Code signing costs money, so ask the user first.
+- **Stage 5 (installers): done, 2026-11-05.** The user chose unsigned installers for now, with SignPath's free open-source signing to apply for later (and Apple's later still).
+  - `scripts/package.sh [msi|dmg|deb|app-image]` runs `mvn package`, which writes `target/app` (jar plus FlatLaf, via maven-jar and maven-dependency plugins), then the icons, then `jlink` (java.se, jdk.compiler, jdk.jdi, jdk.jdwp.agent, jdk.charsets) and `jpackage`.
+  - The Windows upgrade UUID is fixed in the script. The `.deb` depends on libgtk-3-0.
+  - `raphael.SelfTest` runs on `Raphael --self-test`, headless.
+  - `ui/Logo` draws the icon, and the window uses it. `scripts/AppIcon.java` writes the `.ico`, the `.iconset` (which `iconutil` turns into `.icns`) and the `.png`.
+  - `.github/workflows/package.yml` (on tags and manual) builds the msi, dmg arm64 and x64 (`macos-15-intel`), deb and tar.gz; it installs each on a fresh machine and runs the self-test, all passing; installs WiX if missing; and runs the screenshots job (`ScreenshotTest`, tagged `screenshots`) on Windows at 150% and on a Mac.
+  - Version 1.0.0, because macOS rejects a first number of 0.
+  - `build-windows.sh` is removed.
+  - Download sizes: about 48 MB on Windows and Mac, 47 MB for the `.deb`.
+- **Next:** the Stage 5 UI pass (icon and installer surfaces), then ROADMAP stage 6 (first public release; ask the user for a licence).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

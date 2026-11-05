@@ -35,6 +35,19 @@ The two Mac tests caught real mistakes during development:
 - "Option+Down, Option+Up" was too long for the keys screen's column.
 - One description still said "Ctrl".
 
+### Installers
+Each installer is checked on a fresh machine of its own system: the installers workflow installs it and runs `Raphael --self-test` from the installed copy. That run compiles and records an example with the Java bundled inside the installer, with no window.
+
+| Installer | Size | Installed and self-tested |
+|---|---|---|
+| Windows `.msi` | 48 MB | Yes |
+| macOS `.dmg`, Apple Silicon | 48 MB | Yes |
+| macOS `.dmg`, Intel | 50 MB | Yes |
+| Ubuntu `.deb` | 47 MB | Yes |
+| Linux `.tar.gz` (unpack and run) | 50 MB | Yes |
+
+A screenshots test captures the real window on Windows at 150% scaling and on macOS, for checking the interface on screens the developer doesn't have.
+
 ## 8.3 Edge cases
 A student can paste anything, so Raphael is tested against programs chosen to be awkward. Each of the 32 programs in `src/test/resources/edge/` states at its top what must happen:
 

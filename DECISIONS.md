@@ -603,3 +603,29 @@ Six things, all fixed:
 - The code view could cut its top line in half, and is now snapped to whole lines. The menus showed "Ctrl+Equals".
 - The amber swatch was nearly invisible on the light bar, so each swatch now has an edge.
 
+## Stage 5: Installers
+
+- How does Raphael install without Java?
+
+Each installer carries its own private Java. `jlink`, a JDK tool, builds a Java runtime with only the modules asked for. Raphael itself needs six (`jdeps` lists them), but the student's program runs on the same Java, so the runtime also has the whole standard library (`java.se`), the compiler (`jdk.compiler`) and both halves of the debugger (`jdk.jdi`, `jdk.jdwp.agent`). Then `jpackage`, another JDK tool, wraps Raphael's jar, FlatLaf, that runtime and the icon into each system's own installer: an `.msi` for Windows, a `.dmg` for macOS (Apple Silicon and Intel), and a `.deb` for Ubuntu, plus a folder to unpack for any other Linux. `scripts/package.sh` does it all, and each download is about 48 MB.
+
+- How do I know an installer works on a machine I've never used?
+
+`Raphael --self-test` compiles the BubbleSort example, records it in a second JVM, lays out its pictures and exits, all with no window. Exit code 0 means it worked. On every system, the installers workflow builds the installer, installs it on a fresh machine (`msiexec`, `hdiutil attach`, `apt install`), and runs the self-test from the installed copy. That proves the Java inside really can compile and debug. All five passed.
+
+- Why version 1.0.0 already?
+
+macOS refuses an app version whose first number is 0. The first public release (stage 6) is 1.0 anyway, so the version is 1.0.0 from now on.
+
+- Why aren't the installers signed?
+
+A signature tells Windows and macOS who made the app. Without one, Windows says "Windows protected your PC" (More info, then Run anyway), and a Mac needs a right-click and Open the first time. Signing costs money: about $99 a year for Apple, and $100 to $400 a year for a Windows certificate. For now they're unsigned, and I'll apply to SignPath, which signs open-source projects for free.
+
+- Where does the icon come from?
+
+`ui/Logo` draws it with Java 2D: a blue rounded square with a small binary tree, its newest node in amber, Raphael's colour for "just changed". The window uses it for its title bar and taskbar. `scripts/AppIcon.java` writes it in each system's format: an `.ico` (a short header followed by PNG images, packed by hand), a set of PNGs that macOS's `iconutil` turns into an `.icns`, and a PNG for Linux. It's drawn at each size, so the 16 px version stays sharp.
+
+- How was the look checked on Windows and a Mac?
+
+A test tagged `screenshots` opens the real window, records a run, and saves pictures of it and its dialogs. CI runs it on Windows at 150% scaling and on a Mac. On Windows, FlatLaf's title bar follows the theme, with the icon and the menus inside it. The Mac has its own buttons, its own font and "Cmd" in every shortcut. CI's screens are small (1024×768), which squeezes the window at 150%, but real laptops rarely go that small.
+

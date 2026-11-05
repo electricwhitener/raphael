@@ -184,7 +184,7 @@ Built in this stage (all seven), plus Windows' own file dialog inside WSL (`Wind
    - F6 to move between regions
 7. **Drag and drop** a `.java` file onto the window. It must keep the editor's own text drag and drop working.
 
-### 5. Installers
+### 5. Installers (done, 2026-11-05)
 - `jlink` makes a small private Java runtime with only the modules Raphael needs:
   - `java.desktop`, `java.compiler`, `jdk.compiler`, `jdk.jdi`, `jdk.jdwp.agent`, `java.prefs`, `java.logging`
 - `jpackage` builds `.msi` (Windows), `.dmg` (macOS, Apple Silicon and Intel) and `.deb` plus `.AppImage` or `.rpm` (Linux), all built in CI.
