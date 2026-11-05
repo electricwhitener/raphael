@@ -50,17 +50,25 @@ public class App {
     // thin lines, one monospace font, and the blue accent.
     public static void setupLook(boolean dark) {
         Style.useTheme(dark);
-        FlatLaf.setGlobalExtraDefaults(Map.of(
-                "@background", hex(Style.BACKGROUND),
-                "@accentColor", hex(Style.ACCENT),
-                "Component.borderColor", hex(Style.CONTROL_BORDER),
-                "Button.toolbar.hoverBackground", hex(Style.HOVER),
-                "Button.toolbar.pressedBackground", hex(Style.PRESSED),
-                "TitlePane.background", hex(Style.BAR), // Windows: the title bar matches the toolbar
-                "TitlePane.inactiveBackground", hex(Style.BAR),
-                "TitlePane.foreground", hex(Style.INK),
-                "TitlePane.inactiveForeground", hex(Style.MUTED),
-                "MenuBar.background", hex(Style.BAR)));
+        // Map.ofEntries, because Map.of takes at most 10 pairs.
+        FlatLaf.setGlobalExtraDefaults(Map.ofEntries(
+                Map.entry("@background", hex(Style.BACKGROUND)),
+                Map.entry("@accentColor", hex(Style.ACCENT)),
+                Map.entry("Component.borderColor", hex(Style.CONTROL_BORDER)),
+                Map.entry("Button.toolbar.hoverBackground", hex(Style.HOVER)),
+                Map.entry("Button.toolbar.pressedBackground", hex(Style.PRESSED)),
+                // The main button of every dialog is filled blue in both themes (FlatLaf's light
+                // theme only outlines it), so the one obvious action is obvious.
+                Map.entry("Button.default.background", hex(Style.ACCENT)),
+                Map.entry("Button.default.focusedBackground", hex(Style.ACCENT)),
+                Map.entry("Button.default.borderColor", hex(Style.ACCENT)),
+                Map.entry("Button.default.foreground", hex(Style.ON_ACCENT)),
+                Map.entry("Button.default.borderWidth", "1"),
+                Map.entry("TitlePane.background", hex(Style.BAR)), // Windows: the title bar matches the toolbar
+                Map.entry("TitlePane.inactiveBackground", hex(Style.BAR)),
+                Map.entry("TitlePane.foreground", hex(Style.INK)),
+                Map.entry("TitlePane.inactiveForeground", hex(Style.MUTED)),
+                Map.entry("MenuBar.background", hex(Style.BAR))));
         if (Style.defaultUiFont() != null) { // Linux: the bundled Inter; elsewhere FlatLaf's system font
             UIManager.put("defaultFont", Style.defaultUiFont());
         }

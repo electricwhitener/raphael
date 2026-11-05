@@ -321,10 +321,24 @@ public class CodePanel extends JPanel implements TraceListener {
                 Rectangle area = where.getBounds();
                 area.grow(0, area.height * 3); // keep a few lines visible around it
                 editor.scrollRectToVisible(area);
+                snapToWholeLines(area.height / 7);
             }
         } catch (BadLocationException e) {
             // the line doesn't exist (the code was changed)
         }
+    }
+
+    // Moves the view so its top line is whole, not cut in half by the edge.
+    private void snapToWholeLines(int lineHeight) {
+        if (lineHeight <= 0 || !(editor.getParent() instanceof javax.swing.JViewport)) {
+            return;
+        }
+        javax.swing.JViewport view = (javax.swing.JViewport) editor.getParent();
+        Point at = view.getViewPosition();
+        int top = editor.getInsets().top;
+        int y = top + Math.round((at.y - top) / (float) lineHeight) * lineHeight;
+        int lowest = Math.max(0, editor.getHeight() - view.getHeight());
+        view.setViewPosition(new Point(at.x, Math.max(0, Math.min(y, lowest))));
     }
 
     private int lineAt(Point point) {

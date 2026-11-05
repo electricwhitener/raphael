@@ -97,7 +97,7 @@ public class MainWindow extends JFrame {
               Home, End          first, last step
               Alt+Down, Alt+Up   skip call, finish call
               click a line number   jump to when that line runs
-              (in the editor, hold Alt with the arrow keys)
+              (In the editor, hold Alt with the arrow keys.)
 
             the editor
               Ctrl+N, O, S       new, open, save
@@ -135,6 +135,8 @@ public class MainWindow extends JFrame {
     private final JPanel pictureArea = new JPanel(pictureCards);
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
+    private EmptyState emptyState;
+    private JSplitPane middle; // the work area above, the call stack, variables and console below
     private boolean legendWanted = true; // false while the status bar shows an error
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
@@ -144,6 +146,7 @@ public class MainWindow extends JFrame {
     private boolean running;
     private Timer progress;
     private String lastSearch = "";
+    private volatile int recordedSteps; // set by the background run, read on Swing's thread
     private RunLimits limits = savedLimits();
     private String documentName = "new program"; // shown in the title
 
@@ -151,6 +154,7 @@ public class MainWindow extends JFrame {
     // writing happens on a background thread, so a slow disk never pauses the window.
     private static final Logger LOG = Logger.getLogger(MainWindow.class.getName());
     private static final int AUTOSAVE_MS = 5000;
+    private static final int COLLAPSED_ROW_H = 28; // the bottom panels with only their headings showing
     private final DraftStore draft = openDraft();
     private final ExecutorService draftWriter = Executors.newSingleThreadExecutor(job -> {
         Thread thread = new Thread(job, "autosave");
@@ -195,8 +199,12 @@ public class MainWindow extends JFrame {
         picture.getViewport().setBackground(Style.BACKGROUND);
         pictureArea.setBorder(Section.hairline(0, 1, 0, 0));
         pictureArea.add(picture, "picture");
-        pictureArea.add(new EmptyState(EXAMPLES, !WindowsFileDialog.available(), this::loadExample,
-                () -> examplesMenu.show(examplesButton, 0, examplesButton.getHeight())), "empty");
+        emptyState = new EmptyState(EXAMPLES, !WindowsFileDialog.available(), this::loadExample,
+                () -> examplesMenu.show(examplesButton, 0, examplesButton.getHeight()));
+        JScrollPane guide = new JScrollPane(emptyState, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        guide.setBorder(BorderFactory.createEmptyBorder());
+        pictureArea.add(guide, "empty");
         model.addListener(m -> showPictureOrGuide());
         // Drop a .java file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
@@ -212,13 +220,14 @@ public class MainWindow extends JFrame {
         addBottomPanel(bottom, locals, 0.45); // values can be long, so variables get the most room
         addBottomPanel(bottom, console, 0.30);
         bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
-        JSplitPane middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
+        bottom.setMinimumSize(new Dimension(0, COLLAPSED_ROW_H));
+        middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
         middle.setResizeWeight(1); // the top gets all the spare room
         // Whenever the window changes size, including when it first opens, the bottom row keeps its height.
         middle.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                middle.setDividerLocation(middle.getHeight() - middle.getDividerSize() - Style.BOTTOM_ROW_H);
+                fitBottomRow();
             }
         });
         middle.setBorder(Section.hairline(1, 0, 0, 0));
@@ -248,10 +257,13 @@ public class MainWindow extends JFrame {
         code.setOnCodeChanged(() -> {
             updateTitle();
             console.showInput(code.getCode().contains("System.in"));
-            if (model.getTrace() == null) { // an old compile error no longer applies
+            if (model.getTrace() == null) { // an old run or compile error no longer applies
                 visual.setMessage(null, null);
                 console.showMessage("");
                 showPictureOrGuide();
+                if (!running) {
+                    say(Shortcuts.label("code changed · press run (ctrl+enter)"), Style.INK_SOFT);
+                }
             }
         });
         code.setOnTextSizeWheel(this::changeTextSize);
@@ -268,6 +280,12 @@ public class MainWindow extends JFrame {
         tracer.setLimits(limits);
         autosave.start();
         useAppMenu();
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowOpened(WindowEvent e) {
+                code.getEditor().requestFocusInWindow(); // ready to type or paste, not on the first toolbar button
+            }
+        });
     }
 
     // On a Mac, Quit (Cmd+Q) and Settings… live in the app's own menu. Route them through the
@@ -406,41 +424,76 @@ public class MainWindow extends JFrame {
         }
     }
 
+    // The keyboard shortcuts: a heading for each part, then each key in a key-cap chip with what it
+    // does beside it. It scrolls if it's taller than 70% of the screen, so Close is always visible.
     private void showHelp() {
-        JTextArea text = new JTextArea(helpText(Shortcuts.isMac()));
-        text.setEditable(false);
-        text.setFocusable(false); // nothing to type or select here, so no text cursor
-        text.setFont(Style.UI_FONT);
-        text.setOpaque(false);
-        text.setForeground(Style.INK);
-        Dialogs.question(this, "Keyboard shortcuts").title("Keyboard shortcuts").extra(text)
+        JPanel list = new JPanel(new GridBagLayout());
+        list.setOpaque(false);
+        GridBagConstraints c = new GridBagConstraints();
+        c.anchor = GridBagConstraints.WEST;
+        c.gridy = 0;
+        for (String[] row : helpRows(Shortcuts.isMac())) {
+            c.gridx = 0;
+            c.weightx = 0;
+            c.fill = GridBagConstraints.NONE;
+            if (row[0].equals("section")) {
+                c.gridwidth = 2;
+                c.insets = new java.awt.Insets(c.gridy == 0 ? 0 : Style.SPACE_6, 0, Style.SPACE_1, 0);
+                list.add(Section.header(row[1]), c);
+            } else if (row[0].equals("note")) {
+                c.gridwidth = 2;
+                c.insets = new java.awt.Insets(Style.SPACE_1, 0, 0, 0);
+                JLabel note = new JLabel(row[1]);
+                note.setFont(Style.sans(false, 12f));
+                note.setForeground(Style.MUTED);
+                list.add(note, c);
+            } else {
+                c.gridwidth = 1;
+                c.insets = new java.awt.Insets(Style.SPACE_1, 0, Style.SPACE_1, Style.SPACE_3);
+                list.add(EmptyState.keyChip(row[1]), c);
+                c.gridx = 1;
+                c.weightx = 1;
+                c.fill = GridBagConstraints.HORIZONTAL;
+                c.insets = new java.awt.Insets(Style.SPACE_1, 0, Style.SPACE_1, 0);
+                JLabel what = new JLabel(row[2]);
+                what.setFont(Style.sans(false, 13f));
+                what.setForeground(Style.INK);
+                list.add(what, c);
+            }
+            c.gridy++;
+        }
+        JScrollPane scroll = new JScrollPane(list, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        int screen = getGraphicsConfiguration().getBounds().height;
+        int tallest = screen * 7 / 10 - 160; // room for the heading and the buttons
+        scroll.setPreferredSize(new Dimension(Math.max(440, list.getPreferredSize().width + 20),
+                Math.min(list.getPreferredSize().height + 4, Math.max(160, tallest))));
+        Dialogs.question(this, "Keyboard shortcuts").title("Keyboard shortcuts").extra(scroll)
                 .buttons("Close", null).ask();
     }
 
-    // HELP with this computer's key names. On a Mac "Ctrl" becomes "Cmd" and "Alt" becomes
-    // "Option", which changes their length, so the lines are laid out again: the keys, then the
-    // descriptions in one column just past the longest keys.
-    static String helpText(boolean mac) {
-        String[] lines = HELP.split("\n");
-        String[][] rows = new String[lines.length][]; // the keys and what they do, or null
-        int width = 0;
-        for (int i = 0; i < lines.length; i++) {
-            String[] parts = lines[i].split("(?<=\\S)\\s{2,}", 2);
-            if (lines[i].startsWith("  ") && parts.length == 2) {
-                rows[i] = new String[] {Shortcuts.label(parts[0], mac), Shortcuts.label(parts[1], mac)};
-                width = Math.max(width, rows[i][0].length() + 2);
+    // HELP as rows to show, with this computer's key names (Cmd and Option on a Mac):
+    // {"section", name}, {"key", keys, what they do} or {"note", text}.
+    static List<String[]> helpRows(boolean mac) {
+        List<String[]> rows = new java.util.ArrayList<>();
+        for (String line : HELP.split("\n")) {
+            if (line.isBlank()) {
+                continue;
             }
-        }
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < lines.length; i++) {
-            if (rows[i] != null) {
-                out.append(rows[i][0]).append(" ".repeat(width - rows[i][0].length())).append(rows[i][1]);
+            if (!line.startsWith("  ")) {
+                rows.add(new String[] {"section", line.trim()});
+            } else if (line.trim().startsWith("(")) {
+                String note = line.trim();
+                rows.add(new String[] {"note", Shortcuts.label(note.substring(1, note.length() - 1), mac)});
             } else {
-                out.append(Shortcuts.label(lines[i], mac));
+                String[] parts = line.trim().split("\\s{2,}", 2); // the keys, then what they do
+                rows.add(new String[] {"key", Shortcuts.label(parts[0], mac), Shortcuts.label(parts[1], mac)});
             }
-            out.append('\n');
         }
-        return out.toString();
+        return rows;
     }
 
     private static String hex(Color color) {
@@ -497,6 +550,16 @@ public class MainWindow extends JFrame {
         bar.add(themeButton);
         bar.add(settings);
         bar.add(help);
+        for (java.awt.Component part : bar.getComponents()) {
+            if (part instanceof javax.swing.AbstractButton) {
+                // A toolbar makes its buttons unreachable with Tab; let Tab reach them (a click
+                // still doesn't take the focus, so Space and the arrows keep stepping the program).
+                part.setFocusable(true);
+            }
+        }
+        for (JButton tall : new JButton[] {examples, runButton}) {
+            tall.putClientProperty("JComponent.minimumHeight", 32); // as tall as the icon buttons; width as the text needs
+        }
         return bar;
     }
 
@@ -538,6 +601,9 @@ public class MainWindow extends JFrame {
         // The keys with a menu item (Ctrl+S, Ctrl+Enter, F1…) are that item's shortcut, set in
         // buildMenuBar(). These are the others: plain keys, and second keys for the same command.
         bind("F5", this::run);
+        bind("control COMMA", this::showSettings);
+        bind("control EQUALS", () -> changeTextSize(1));
+        bind("control MINUS", () -> changeTextSize(-1));
         bind("F6", () -> moveFocus(1));
         bind("shift F6", () -> moveFocus(-1));
         bind("ESCAPE", () -> {
@@ -583,7 +649,7 @@ public class MainWindow extends JFrame {
         file.add(item("Save As…", "shift control S", this::saveAs));
         if (!Shortcuts.isMac()) {
             file.addSeparator();
-            file.add(item("Settings…", "control COMMA", this::showSettings));
+            file.add(item(Shortcuts.label("Settings…  (Ctrl+,)"), null, this::showSettings));
             file.addSeparator();
             file.add(item("Quit", "control Q", () -> {
                 if (okToLoseCode()) {
@@ -608,8 +674,9 @@ public class MainWindow extends JFrame {
         run.add(item("First step  (Home)", null, model::first));
         run.add(item("Last step  (End)", null, model::last));
         JMenu view = menu("View", KeyEvent.VK_V);
-        view.add(item("Larger text", "control EQUALS", () -> changeTextSize(1)));
-        view.add(item("Smaller text", "control MINUS", () -> changeTextSize(-1)));
+        // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
+        view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
+        view.add(item(Shortcuts.label("Smaller text  (Ctrl −)"), null, () -> changeTextSize(-1)));
         view.add(item("Normal size", "control 0", this::resetView));
         view.addSeparator();
         view.add(item("Switch light or dark", "control D", this::toggleTheme));
@@ -694,7 +761,9 @@ public class MainWindow extends JFrame {
         busy.setVisible(true);
         showPictureOrGuide();
         progress = new Timer(200, e -> {
-            visual.setRecordedSteps(tracer.stepsSoFar());
+            if (tracer.stepsSoFar() > 0) { // 0 once recording has finished and drawing has begun
+                visual.setRecordedSteps(tracer.stepsSoFar());
+            }
             if (tracer.stepsSoFar() > 0) {
                 say("recording your program: " + tracer.stepsSoFar() + " steps · esc stops", Style.INK_SOFT);
             }
@@ -715,12 +784,14 @@ public class MainWindow extends JFrame {
                     return new RunResult(program, null, null);
                 }
                 Trace trace = tracer.trace(program, input);
+                recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
                 return new RunResult(program, trace, new SceneBuilder(source).build(trace));
             }
 
             @Override
             protected void process(List<String> messages) {
+                visual.setRecordedSteps(recordedSteps); // the picture's count agrees with the status
                 say(messages.get(messages.size() - 1), Style.INK_SOFT);
             }
 
@@ -749,6 +820,23 @@ public class MainWindow extends JFrame {
     private void showPictureOrGuide() {
         boolean nothingYet = !model.hasSteps() && !running && !visual.hasMessage();
         pictureCards.show(pictureArea, nothingYet ? "empty" : "picture");
+        fitBottomRow();
+    }
+
+    // The bottom row keeps its height, except before the first run in a small window (or at
+    // 200% scaling): then the empty panels shrink to their headings so the guide fits. Not while
+    // the stdin box is showing, which is needed before running.
+    private void fitBottomRow() {
+        if (middle == null || middle.getHeight() == 0) {
+            return;
+        }
+        int bottom = Style.BOTTOM_ROW_H;
+        boolean guide = !model.hasSteps() && !running && !visual.hasMessage();
+        if (guide && !console.isInputShown()
+                && middle.getHeight() - Style.BOTTOM_ROW_H < emptyState.getPreferredSize().height + 2 * Style.SPACE_6) {
+            bottom = COLLAPSED_ROW_H;
+        }
+        middle.setDividerLocation(middle.getHeight() - middle.getDividerSize() - bottom);
     }
 
     // A run that ended with an exception instead of a result. A RaphaelException is a problem

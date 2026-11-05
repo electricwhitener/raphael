@@ -28,20 +28,28 @@ import raphael.render.Style;
 // OOP: inheritance (extends JPanel); anonymous subclasses of JLabel and JComponent that override
 // how they get their colour or paint; composition (it's built from labels, chips and buttons);
 // a Consumer and a Runnable, so it doesn't need to know the window it's in.
-public class EmptyState extends JPanel {
+public class EmptyState extends JPanel implements javax.swing.Scrollable {
 
     private static final int COLUMN = 440;
     private static final String[][] STEPS = {
         {"Paste or open a Java program", "Ctrl+V"},
         {"Press Run", "Ctrl+Enter"},
-        {"Step through it with ← → or Space to play", "← →"},
+        {"Step with ← →, or play with Space", "← →"},
     };
 
     // canDrop: whether files can be dropped here. Not inside WSL, where Windows can't drag files
     // into Linux windows, so the guide doesn't promise it there.
     public EmptyState(String[] examples, boolean canDrop, Consumer<String> onExample, Runnable onMoreExamples) {
         super(new GridBagLayout()); // centres the column
-        JPanel column = new JPanel();
+        // At most 440 px wide, narrower in a small window, with 24 px to spare on each side.
+        java.util.function.IntSupplier width = () -> getWidth() <= 0 ? COLUMN
+                : Math.min(COLUMN, Math.max(240, getWidth() - 2 * Style.SPACE_6));
+        JPanel column = new JPanel() {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(width.getAsInt(), super.getPreferredSize().height);
+            }
+        };
         column.setOpaque(false);
         column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
 
@@ -56,21 +64,19 @@ public class EmptyState extends JPanel {
         column.add(Box.createVerticalStrut(Style.SPACE_6));
         column.add(label("Or start from an example", Style.sans(true, 12f), () -> Style.MUTED));
         column.add(Box.createVerticalStrut(Style.SPACE_2));
-        JPanel chips = new JPanel(new WrapLayout(FlowLayout.LEFT, Style.SPACE_2, Style.SPACE_2));
+        JPanel chips = new JPanel(new WrapLayout(width, Style.SPACE_2, Style.SPACE_2));
         chips.setOpaque(false);
         for (int i = 0; i < Math.min(6, examples.length); i++) {
             String name = examples[i];
             chips.add(chip(name, () -> onExample.accept(name)));
         }
         chips.add(chip("More…", onMoreExamples));
-        chips.setMaximumSize(new Dimension(COLUMN, Integer.MAX_VALUE));
         column.add(left(chips));
         if (canDrop) {
             column.add(Box.createVerticalStrut(Style.SPACE_3));
             column.add(label("You can also drop a .java file anywhere on this window.", Style.sans(false, 12f), () -> Style.MUTED));
         }
 
-        column.setPreferredSize(new Dimension(COLUMN, column.getPreferredSize().height));
         add(column, new GridBagConstraints());
     }
 
@@ -110,12 +116,12 @@ public class EmptyState extends JPanel {
         row.add(label(text, Style.sans(false, 13f), () -> Style.INK));
         row.add(Box.createHorizontalGlue());
         row.add(keyChip(keys));
-        row.setMaximumSize(new Dimension(COLUMN, 32));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
         return left(row);
     }
 
-    // The keys, in a small rounded box like a key cap.
-    private static JComponent keyChip(String keys) {
+    // The keys, in a small rounded box like a key cap. Also used by the keyboard shortcuts list.
+    static JComponent keyChip(String keys) {
         JLabel chip = new JLabel(keys) {
             @Override
             protected void paintComponent(Graphics graphics) {
@@ -146,6 +152,33 @@ public class EmptyState extends JPanel {
         return chip;
     }
 
+    // Inside a scroll pane: as wide as the window, and as tall too when there's room (so the
+    // column stays centred); when there isn't, it scrolls.
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    @Override
+    public int getScrollableUnitIncrement(java.awt.Rectangle visible, int orientation, int direction) {
+        return 16;
+    }
+
+    @Override
+    public int getScrollableBlockIncrement(java.awt.Rectangle visible, int orientation, int direction) {
+        return visible.height;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return true;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return getParent() != null && getParent().getHeight() > getPreferredSize().height;
+    }
+
     private static JLabel label(String text, Font font, Supplier<Color> color) {
         JLabel label = new JLabel(text) {
             @Override
@@ -173,13 +206,16 @@ public class EmptyState extends JPanel {
     // its parent it needs one long row, so its chips would never wrap).
     private static class WrapLayout extends FlowLayout {
 
-        WrapLayout(int align, int gap, int vgap) {
-            super(align, gap, vgap);
+        private final java.util.function.IntSupplier columnWidth;
+
+        WrapLayout(java.util.function.IntSupplier columnWidth, int gap, int vgap) {
+            super(FlowLayout.LEFT, gap, vgap);
+            this.columnWidth = columnWidth;
         }
 
         @Override
         public Dimension preferredLayoutSize(java.awt.Container target) {
-            int width = COLUMN;
+            int width = columnWidth.getAsInt();
             int x = 0;
             int rows = 1;
             int rowHeight = 0;

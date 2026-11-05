@@ -44,8 +44,8 @@ public class ControlsBar extends JPanel implements TraceListener {
         setOpaque(false);
         speed.setSelectedIndex(1);
         speed.setToolTipText("playing speed");
-        speed.setFocusable(false);
-        slider.setFocusable(false);
+        speed.getAccessibleContext().setAccessibleName("Playback speed");
+        slider.getAccessibleContext().setAccessibleName("Step position");
         stepLabel.setToolTipText("this step, and how many the run has");
         stepLabel.setFont(Style.UI_FONT.deriveFont(12f));
 
@@ -170,7 +170,10 @@ public class ControlsBar extends JPanel implements TraceListener {
         button.getAccessibleContext().setAccessibleName(name); // what a screen reader says
         button.setRequestFocusEnabled(false);
         button.putClientProperty("JButton.buttonType", "toolBarButton"); // flat, like the toolbar's
-        button.setPreferredSize(new java.awt.Dimension(32, 32));
+        java.awt.Dimension square = new java.awt.Dimension(32, 32);
+        button.setPreferredSize(square);
+        button.setMinimumSize(square); // a toolbar would otherwise squeeze it to 24 px high
+        button.setMaximumSize(square);
         return button;
     }
 

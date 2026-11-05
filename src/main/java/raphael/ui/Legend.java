@@ -73,8 +73,12 @@ public class Legend extends JComponent {
         g.dispose();
     }
 
+    // A filled swatch with a faint edge, so a pale colour (amber on the light bar) still shows.
     private static void fill(Graphics2D g, int x, int y, Color color) {
         g.setColor(color);
         g.fillRect(x, y, SWATCH, SWATCH);
+        g.setColor(new Color(Style.OUTLINE.getRed(), Style.OUTLINE.getGreen(), Style.OUTLINE.getBlue(), 150));
+        g.setStroke(new BasicStroke(1f));
+        g.drawRect(x, y, SWATCH - 1, SWATCH - 1);
     }
 }

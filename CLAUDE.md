@@ -118,7 +118,15 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - F6 cycles regions; toolbar buttons can be reached with Tab (`setRequestFocusEnabled(false)`).
   - `ui/FileDrop` (Decorator) for dropping files; it isn't offered inside WSL.
   - 222 tests.
-- **Next:** the stage 4b UI review with `raphael-ui-designer`, then ROADMAP stage 5 (installers).
+- **Stage 4b review: done, 2026-11-05.** The designer's six findings are fixed:
+  - default buttons are filled in both themes (`Button.default.*`, using `Map.ofEntries`)
+  - the toolbar is a true 32 px with Tab reach, the editor has focus at start, and `JComponent.minimumHeight` is set on Run and Examples
+  - the guide scrolls and narrows, and `fitBottomRow()` shrinks the bottom row before the first run
+  - the keys screen is a list (`helpRows`)
+  - the status is accurate after edits and while drawing
+  - the code view snaps to whole lines, the menu hints are plain, and the legend swatches have edges
+  - 222 tests
+- **Next:** ROADMAP stage 5 (installers). Code signing costs money, so ask the user first.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

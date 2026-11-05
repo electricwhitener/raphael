@@ -593,3 +593,13 @@ Following the designer's spec (mockups in `docs/design/`):
 - **A menu bar** (File, Edit, Run, View, Help) with every command and its shortcut. On a Mac it's the bar at the top of the screen. Toolbar buttons can be reached with Tab, and F6 moves between the toolbar, the code and the picture.
 - **Dropping a `.java` file** onto the window opens it. `FileDrop` wraps the editor's own copy-and-paste handler and only takes over for files (the Decorator pattern). Windows can't drag files into Linux windows under WSL, so the guide doesn't promise it there.
 
+- What did the designer's review of the built interface find?
+
+Six things, all fixed:
+- In light mode, a dialog's main button was only outlined: FlatLaf's light theme doesn't fill it. It's filled blue in both themes now.
+- The toolbar's buttons were 24 px tall instead of 32, and `JToolBar` quietly made them unreachable with Tab.
+- At 200% scaling the guide was cut off, and the keys dialog was taller than the screen. Now the guide narrows to fit, the empty bottom panels shrink to their headings before the first run when space is short, and the keys are a scrolling list of key chips.
+- The status bar still said "recorded 67 steps" after the code was edited, and the recording count froze while drawing.
+- The code view could cut its top line in half, and is now snapped to whole lines. The menus showed "Ctrl+Equals".
+- The amber swatch was nearly invisible on the light bar, so each swatch now has an edge.
+
