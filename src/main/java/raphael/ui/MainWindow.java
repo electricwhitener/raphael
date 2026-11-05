@@ -860,8 +860,21 @@ public class MainWindow extends JFrame {
     }
 
     // The computer's own Open or Save dialog: Explorer's on Windows, Finder's on macOS, GTK's on
-    // Linux (and inside WSL). Swing's JFileChooser looks and works like neither. Null if cancelled.
+    // Linux, and Windows' own inside WSL (see WindowsFileDialog). Swing's JFileChooser looks and
+    // works like none of them. Null if cancelled.
     private File chooseFile(boolean forSaving) {
+        if (WindowsFileDialog.available()) { // inside WSL: Windows' own dialog, as a browser would show
+            try {
+                File chosen = WindowsFileDialog.choose(this, forSaving, new File(lastFolder()),
+                        currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
+                if (chosen != null && chosen.getParent() != null) {
+                    App.SETTINGS.put("lastFolder", chosen.getParent());
+                }
+                return chosen;
+            } catch (IOException e) {
+                LOG.log(Level.INFO, "Windows' file dialog didn't open; using Java's instead", e);
+            }
+        }
         FileDialog dialog = new FileDialog(this, forSaving ? "Save As" : "Open", forSaving ? FileDialog.SAVE : FileDialog.LOAD);
         dialog.setDirectory(lastFolder());
         if (forSaving) {
