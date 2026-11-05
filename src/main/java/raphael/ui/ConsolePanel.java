@@ -70,6 +70,10 @@ public class ConsolePanel extends JPanel implements TraceListener {
         inputArea.setVisible(show);
     }
 
+    public boolean isInputShown() {
+        return inputArea.isVisible();
+    }
+
     public void showMessage(String message) {
         output.setText(message);
     }

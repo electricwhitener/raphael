@@ -33,20 +33,16 @@ class ShortcutsTest {
         assertEquals("skip call  (Option+↓)", Shortcuts.label("skip call  (Alt+↓)", true));
     }
 
-    // Every description in the keys screen starts in the same column, on a Mac too, where the
-    // key names have a different length.
+    // The keys screen lists every shortcut once, with the Mac's key names on a Mac, and the note
+    // about the editor as a note, not a row.
     @Test
-    void helpColumnsStayLinedUp() {
+    void theKeysScreenUsesThisComputersKeyNames() {
         for (boolean mac : new boolean[] {false, true}) {
-            String help = MainWindow.helpText(mac);
-            int column = help.indexOf("run; while recording"); // where the first description starts
-            column -= help.lastIndexOf('\n', column) + 1;
-            for (String line : help.split("\n")) {
-                if (line.startsWith("  ") && line.trim().contains("  ")) { // a "keys   what they do" line
-                    assertTrue(line.charAt(column - 1) == ' ' && line.charAt(column) != ' ', "mac=" + mac + ": " + line);
-                }
-            }
+            java.util.List<String[]> rows = MainWindow.helpRows(mac);
+            assertTrue(rows.stream().anyMatch(r -> r[0].equals("note") && r[1].startsWith("In the editor")));
+            assertTrue(rows.stream().filter(r -> r[0].equals("key")).allMatch(r -> r.length == 3 && !r[2].isBlank()));
+            boolean saysCtrl = rows.stream().anyMatch(r -> String.join(" ", r).contains("Ctrl"));
+            assertTrue(mac != saysCtrl, "mac=" + mac);
         }
-        assertFalse(MainWindow.helpText(true).contains("Ctrl"));
     }
 }
