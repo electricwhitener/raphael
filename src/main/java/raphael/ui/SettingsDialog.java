@@ -7,6 +7,7 @@ import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
@@ -64,7 +65,7 @@ public class SettingsDialog extends JDialog {
         row(form, y++, "Memory for the program", "Past this, the program ends with OutOfMemoryError.", memory, "MB");
         group(form, y++, "Appearance", true);
         row(form, y++, "Text size", "The code, the variables and the console.", textSize, "pt");
-        JPanel segments = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        JPanel segments = new JPanel(new GridLayout(1, 3, 0, 0)); // one row that never wraps
         segments.setOpaque(false);
         segments.add(system);
         segments.add(light);
@@ -103,8 +104,8 @@ public class SettingsDialog extends JDialog {
         getContentPane().setBackground(Style.BACKGROUND);
         add(form, BorderLayout.CENTER);
         add(footer, BorderLayout.SOUTH);
+        setResizable(false); // before pack(), so the packed size is the final one (it changes the frame on Windows)
         pack();
-        setResizable(false);
         setLocationRelativeTo(owner);
     }
 

@@ -472,7 +472,7 @@ public class MainWindow extends JFrame {
         int tallest = screen * 7 / 10 - 160; // room for the heading and the buttons
         scroll.setPreferredSize(new Dimension(Math.max(440, list.getPreferredSize().width + 20),
                 Math.min(list.getPreferredSize().height + 4, Math.max(160, tallest))));
-        Dialogs.question(this, "Keyboard shortcuts").title("Keyboard shortcuts").extra(scroll)
+        Dialogs.question(this, null).title("Keyboard shortcuts").extra(scroll) // the title bar says what it is
                 .buttons("Close", null).ask();
     }
 
@@ -491,7 +491,7 @@ public class MainWindow extends JFrame {
                 rows.add(new String[] {"note", Shortcuts.label(note.substring(1, note.length() - 1), mac)});
             } else {
                 String[] parts = line.trim().split("\\s{2,}", 2); // the keys, then what they do
-                rows.add(new String[] {"key", Shortcuts.label(parts[0], mac), Shortcuts.label(parts[1], mac)});
+                rows.add(new String[] {"key", Shortcuts.keycap(parts[0], mac), Shortcuts.label(parts[1], mac)});
             }
         }
         return rows;

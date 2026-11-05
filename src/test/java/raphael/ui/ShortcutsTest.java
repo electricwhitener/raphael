@@ -26,6 +26,14 @@ class ShortcutsTest {
     }
 
     @Test
+    void keyCapsShowTheMacSymbols() {
+        assertEquals("⌘↩ or F5", Shortcuts.keycap("Ctrl+Enter or F5", true));
+        assertEquals("⌥↓, ⌥↑", Shortcuts.keycap("Alt+Down, Alt+Up", true));
+        assertEquals("⇧⌘Z", Shortcuts.keycap("Shift+Ctrl+Z", true));
+        assertEquals("Ctrl+Enter or F5", Shortcuts.keycap("Ctrl+Enter or F5", false));
+    }
+
+    @Test
     void labelsUseTheMacKeyNames() {
         assertEquals("save  (Ctrl+S)", Shortcuts.label("save  (Ctrl+S)", false));
         assertEquals("save  (Cmd+S)", Shortcuts.label("save  (Ctrl+S)", true));
@@ -43,6 +51,7 @@ class ShortcutsTest {
             assertTrue(rows.stream().filter(r -> r[0].equals("key")).allMatch(r -> r.length == 3 && !r[2].isBlank()));
             boolean saysCtrl = rows.stream().anyMatch(r -> String.join(" ", r).contains("Ctrl"));
             assertTrue(mac != saysCtrl, "mac=" + mac);
+            assertTrue(mac == rows.stream().anyMatch(r -> r[0].equals("key") && r[1].contains("⌘")), "mac=" + mac);
         }
     }
 }
