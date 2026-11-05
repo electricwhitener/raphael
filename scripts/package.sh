@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 TYPE=${1:-app-image}
 VERSION=$(sed -n 's:^    <version>\([0-9.]*\)</version>.*:\1:p' pom.xml | head -1)
 
+rm -rf target/app                                              # no jar from an earlier version
 mvn -B -q -DskipTests package                                  # target/app: Raphael's jar and FlatLaf
 java -Djava.awt.headless=true -cp target/classes scripts/AppIcon.java target/icons
 

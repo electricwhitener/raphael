@@ -128,6 +128,8 @@ public class MainWindow extends JFrame {
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final Legend legend = new Legend();
+    // "Raphael 1.1.0 is available ↗": stays in the status bar, and opens the download page.
+    private final JButton updateNotice = new JButton();
     private final JPanel statusBar = new JPanel(new BorderLayout());
     private JToolBar toolBar;
     private JButton examplesButton;
@@ -240,7 +242,16 @@ public class MainWindow extends JFrame {
         statusBar.setBorder(Section.hairline(1, 0, 0, 0));
         statusBar.setPreferredSize(new Dimension(0, Style.STATUS_H));
         statusBar.add(status, BorderLayout.CENTER);
-        statusBar.add(legend, BorderLayout.EAST);
+        JPanel statusRight = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, Style.SPACE_3, 0));
+        statusRight.setOpaque(false);
+        updateNotice.putClientProperty("JButton.buttonType", "borderless");
+        updateNotice.setFont(Style.UI_FONT.deriveFont(12f));
+        updateNotice.setRequestFocusEnabled(false);
+        updateNotice.setVisible(false);
+        updateNotice.addActionListener(e -> openReleasePage(App.SETTINGS.get("newerPage", UpdateCheck.RELEASES_PAGE)));
+        statusRight.add(updateNotice);
+        statusRight.add(legend);
+        statusBar.add(statusRight, BorderLayout.EAST);
         add(statusBar, BorderLayout.SOUTH);
         addComponentListener(new ComponentAdapter() {
             @Override
@@ -310,6 +321,9 @@ public class MainWindow extends JFrame {
         if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
             desktop.setPreferencesHandler(event -> showSettings());
         }
+        if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+            desktop.setAboutHandler(event -> showAbout());
+        }
     }
 
     // Adds a panel that takes this share of the row's width. With no preferred width of its own,
@@ -348,6 +362,7 @@ public class MainWindow extends JFrame {
         themeButton.setToolTipText(Shortcuts.label(mode + "  (Ctrl+D)"));
         themeButton.getAccessibleContext().setAccessibleName(mode);
         toolBar.setBackground(Style.BAR); // the bars frame the work area in a slightly different shade
+        updateNotice.setForeground(Style.ACCENT);
         statusBar.setBackground(Style.BAR);
         repaint();
     }
@@ -686,11 +701,13 @@ public class MainWindow extends JFrame {
         JMenu help = menu("Help", KeyEvent.VK_H);
         help.add(item("Keyboard shortcuts", "F1", this::showHelp));
         help.add(item("Check for updates…", null, this::checkForUpdatesNow));
+        help.addSeparator();
         if (AppLog.folder() != null) {
             help.add(item("Open log folder", null, this::openLogFolder));
         }
-        help.add(item("About Raphael", null, () -> Dialogs.tell(this, "Raphael " + versionText(),
-                "See your Java program's data structures change while it runs. Free and open source, under the MIT License.")));
+        if (!Shortcuts.isMac()) { // on a Mac, About is in the app's own menu (useAppMenu)
+            help.add(item("About Raphael", null, this::showAbout));
+        }
         for (JMenu menu : new JMenu[] {file, edit, run, view, help}) {
             bar.add(menu);
         }
@@ -719,6 +736,7 @@ public class MainWindow extends JFrame {
     // Raphael exists, and if so, say it in the status bar. Silent when there's nothing to say.
     private void checkForUpdatesQuietly() {
         String current = UpdateCheck.currentVersion();
+        showUpdateNotice(current); // a newer version found earlier stays announced until it's installed
         long last = App.SETTINGS.getLong("lastUpdateCheck", 0);
         if (current == null || !App.SETTINGS.getBoolean("checkUpdates", true)
                 || System.currentTimeMillis() - last < java.util.concurrent.TimeUnit.DAYS.toMillis(1)) {
@@ -728,10 +746,8 @@ public class MainWindow extends JFrame {
         Thread asking = new Thread(() -> {
             try {
                 UpdateCheck.Release release = UpdateCheck.newer(current);
-                if (release != null) {
-                    SwingUtilities.invokeLater(() -> say("Raphael " + release.version()
-                            + " is available · Help → Check for updates", Style.ACCENT));
-                }
+                rememberUpdate(release);
+                SwingUtilities.invokeLater(() -> showUpdateNotice(current));
             } catch (IOException e) {
                 LOG.log(Level.FINE, "Couldn't check for updates", e); // offline: nothing to report
             } catch (InterruptedException e) {
@@ -760,24 +776,78 @@ public class MainWindow extends JFrame {
             protected void done() {
                 try {
                     UpdateCheck.Release release = get();
+                    rememberUpdate(release);
+                    showUpdateNotice(current);
                     if (release == null) {
                         Dialogs.tell(MainWindow.this, "Raphael is up to date", "You have the newest version, " + current + ".");
                     } else if ("Download".equals(Dialogs.question(MainWindow.this, "Raphael " + release.version() + " is available")
                             .body("You have " + current + ". The new version's installers are on its release page.")
                             .buttons("Download", "Later").ask())) {
-                        Desktop.getDesktop().browse(java.net.URI.create(release.page()));
+                        openReleasePage(release.page());
                     }
                 } catch (ExecutionException e) {
                     LOG.log(Level.INFO, "Couldn't check for updates", e.getCause());
                     Dialogs.tell(MainWindow.this, "Couldn't reach GitHub", "Check your internet connection, or look at "
                             + UpdateCheck.RELEASES_PAGE);
-                } catch (IOException | UnsupportedOperationException e) {
-                    Dialogs.tell(MainWindow.this, "The page couldn't be opened", "It's at " + UpdateCheck.RELEASES_PAGE);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             }
         }.execute();
+    }
+
+    // The newest release found (or none), remembered so the notice survives a restart.
+    private static void rememberUpdate(UpdateCheck.Release release) {
+        if (release == null) {
+            App.SETTINGS.remove("newerVersion");
+            App.SETTINGS.remove("newerPage");
+        } else {
+            App.SETTINGS.put("newerVersion", release.version());
+            App.SETTINGS.put("newerPage", release.page());
+        }
+    }
+
+    // Shows the notice if a newer version than this one is known; hides it once it's installed.
+    private void showUpdateNotice(String current) {
+        String newer = App.SETTINGS.get("newerVersion", null);
+        boolean show = current != null && newer != null && UpdateCheck.isNewer(newer, current);
+        if (show) {
+            updateNotice.setText("Raphael " + newer + " is available ↗");
+            updateNotice.setToolTipText("Open the download page");
+            updateNotice.getAccessibleContext().setAccessibleName("Raphael " + newer + " is available. Opens the download page.");
+        }
+        updateNotice.setForeground(Style.ACCENT);
+        updateNotice.setVisible(show);
+    }
+
+    private void openReleasePage(String page) {
+        try {
+            Desktop.getDesktop().browse(java.net.URI.create(page));
+        } catch (IOException | UnsupportedOperationException | IllegalArgumentException e) {
+            Dialogs.tell(this, "The page couldn't be opened", "It's at " + page);
+        }
+    }
+
+    // About Raphael: the version, what it is, the licence, and the details a bug report needs.
+    private void showAbout() {
+        String version = UpdateCheck.currentVersion();
+        String details = "Raphael " + versionText() + ", Java " + System.getProperty("java.version") + ", "
+                + System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch");
+        Dialogs.question(this, version != null ? "Raphael " + version : "Raphael").title("About Raphael")
+                .body("See your Java program's data structures change while it runs."
+                        + (version == null ? "\nBuilt from the source code." : "")
+                        + "\n\nFree and open source, under the MIT License.")
+                .helper("Copy details", button -> {
+                    java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                            .setContents(new java.awt.datatransfer.StringSelection(details), null);
+                    button.setText("Copied");
+                    Timer back = new Timer(1500, tick -> button.setText("Copy details"));
+                    back.setRepeats(false);
+                    back.start();
+                })
+                .helper("Website", button -> openReleasePage("https://github.com/electricwhitener/raphael"))
+                .buttons("OK", null)
+                .ask();
     }
 
     private static String versionText() {

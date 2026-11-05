@@ -74,11 +74,13 @@ public class SettingsDialog extends JDialog {
         row(form, y++, "Theme", "System follows your computer's light or dark mode.", segments, null);
         group(form, y++, "Updates", true);
         updates.getAccessibleContext().setAccessibleName("Check for new versions");
-        row(form, y, "Check for new versions", "Once a day, Raphael asks GitHub whether a newer version exists. "
-                + "Nothing about you or your code is sent.", updates, null);
+        JLabel updatesName = row(form, y, "Check for new versions",
+                "Once a day, Raphael asks GitHub if a newer version exists. Nothing about you or your code is sent.", updates, null);
+        clickable(updatesName, updates);
 
         JButton defaults = new JButton("Restore defaults");
         defaults.putClientProperty("JButton.buttonType", "borderless");
+        defaults.setMargin(new Insets(3, 0, 3, 0)); // its text lines up with the labels above
         defaults.setForeground(Style.ACCENT); // looks like a link: it changes the fields, not the settings
         defaults.addActionListener(e -> fill(new Values(RunLimits.DEFAULTS, Style.DEFAULT_CODE_SIZE, Theme.SYSTEM, true)));
         JPanel footer = new JPanel(new BorderLayout());
@@ -166,10 +168,12 @@ public class SettingsDialog extends JDialog {
     }
 
     // A setting: its name with what it does underneath, then its field and unit on the right.
-    private static void row(JPanel form, int y, String name, String hint, JComponent field, String unit) {
+    // Returns the name's label.
+    private static JLabel row(JPanel form, int y, String name, String hint, JComponent field, String unit) {
         JPanel text = new JPanel(new BorderLayout(0, 2));
         text.setOpaque(false);
-        text.add(label(name, Style.sans(false, 13f), Style.INK), BorderLayout.NORTH);
+        JLabel nameLabel = label(name, Style.sans(false, 13f), Style.INK);
+        text.add(nameLabel, BorderLayout.NORTH);
         JLabel note = label("<html><div style='width:280px'>" + hint + "</div></html>", Style.sans(false, 12f), Style.MUTED);
         text.add(note, BorderLayout.CENTER);
         GridBagConstraints c = new GridBagConstraints();
@@ -188,6 +192,23 @@ public class SettingsDialog extends JDialog {
             c.gridx = 2;
             c.insets = new Insets(Style.SPACE_2, 0, Style.SPACE_2, 0);
             form.add(label(unit, Style.sans(false, 12f), Style.INK_SOFT), c);
+        }
+        return nameLabel;
+    }
+
+    // Clicking a checkbox's words (its name and the line under it) ticks it, as with any checkbox.
+    private static void clickable(JLabel name, javax.swing.JCheckBox box) {
+        name.setLabelFor(box);
+        java.awt.Container words = name.getParent();
+        words.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        java.awt.event.MouseAdapter click = new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                box.doClick();
+            }
+        };
+        for (java.awt.Component part : words.getComponents()) {
+            part.addMouseListener(click);
         }
     }
 

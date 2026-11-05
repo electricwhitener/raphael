@@ -192,7 +192,7 @@ Built in this stage (all seven), plus Windows' own file dialog inside WSL (`Wind
 - **Code signing** stops the "unknown publisher" warnings on Windows and macOS, but it costs money (an Apple developer account, a Windows certificate). This is the user's decision at this stage; free options like SignPath for open source will be checked.
 - Replaces the untested `scripts/build-windows.sh`.
 
-### 6. First public release (v1.0)
+### 6. First public release (v1.0) (done, 2026-11-05)
 - Choose the licence, then make the repo public.
 - README for the public, with a GIF at the top; a GitHub Pages site; a user guide; a privacy note.
 - CHANGELOG, CONTRIBUTING, issue templates and semantic versions.

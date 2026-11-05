@@ -141,7 +141,15 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - `Shortcuts.keycap()` shows ⌘⌥⇧↩ and arrows on Mac chips.
   - The keys dialog has no repeated heading (`Dialogs.question(owner, null)`).
   - 223 tests.
-- **Next:** ROADMAP stage 6, the first public release. Ask the user for a licence.
+- **Stage 6 (first public release): in progress, 2026-11-05.**
+  - The user chose MIT: `LICENSE` (Eknoor Brar, from the git author), and the pom has `<licenses>`.
+  - `io/UpdateCheck`: GitHub's latest release, once a day, switched in Settings → Updates (`checkUpdates`), Help → Check for updates…; the version comes from the manifest (`addDefaultImplementationEntries`); `jdk.crypto.ec` is in the runtime.
+  - `CHANGELOG.md`, `PRIVACY.md`, `CONTRIBUTING.md` and issue templates.
+  - `docs/demo.gif`, made by `src/test/java/raphael/DemoGif.java`.
+  - GitHub Pages serves `docs/` (`docs/index.html`, `docs/icon.png`).
+  - The `release` job in `package.yml` publishes on `v*` tags.
+  - 225 tests.
+- **Next:** the Stage 6 UI pass, then tag `v1.0.0`.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

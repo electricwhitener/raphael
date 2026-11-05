@@ -637,3 +637,26 @@ The designer looked at the icon and at the Windows and Mac screenshots from CI, 
 - **Mac shortcuts.** Key chips on a Mac show the symbols on the keys (⌘↩, ⌥↓) instead of "Cmd+Enter".
 - **The keys dialog** no longer repeats its title inside itself.
 
+## Stage 6: The first public release
+
+- Which licence, and why?
+
+MIT. It's the simplest and most common open-source licence: anyone may use, change or share Raphael, even in a closed product, as long as they keep the copyright notice. That makes it easy for schools and other projects to adopt. The libraries and fonts Raphael uses (FlatLaf under Apache 2.0, JetBrains Mono and Inter under the SIL Open Font License) all allow it.
+
+- How does Raphael know a new version is out?
+
+Once a day at most, `UpdateCheck` asks GitHub's public API for the project's latest release, using Java's own `HttpClient` with short timeouts and on a background thread. It compares the version numbers one by one, so 1.10 is newer than 1.9. If there's a newer one, the status bar says so, and Help → Check for updates… asks right away and offers the download page. The running version comes from the jar's manifest, which Maven fills in. Run from the source code, there's no version, so there's nothing to check. The request carries nothing about the user or their code, it can be turned off in Settings, and `PRIVACY.md` says exactly what's stored and sent. Java 21 keeps some of the encryption HTTPS needs in `jdk.crypto.ec`, so that joined the bundled runtime. I tested the request with the bundled Java.
+
+- What makes it a release?
+
+Pushing a version tag (`v1.0.0`) runs the installers workflow. It builds every installer, installs each on a fresh machine and runs its self-test. Only if all of them pass does a last job publish them as a GitHub Release, with that version's section of `CHANGELOG.md` as the notes. Versions follow semantic versioning: the first number changes when something stops working the way it did, the second when something's added, and the third for fixes.
+
+- What else does a public project need?
+
+- A `README` that starts with what Raphael does, an animation of it and a download link.
+- A `CHANGELOG`, a `PRIVACY` note, a `CONTRIBUTING` guide (how to report a bug, build and test).
+- Issue templates that ask for the program, the version and the crash details.
+- A one-page site on GitHub Pages (`docs/index.html`).
+
+The animation, `docs/demo.gif`, is made from the real window by `DemoGif`, a tool kept with the tests. It records ReverseList playing at 2× speed. A GIF has at most 256 colours, so it uses the 256 most common colours in the frames, and frames that look the same as the one before are merged.
+
