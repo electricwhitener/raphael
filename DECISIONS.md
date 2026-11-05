@@ -480,3 +480,42 @@ The 1-in-60 timing bug from version 1 only showed up by running the same program
 
 JaCoCo, a Maven plugin, watches the tests run and records which lines and branches of Raphael they used. It writes a report to `target/site/jacoco/index.html`. Overall it's 78.5% of lines and 70.5% of branches. The engine is at 89–99% (compile, detect, model, render, trace). The window is at 58%, because most of it reacts to clicks.
 
+## Stage 3: Raphael catches its own errors
+
+- What's the difference between a problem and a bug?
+
+A *problem* is something Raphael expects and can explain: there's no Java compiler (a JRE instead of a JDK), the temp folder can't be written, or the program's JVM won't start. A *bug* is something Raphael didn't expect, like a `NullPointerException` in a panel. The two are handled differently, so the code needs to tell them apart.
+
+Every problem is now a subclass of one abstract, checked exception:
+
+```
+Exception
+ └ RaphaelException (abstract)
+    ├ CompileSetupException   can't get ready to compile
+    └ TraceException          can't run or record the program
+```
+
+It's abstract so that only the specific kinds are ever thrown, and checked so the compiler makes every caller handle it. Each one keeps the low-level error that caused it (`super(message, cause)`), so the log still shows the real `IOException`. When a run fails, `MainWindow.runFailed()` checks `cause instanceof RaphaelException`. A problem gets a plain message in the picture. A bug goes to the safety net.
+
+- What's the safety net?
+
+`ErrorReporter.install()` makes it Java's *default uncaught exception handler*: the code Java calls when an exception reaches the top of any thread without being caught, Swing's thread included. Before, such an exception printed to a console nobody looks at, and a button would just stop working. Now it's written to the log, and a dialog says what happened, that the code is safe, and where the details are. It has a "copy details" button for a bug report. If the same bug happens 50 times a second (say, while painting), only one dialog shows every 10 seconds, and the rest go to the log.
+
+- Where's the log, and what's in it?
+
+It uses `java.util.logging`, which is part of the JDK. Each class has a `Logger` named after itself, and `AppLog.setup()` sends everything under `raphael` to a file in the usual place for each system (`AppFolders`): `%LOCALAPPDATA%\Raphael\logs` on Windows, `~/Library/Logs/Raphael` on a Mac, and `~/.local/state/raphael/logs` on Linux. When the file reaches 1 MB it rotates, and three files are kept, so it never grows without end. `LineFormatter` extends Java's `Formatter` to write one line per message. The log has the start, each run (steps and how it ended), each problem with its stack trace, and the quit. It never leaves the computer.
+
+I also went through every `catch` block. Most are normal flow, like a line that no longer exists after an edit. But some hid real failures with no trace: the font not loading, the agent jar not being written, an example missing, a collection that couldn't be listed. Those are now logged.
+
+- How does autosave work?
+
+Every 5 seconds, if the code has unsaved changes, it's copied to `draft.java` in Raphael's data folder (`DraftStore`). The writing happens on a background thread, so a slow disk never pauses the window. A normal quit deletes the draft. So if Raphael finds a draft when it starts, the last session didn't end normally, through a crash, a power cut or "End task", and it offers the code back. If there are no unsaved changes, there's no draft.
+
+- How are files saved safely?
+
+`SafeFiles.write()` writes to a temporary file in the same folder, then *moves* it over the real file in one step. If the disk fills up or the power goes halfway, the old file is still whole, never half-written. Opening a file now refuses anything over 1 MB or with zero bytes in it (a picture renamed `.java`), which would have frozen the editor. File errors get plain reasons: `NoSuchFileException` says "it doesn't exist (was it moved or deleted?)" and `AccessDeniedException` says "you don't have permission to use it". A failed save keeps the code in the editor and asks where to save next time.
+
+- What can be changed in settings?
+
+The step limit (100 to 20,000), how long a program may sit idle (1 to 60 seconds), its memory (64 MB to 2 GB), the text size and dark mode. `RunLimits` is a record whose compact constructor refuses values outside those ranges, so a bad setting can't exist. If the saved settings were changed by hand and are out of range, Raphael falls back to the defaults and logs it. The window only knows the `Tracer` interface, so `setLimits()` became one of its default methods, like `stop()`. Each run keeps one set of limits from start to end, even if settings change while it records.
+

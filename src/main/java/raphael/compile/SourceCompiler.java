@@ -35,18 +35,25 @@ public class SourceCompiler {
     private static final Pattern ANY_TYPE = Pattern.compile(TYPE_WORD);
     private static final Pattern FILE_RULES = Pattern.compile("\\bpublic\\b|\\bpackage\\s+[\\w.]+\\s*;");
 
-    public CompileResult compile(String source) throws IOException {
+    public CompileResult compile(String source) throws CompileSetupException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            throw new IllegalStateException("No Java compiler found. Raphael needs a JDK, not a JRE.");
+            throw new CompileSetupException("No Java compiler found. Raphael needs a JDK, not a JRE.");
         }
 
         // javac needs a real file, named after the public class.
         String topLevel = topLevelText(source);
         String className = findClassName(topLevel);
-        Path dir = Files.createTempDirectory("raphael");
-        Path file = dir.resolve(className + ".java");
-        Files.writeString(file, withoutFileRules(source, topLevel));
+        Path dir;
+        Path file;
+        try {
+            dir = Files.createTempDirectory("raphael");
+            file = dir.resolve(className + ".java");
+            Files.writeString(file, withoutFileRules(source, topLevel));
+        } catch (IOException e) {
+            throw new CompileSetupException("Couldn't write the code to the temporary folder ("
+                    + System.getProperty("java.io.tmpdir") + "). Is the disk full?", e);
+        }
 
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         boolean ok;
@@ -57,6 +64,8 @@ public class SourceCompiler {
             // -g keeps variable names; -d puts the .class files in our temp folder.
             List<String> options = List.of("-g", "-d", dir.toString());
             ok = compiler.getTask(null, fileManager, diagnostics, options, null, files).call();
+        } catch (IOException e) { // closing the file manager failed
+            throw new CompileSetupException("The compiler couldn't read or write its files.", e);
         }
 
         // Keep only errors; warnings don't stop the program from running.
@@ -70,7 +79,11 @@ public class SourceCompiler {
         // The class to run is the one with main, which isn't always the public one.
         String mainClass = className;
         if (ok) {
-            mainClass = findMainClass(dir, className);
+            try {
+                mainClass = findMainClass(dir, className);
+            } catch (IOException e) {
+                throw new CompileSetupException("Couldn't read the compiled classes back.", e);
+            }
             if (mainClass == null) {
                 ok = false;
                 errors.add(new CompileResult.CompileError(0,

@@ -325,6 +325,23 @@ class TracerTest {
         assertTrue(list.getElements().isEmpty());
     }
 
+    @Test
+    void theStepLimitFromSettingsIsUsed() throws Exception {
+        CompileResult program = new SourceCompiler().compile("""
+                public class Main {
+                    public static void main(String[] args) {
+                        int x = 0;
+                        while (true) { x++; }
+                    }
+                }
+                """);
+        JdiTracer tracer = new JdiTracer();
+        tracer.setLimits(new RunLimits(150, 5, 128));
+        Trace trace = tracer.trace(program, "");
+        assertEquals(150, trace.size());
+        assertTrue(trace.getEndMessage().startsWith("Stopped after 150 steps"), trace.getEndMessage());
+    }
+
     // The program must never outlive Raphael, however Raphael ends. TraceAndWait plays Raphael.
     @Test
     void theProgramEndsWhenRaphaelIsKilled() throws Exception {

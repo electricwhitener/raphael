@@ -203,6 +203,11 @@ public class CodePanel extends JPanel implements TraceListener {
         dirty = false;
     }
 
+    // For code that isn't in any file yet, such as a restored draft.
+    public void markUnsaved() {
+        dirty = true;
+    }
+
     // How wide this panel must be to show the longest line without cutting it off.
     public int widthForLongestLine() {
         int longest = 0;

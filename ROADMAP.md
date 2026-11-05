@@ -78,7 +78,7 @@ The user now wants Raphael to be **a real, production-grade product**:
 
 ## Part 1 — Production-grade foundation (first)
 
-### 0. Set up
+### 0. Set up (done, 2026-11-04)
 - CLAUDE.md:
   - add a "Product" section with the decisions above
   - relax the old rules
@@ -96,7 +96,7 @@ The user now wants Raphael to be **a real, production-grade product**:
   10. Limits and future work
 - Draft chapters 1–5 from the README, OOP-HIGHLIGHTS and DECISIONS.
 
-### 1. Works on any machine
+### 1. Works on any machine (done, 2026-11-04)
 - **CI from day one:** GitHub Actions runs `mvn test` on `windows-latest`, `macos-latest` and `ubuntu-latest` on every push (Linux uses a virtual screen, xvfb).
 - **Fix the platform assumptions:**
   - `startFolder()`: use the OS's own Desktop or Documents folder, and keep the WSL path only when running inside WSL.
@@ -107,7 +107,7 @@ The user now wants Raphael to be **a real, production-grade product**:
   - Dark mode follows the OS on first launch.
 - **Launchers:** moved to Stage 5. `jpackage` makes a native launcher for each system, which replaces `Run Raphael.bat` and makes WSL optional.
 
-### 2. Bulletproof tracing
+### 2. Bulletproof tracing (done, 2026-11-04)
 - **The debuggee (done, 2026-11-04):**
   - a memory cap (`-Xmx256m`, configurable)
   - a shutdown hook and a kill on quit, so no stray JVMs are left behind
@@ -123,8 +123,8 @@ The user now wants Raphael to be **a real, production-grade product**:
 - **Soak test:** each example run 100 times in CI, and every run must give the same steps (this guards against the old 1-in-60 timing bug class).
 - Fix every bug found, each with its own test.
 
-### 3. Raphael catches its own errors
-- **Exception hierarchy:** `RaphaelException` (checked) → `TraceException`, `RunFileException`, `CompileSetupException`. Shows chaining with `cause`, checked vs unchecked, and multi-catch.
+### 3. Raphael catches its own errors (done, 2026-11-05)
+- **Exception hierarchy:** `RaphaelException` (abstract, checked) → `TraceException`, `CompileSetupException`; `RunFileException` joins in Stage 8, when there are run files to read. Shows chaining with `cause`, checked vs unchecked, and multi-catch.
 - **Safety net:**
   - `Thread.setDefaultUncaughtExceptionHandler` plus a handler for Swing's UI thread
   - a friendly dialog with "copy details" and "open log folder"

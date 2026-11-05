@@ -75,7 +75,19 @@ Version 1, the course project, followed [PLAN.md](PLAN.md). Version 2 turns Raph
   - JaCoCo 0.8.12: 78.5% lines, 70.5% branches.
   - 150 tests pass.
   - Known gap: Raphael killed during the half second while the program is starting (paused before the agent runs) can leave it waiting.
-- **Next:** ROADMAP Stage 3, Raphael catches its own errors (exception hierarchy, safety net, log file, autosave, settings dialog).
+- **Stage 3 (Raphael catches its own errors): done, 2026-11-05.**
+  - The abstract checked `RaphaelException` is the parent of `TraceException` and `compile/CompileSetupException`. `MainWindow.runFailed()` tells these expected problems apart from bugs.
+  - `ui/ErrorReporter` is the default uncaught-exception handler: it logs, then shows one dialog at most every 10 s. The `dialogs` flag is off in tests.
+  - New `io/` package:
+    - `AppFolders`: the data and log folders for each OS (XDG on Linux)
+    - `AppLog`: java.util.logging to `raphael-%g.log`, 3 files of 1 MB each; `LineFormatter`
+    - `SafeFiles`: atomic write; `readCode` refuses files over 1 MB or binary; `describe()`
+    - `DraftStore`: autosave every 5 s on a daemon executor; cleared on a normal quit; `offerDraft()` on start
+  - `trace/RunLimits` (record) and `SettingsDialog` (Ctrl+,) cover steps, timeout, memory, text size and theme, stored in `Preferences`. `Tracer.setLimits` is a default method.
+  - Silent catches that hide real failures are now logged.
+  - Checked in the real app: draft restore, the settings dialog, the safety-net dialog and the log file.
+  - 167 tests.
+- **Next:** ROADMAP Stage 4, fast (profile recording; 500-node list under 5 s; memory, frame rate, startup).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

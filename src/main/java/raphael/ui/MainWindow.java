@@ -19,10 +19,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -47,14 +52,19 @@ import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.JTextComponent;
 import raphael.App;
+import raphael.RaphaelException;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
+import raphael.io.AppFolders;
+import raphael.io.DraftStore;
+import raphael.io.SafeFiles;
 import raphael.model.EndReason;
 import raphael.model.Trace;
 import raphael.render.Scene;
 import raphael.render.SceneBuilder;
 import raphael.render.Style;
 import raphael.trace.JdiTracer;
+import raphael.trace.RunLimits;
 import raphael.trace.Tracer;
 
 // Raphael's main window. It builds the panels, connects them to the TraceModel, sets up the
@@ -97,6 +107,7 @@ public class MainWindow extends JFrame {
               Ctrl + wheel       zoom the picture (over the picture)
               Ctrl+0             normal text size and zoom
               Ctrl+D             dark or light
+              Ctrl+,             settings
             """;
     private static final String[] EXAMPLES = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts"};
 
@@ -118,6 +129,20 @@ public class MainWindow extends JFrame {
     private boolean running;
     private Timer progress;
     private String lastSearch = "";
+    private RunLimits limits = savedLimits();
+
+    // Autosave: every few seconds, unsaved code is copied to a draft file (see DraftStore). The
+    // writing happens on a background thread, so a slow disk never pauses the window.
+    private static final Logger LOG = Logger.getLogger(MainWindow.class.getName());
+    private static final int AUTOSAVE_MS = 5000;
+    private final DraftStore draft = openDraft();
+    private final ExecutorService draftWriter = Executors.newSingleThreadExecutor(job -> {
+        Thread thread = new Thread(job, "autosave");
+        thread.setDaemon(true); // never keeps Raphael running
+        return thread;
+    });
+    private final Timer autosave = new Timer(AUTOSAVE_MS, e -> autosave());
+    private String lastDraft; // what the draft file holds now; null means no draft
 
     public MainWindow() {
         super("raphael");
@@ -133,7 +158,7 @@ public class MainWindow extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 if (okToLoseCode("quit without saving your code?")) {
-                    System.exit(0);
+                    quit();
                 }
             }
         });
@@ -201,6 +226,8 @@ public class MainWindow extends JFrame {
         applyTheme();
         applyTextSize();
         loadExample("BSTInsert");
+        tracer.setLimits(limits);
+        autosave.start();
     }
 
     // Adds a panel that takes this share of the row's width. With no preferred width of its own,
@@ -378,6 +405,8 @@ public class MainWindow extends JFrame {
         }
         examples.addActionListener(e -> examplesMenu.show(examples, 0, examples.getHeight()));
         themeButton.addActionListener(e -> toggleTheme());
+        JButton settings = toolButton("settings", "steps, timeout, memory, text size and theme  (Ctrl+,)");
+        settings.addActionListener(e -> showSettings());
         JButton help = toolButton("keys", "all the keyboard shortcuts  (F1)");
         help.addActionListener(e -> showHelp());
         runButton.setToolTipText(Shortcuts.label("compile and trace the program  (Ctrl+Enter or F5)"));
@@ -397,6 +426,7 @@ public class MainWindow extends JFrame {
         bar.add(controls);
         bar.addSeparator();
         bar.add(themeButton);
+        bar.add(settings);
         bar.add(help);
         return bar;
     }
@@ -420,6 +450,7 @@ public class MainWindow extends JFrame {
         bind("F3", this::findNext);
         bind("F1", this::showHelp);
         bind("control D", this::toggleTheme);
+        bind("control COMMA", this::showSettings);
         bind("ESCAPE", () -> {
             if (running) {
                 tracer.stop();
@@ -514,8 +545,7 @@ public class MainWindow extends JFrame {
                 try {
                     show(get());
                 } catch (ExecutionException e) {
-                    say("[error] could not run the program: " + e.getCause().getMessage(), Style.ERROR);
-                    console.showMessage(String.valueOf(e.getCause()));
+                    runFailed(e.getCause());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -523,8 +553,24 @@ public class MainWindow extends JFrame {
         }.execute();
     }
 
+    // A run that ended with an exception instead of a result. A RaphaelException is a problem
+    // Raphael knows how to explain (no compiler, the program's JVM wouldn't start); anything else
+    // is a bug in Raphael, which ErrorReporter logs and reports.
+    private void runFailed(Throwable cause) {
+        if (cause instanceof RaphaelException) {
+            LOG.log(Level.WARNING, "A run couldn't start", cause);
+            visual.setMessage("couldn't run:", cause.getMessage());
+            say("[error] " + cause.getMessage(), Style.ERROR);
+        } else {
+            ErrorReporter.report(cause);
+            visual.setMessage("something went wrong inside raphael:", cause.toString());
+            say("[error] something went wrong inside raphael · the details are in its log", Style.ERROR);
+        }
+    }
+
     private void show(RunResult result) {
         if (result.trace() == null) {
+            LOG.info("Didn't compile: " + result.program().errors().size() + " error(s)");
             List<CompileResult.CompileError> errors = result.program().errors();
             code.showErrors(errors);
             StringBuilder text = new StringBuilder();
@@ -540,6 +586,7 @@ public class MainWindow extends JFrame {
             return;
         }
         Trace trace = result.trace();
+        LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
         model.load(trace, result.scenes());
         visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         controls.play();
@@ -572,6 +619,116 @@ public class MainWindow extends JFrame {
         return okToLoseCode("replace your unsaved code?");
     }
 
+    private void showSettings() {
+        SettingsDialog.Values chosen = SettingsDialog.ask(this,
+                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), Style.isDark()));
+        if (chosen == null) {
+            return;
+        }
+        limits = chosen.limits();
+        App.SETTINGS.putInt("maxSteps", limits.maxSteps());
+        App.SETTINGS.putInt("timeoutSeconds", limits.timeoutSeconds());
+        App.SETTINGS.putInt("memoryMb", limits.memoryMb());
+        tracer.setLimits(limits);
+        if (chosen.dark() != Style.isDark()) {
+            toggleTheme();
+        }
+        if (chosen.textSize() != Style.CODE_FONT.getSize()) {
+            changeTextSize(chosen.textSize() - Style.CODE_FONT.getSize());
+        }
+        say("settings saved · the next run uses them", Style.INK_SOFT);
+    }
+
+    // The limits saved in settings. If they were changed outside Raphael and are out of range, the defaults.
+    private static RunLimits savedLimits() {
+        try {
+            return new RunLimits(App.SETTINGS.getInt("maxSteps", RunLimits.DEFAULTS.maxSteps()),
+                    App.SETTINGS.getInt("timeoutSeconds", RunLimits.DEFAULTS.timeoutSeconds()),
+                    App.SETTINGS.getInt("memoryMb", RunLimits.DEFAULTS.memoryMb()));
+        } catch (IllegalArgumentException e) {
+            LOG.log(Level.WARNING, "Saved limits are out of range; using the defaults", e);
+            return RunLimits.DEFAULTS;
+        }
+    }
+
+    private static DraftStore openDraft() {
+        try {
+            return new DraftStore(AppFolders.data().resolve("draft.java"));
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "No folder for the autosaved draft; autosave is off", e);
+            return null;
+        }
+    }
+
+    // Copies unsaved code to the draft, or removes the draft once nothing is unsaved.
+    private void autosave() {
+        String text = code.isDirty() ? code.getCode() : null;
+        if (draft == null || Objects.equals(text, lastDraft)) {
+            return;
+        }
+        lastDraft = text;
+        draftWriter.execute(() -> {
+            try {
+                if (text == null) {
+                    draft.clear();
+                } else {
+                    draft.save(text);
+                }
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Autosave failed", e);
+            }
+        });
+    }
+
+    // Called once the window is showing. A draft left from last time means Raphael didn't quit
+    // normally (a normal quit removes it), so offer the code back.
+    public void offerDraft() {
+        if (draft == null) {
+            return;
+        }
+        String saved;
+        try {
+            saved = draft.load();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Couldn't read the autosaved draft", e);
+            return;
+        }
+        if (saved == null || saved.isBlank()) {
+            return;
+        }
+        int answer = JOptionPane.showConfirmDialog(this,
+                "Raphael didn't close normally last time.\nBring back the unsaved code you were working on?",
+                "raphael · restore your code", JOptionPane.YES_NO_OPTION);
+        if (answer == JOptionPane.YES_OPTION) {
+            code.setCode(saved);
+            code.markUnsaved();
+            top.setDividerLocation(dividerForCode());
+            currentFile = null;
+            setTitle("raphael · restored code");
+            say(Shortcuts.label("restored your unsaved code · ctrl+s saves it"), Style.INK_SOFT);
+        } else {
+            lastDraft = "";  // differs from "no draft", so the next autosave removes the file
+        }
+    }
+
+    // A normal quit: no draft is left behind, so the next start doesn't offer one.
+    private void quit() {
+        autosave.stop();
+        draftWriter.shutdown();
+        try {
+            draftWriter.awaitTermination(2, TimeUnit.SECONDS); // a save in progress finishes first
+            if (draft != null) {
+                draft.clear();
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Couldn't remove the autosaved draft", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        LOG.info("Raphael quit");
+        System.exit(0);
+    }
+
     private boolean okToLoseCode(String question) {
         return !code.isDirty() || JOptionPane.showConfirmDialog(this, question, "raphael",
                 JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION;
@@ -598,7 +755,8 @@ public class MainWindow extends JFrame {
             currentFile = null;
             setTitle("raphael · " + name + ".java (example)");
             say("loaded " + name + Shortcuts.label(".java · press run (ctrl+enter)"), Style.INK_SOFT);
-        } catch (IOException | NullPointerException e) {
+        } catch (IOException | NullPointerException e) { // the examples are inside Raphael, so this is a bug
+            ErrorReporter.report(e);
             say("[error] could not load the example " + name, Style.ERROR);
         }
     }
@@ -624,14 +782,15 @@ public class MainWindow extends JFrame {
             return;
         }
         try {
-            // Not readString: that refuses a file that isn't valid UTF-8, like one Notepad saved.
-            code.setCode(new String(Files.readAllBytes(chooser.getSelectedFile().toPath()), StandardCharsets.UTF_8));
+            code.setCode(SafeFiles.readCode(chooser.getSelectedFile().toPath()));
             top.setDividerLocation(dividerForCode());
             currentFile = chooser.getSelectedFile();
             setTitle("raphael · " + currentFile.getName());
             say("opened " + currentFile.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Could not open the file: " + e.getMessage());
+            LOG.log(Level.INFO, "Couldn't open " + chooser.getSelectedFile(), e);
+            JOptionPane.showMessageDialog(this, "Couldn't open " + chooser.getSelectedFile().getName() + ":\n"
+                    + SafeFiles.describe(e), "raphael", JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -648,12 +807,16 @@ public class MainWindow extends JFrame {
             }
         }
         try {
-            Files.writeString(currentFile.toPath(), code.getCode());
+            SafeFiles.write(currentFile.toPath(), code.getCode());
             code.markSaved();
             setTitle("raphael · " + currentFile.getName());
             say("saved " + currentFile.getName(), Style.INK_SOFT);
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Could not save the file: " + e.getMessage());
+            LOG.log(Level.WARNING, "Couldn't save " + currentFile, e);
+            JOptionPane.showMessageDialog(this, "Couldn't save " + currentFile.getName() + ":\n"
+                    + SafeFiles.describe(e) + "\nYour code is still here; try saving somewhere else.",
+                    "raphael", JOptionPane.WARNING_MESSAGE);
+            currentFile = null; // so the next save asks where
         }
     }
 

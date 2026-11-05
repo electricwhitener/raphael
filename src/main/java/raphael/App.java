@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import raphael.io.AppLog;
 import raphael.render.Style;
+import raphael.ui.ErrorReporter;
 import raphael.ui.MainWindow;
 import raphael.ui.SystemTheme;
 
@@ -20,8 +22,15 @@ public class App {
     public static final Preferences SETTINGS = Preferences.userNodeForPackage(App.class);
 
     public static void main(String[] args) {
+        AppLog.setup();          // the log file first, so everything after can write to it
+        ErrorReporter.install(); // then the safety net, so even a problem while starting up is caught
         setupLook();
-        SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            MainWindow window = new MainWindow();
+            ErrorReporter.setOwner(window);
+            window.setVisible(true);
+            window.offerDraft();
+        });
     }
 
     // The look the user last chose. The first time, before they have chosen, match the computer.
