@@ -138,8 +138,8 @@ public final class Dialogs {
                     }
                 }
             });
+            dialog.setResizable(false); // before pack(), so the packed size is the final one
             dialog.pack();
-            dialog.setResizable(false);
             dialog.setLocationRelativeTo(window);
             dialog.setVisible(true); // waits here until the dialog closes
             return answer;
@@ -150,14 +150,16 @@ public final class Dialogs {
             content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
             content.setOpaque(false);
             content.setBorder(BorderFactory.createEmptyBorder(PADDING, PADDING, PADDING - 4, PADDING));
-            JLabel title = new JLabel(heading);
-            title.setFont(Style.sans(true, 15f));
-            title.setForeground(Style.INK);
-            if (error) {
-                title.setIcon(ERROR_SIGN);
-                title.setIconTextGap(Style.SPACE_3);
+            if (heading != null) { // null when the title bar already says it all
+                JLabel title = new JLabel(heading);
+                title.setFont(Style.sans(true, 15f));
+                title.setForeground(Style.INK);
+                if (error) {
+                    title.setIcon(ERROR_SIGN);
+                    title.setIconTextGap(Style.SPACE_3);
+                }
+                content.add(left(title));
             }
-            content.add(left(title));
             if (body != null) {
                 content.add(Box.createVerticalStrut(Style.SPACE_2));
                 JLabel text = new JLabel("<html><div style='width:" + BODY_WIDTH + "px'>" + escape(body) + "</div></html>");
@@ -166,7 +168,9 @@ public final class Dialogs {
                 content.add(left(text));
             }
             if (extra != null) {
-                content.add(Box.createVerticalStrut(Style.SPACE_3));
+                if (heading != null || body != null) {
+                    content.add(Box.createVerticalStrut(Style.SPACE_3));
+                }
                 content.add(left(extra));
             }
             return content;

@@ -629,3 +629,11 @@ A signature tells Windows and macOS who made the app. Without one, Windows says 
 
 A test tagged `screenshots` opens the real window, records a run, and saves pictures of it and its dialogs. CI runs it on Windows at 150% scaling and on a Mac. On Windows, FlatLaf's title bar follows the theme, with the icon and the menus inside it. The Mac has its own buttons, its own font and "Cmd" in every shortcut. CI's screens are small (1024×768), which squeezes the window at 150%, but real laptops rarely go that small.
 
+- What did the UI pass after Stage 5 change?
+
+The designer looked at the icon and at the Windows and Mac screenshots from CI, and found four things:
+- **The icon** lost its tree at 16 px and sat low in its square. It's now bolder and centred, with a three-node tree at 24 px and below. The Mac version sits on Apple's icon grid (a tile 80% of the canvas, with rounder corners), so it doesn't look oversized in the Dock.
+- **Settings on Windows.** "Dark" could wrap onto a line of its own and get cut off. The theme switch is now a `GridLayout` row, which never wraps, and dialogs are made unresizable before `pack()`, because on Windows that changes the frame's size.
+- **Mac shortcuts.** Key chips on a Mac show the symbols on the keys (⌘↩, ⌥↓) instead of "Cmd+Enter".
+- **The keys dialog** no longer repeats its title inside itself.
+

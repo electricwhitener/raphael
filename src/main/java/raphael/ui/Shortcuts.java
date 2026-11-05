@@ -48,6 +48,22 @@ public final class Shortcuts {
         return text.replace("Ctrl", "Cmd").replace("ctrl", "cmd").replace("Alt", "Option");
     }
 
+    // Keys inside a key-cap chip. On a Mac they're the symbols on the keys: "Ctrl+Enter" becomes
+    // ⌘↩ and "Alt+Down" becomes ⌥↓, with no "+". Elsewhere they're as written. (Sentences keep the
+    // words, through label().)
+    public static String keycap(String keys) {
+        return keycap(keys, MAC);
+    }
+
+    static String keycap(String keys, boolean mac) {
+        if (!mac) {
+            return keys;
+        }
+        return keys.replace("Ctrl+", "⌘").replace("Alt+", "⌥").replace("Shift+", "⇧")
+                .replace("Ctrl ", "⌘ ").replace("Enter", "↩")
+                .replace("Down", "↓").replace("Up", "↑").replace("Right", "→").replace("Left", "←");
+    }
+
     // Whether the shortcut key is held during a mouse event, for Ctrl + mouse wheel. A Mac
     // accepts both Cmd and Ctrl.
     public static boolean isDown(InputEvent e) {

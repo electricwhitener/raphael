@@ -31,14 +31,14 @@ public class AppIcon {
 
         Path iconset = Files.createDirectories(out.resolve("raphael.iconset"));
         for (int size : new int[] {16, 32, 128, 256, 512}) {
-            ImageIO.write(draw(size), "png", iconset.resolve("icon_" + size + "x" + size + ".png").toFile());
-            ImageIO.write(draw(size * 2), "png", iconset.resolve("icon_" + size + "x" + size + "@2x.png").toFile());
+            ImageIO.write(raphael.ui.Logo.draw(size, true), "png", iconset.resolve("icon_" + size + "x" + size + ".png").toFile());
+            ImageIO.write(raphael.ui.Logo.draw(size * 2, true), "png", iconset.resolve("icon_" + size + "x" + size + "@2x.png").toFile());
         }
         System.out.println("icons written to " + out);
     }
 
     private static BufferedImage draw(int size) {
-        return raphael.ui.Logo.draw(size); // the one drawing, shared with the window's icon
+        return raphael.ui.Logo.draw(size); // the one drawing, shared with the window's icon (macOS uses Logo.draw(size, true))
     }
 
     private static byte[] png(BufferedImage image) throws IOException {

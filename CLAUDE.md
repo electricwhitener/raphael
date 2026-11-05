@@ -135,7 +135,13 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Version 1.0.0, because macOS rejects a first number of 0.
   - `build-windows.sh` is removed.
   - Download sizes: about 48 MB on Windows and Mac, 47 MB for the `.deb`.
-- **Next:** the Stage 5 UI pass (icon and installer surfaces), then ROADMAP stage 6 (first public release; ask the user for a licence).
+- **Stage 5 UI pass: done, 2026-11-05.**
+  - `Logo.draw(size, mac)`: bolder and centred; three nodes at 24 px and below; the Mac version on a tile 80% of the canvas.
+  - The settings theme switch uses `GridLayout`, and `setResizable(false)` comes before `pack()`.
+  - `Shortcuts.keycap()` shows ⌘⌥⇧↩ and arrows on Mac chips.
+  - The keys dialog has no repeated heading (`Dialogs.question(owner, null)`).
+  - 223 tests.
+- **Next:** ROADMAP stage 6, the first public release. Ask the user for a licence.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

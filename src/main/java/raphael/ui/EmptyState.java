@@ -58,7 +58,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
         column.add(label("Raphael records every line, then plays it back as a picture.", Style.sans(false, 13f), () -> Style.INK_SOFT));
         column.add(Box.createVerticalStrut(Style.SPACE_2 * 3));
         for (int i = 0; i < STEPS.length; i++) {
-            column.add(step(i + 1, STEPS[i][0], Shortcuts.label(STEPS[i][1])));
+            column.add(step(i + 1, STEPS[i][0], Shortcuts.keycap(STEPS[i][1])));
             column.add(Box.createVerticalStrut(Style.SPACE_2));
         }
         column.add(Box.createVerticalStrut(Style.SPACE_6));
