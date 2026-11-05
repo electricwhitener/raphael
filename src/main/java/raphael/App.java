@@ -26,6 +26,7 @@ public class App {
         if (Shortcuts.isMac()) { // read by Java when the window system starts, so first of all
             System.setProperty("apple.awt.application.appearance", "system"); // the title bar follows dark mode
             System.setProperty("apple.awt.application.name", "Raphael");
+            System.setProperty("apple.laf.useScreenMenuBar", "true"); // the menus go in the bar at the top of the screen
         }
         AppLog.setup();          // the log file first, so everything after can write to it
         ErrorReporter.install(); // then the safety net, so even a problem while starting up is caught
@@ -58,8 +59,11 @@ public class App {
                 "TitlePane.background", hex(Style.BAR), // Windows: the title bar matches the toolbar
                 "TitlePane.inactiveBackground", hex(Style.BAR),
                 "TitlePane.foreground", hex(Style.INK),
-                "TitlePane.inactiveForeground", hex(Style.MUTED)));
-        UIManager.put("defaultFont", Style.UI_FONT);
+                "TitlePane.inactiveForeground", hex(Style.MUTED),
+                "MenuBar.background", hex(Style.BAR)));
+        if (Style.defaultUiFont() != null) { // Linux: the bundled Inter; elsewhere FlatLaf's system font
+            UIManager.put("defaultFont", Style.defaultUiFont());
+        }
         if (dark) {
             FlatDarkLaf.setup();
         } else {
@@ -74,7 +78,6 @@ public class App {
         UIManager.put("ScrollBar.showButtons", false);
         UIManager.put("SplitPane.dividerSize", 8);
         UIManager.put("SplitPaneDivider.style", "plain");
-        UIManager.put("ToolTip.font", Style.UI_FONT);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
     }
 

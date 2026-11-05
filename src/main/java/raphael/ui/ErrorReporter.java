@@ -11,7 +11,6 @@ import java.io.StringWriter;
 import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import raphael.io.AppLog;
 
@@ -68,19 +67,36 @@ public final class ErrorReporter {
         showing = true;
         try {
             Path logs = AppLog.folder();
-            String message = "Raphael ran into a problem it didn't expect.\n"
-                    + "Your code is safe: Raphael keeps an autosaved copy.\n\n"
-                    + e + (logs != null ? "\n\nThe details are in the log, in\n" + logs : "");
-            Object[] options = logs != null
-                    ? new Object[] {"copy details", "open log folder", "ok"}
-                    : new Object[] {"copy details", "ok"};
-            int choice = JOptionPane.showOptionDialog(owner, message, "raphael · something went wrong",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.ERROR_MESSAGE, null, options, options[options.length - 1]);
-            if (choice == 0) {
-                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(details(e)), null);
-            } else if (choice == 1 && logs != null) {
-                openFolder(logs);
+            javax.swing.JTextArea what = new javax.swing.JTextArea(e.toString(), 4, 46);
+            what.setEditable(false);
+            what.setLineWrap(true);
+            what.setWrapStyleWord(true);
+            what.setFont(raphael.render.Style.UI_FONT.deriveFont(12f));
+            javax.swing.JPanel extra = new javax.swing.JPanel(new java.awt.BorderLayout(0, raphael.render.Style.SPACE_2));
+            extra.setOpaque(false);
+            extra.add(new javax.swing.JScrollPane(what), java.awt.BorderLayout.CENTER);
+            if (logs != null) {
+                javax.swing.JLabel where = new javax.swing.JLabel("Log: " + shorten(logs.toString(), 60));
+                where.setToolTipText(logs.toString());
+                where.setForeground(raphael.render.Style.MUTED);
+                where.setFont(raphael.render.Style.sans(false, 12f));
+                extra.add(where, java.awt.BorderLayout.SOUTH);
             }
+            Dialogs.Question question = Dialogs.question(owner, "Raphael ran into a problem")
+                    .error()
+                    .body("Your code is safe: Raphael keeps an autosaved copy. Nothing was sent anywhere.")
+                    .extra(extra)
+                    .helper("Copy details", button -> {
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(details(e)), null);
+                        button.setText("Copied");
+                        javax.swing.Timer back = new javax.swing.Timer(2000, tick -> button.setText("Copy details"));
+                        back.setRepeats(false);
+                        back.start();
+                    });
+            if (logs != null) {
+                question.helper("Open log folder", button -> openFolder(logs));
+            }
+            question.buttons("Close", null).ask();
         } finally {
             showing = false;
             lastShown = System.currentTimeMillis();
@@ -102,7 +118,16 @@ public final class ErrorReporter {
             Desktop.getDesktop().open(folder.toFile());
         } catch (IOException | UnsupportedOperationException | IllegalArgumentException e) {
             LOG.log(Level.INFO, "Couldn't open the log folder", e);
-            JOptionPane.showMessageDialog(owner, "The log folder is:\n" + folder);
+            Dialogs.tell(owner, "The log folder couldn't be opened", "It's here: " + folder);
         }
+    }
+
+    // A long path with its middle replaced by "…", so it fits on one line.
+    static String shorten(String text, int max) {
+        if (text.length() <= max) {
+            return text;
+        }
+        int keep = (max - 1) / 2;
+        return text.substring(0, keep) + "…" + text.substring(text.length() - keep);
     }
 }

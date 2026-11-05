@@ -27,6 +27,11 @@ public class DraftStore {
         return Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : null;
     }
 
+    // When the draft was last saved, or null if there is none.
+    public java.time.Instant savedAt() throws IOException {
+        return Files.exists(file) ? Files.getLastModifiedTime(file).toInstant() : null;
+    }
+
     public void clear() throws IOException {
         Files.deleteIfExists(file);
     }

@@ -46,6 +46,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     private double fit = 1;  // the scale that fits this run's biggest picture into the panel
     private double zoom = 1; // the user's zoom, on top of that
     private boolean recording;
+    private int recordedSteps; // shown while recording
     private String messageTitle; // a red message from the window, or null
     private String messageDetail;
     private Dimension size = new Dimension(400, 300);
@@ -133,7 +134,11 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (messageTitle != null && !model.hasSteps()) {
             // the message says it all
         } else if (scene == null || !model.hasSteps()) {
-            hint(g2, recording ? "recording your program…" : Shortcuts.label("press run (ctrl+enter) to trace the program"));
+            if (recording) {
+                recordingCard(g2);
+            } else {
+                hint(g2, Shortcuts.label("press run (ctrl+enter) to trace the program"));
+            }
         } else {
             if (scene.getNodes().isEmpty()) {
                 hint(g2, "no arrays or objects yet · plain variables are listed below");
@@ -190,7 +195,34 @@ public class VisualPanel extends JPanel implements TraceListener {
     // While a program is being recorded, the empty picture says so.
     public void setRecording(boolean recording) {
         this.recording = recording;
+        this.recordedSteps = 0;
         repaint();
+    }
+
+    // "Recording… 1,284 steps", and how to stop, in the middle of the picture area.
+    private void recordingCard(Graphics2D g) {
+        Rectangle visible = getVisibleRect();
+        String title = recordedSteps == 0 ? "Recording…" : String.format(java.util.Locale.ENGLISH, "Recording…  %,d steps", recordedSteps);
+        String detail = "Press Esc or Stop to end the recording here.";
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setFont(Style.sans(true, 16f));
+        g.setColor(Style.INK);
+        int middle = visible.y + visible.height / 2;
+        g.drawString(title, visible.x + (visible.width - g.getFontMetrics().stringWidth(title)) / 2, middle - 6);
+        g.setFont(Style.sans(false, 13f));
+        g.setColor(Style.INK_SOFT);
+        g.drawString(detail, visible.x + (visible.width - g.getFontMetrics().stringWidth(detail)) / 2, middle + 18);
+    }
+
+    public void setRecordedSteps(int steps) {
+        if (steps != recordedSteps) {
+            recordedSteps = steps;
+            repaint();
+        }
+    }
+
+    public boolean hasMessage() {
+        return messageTitle != null;
     }
 
     private void hint(Graphics2D g, String text) {
