@@ -19,6 +19,7 @@ import raphael.render.Style;
 // subclass of DefaultListCellRenderer.
 public class CallStackPanel extends JPanel implements TraceListener {
 
+    private static final String LEFT_MARK = "↑ "; // marks a method a caught exception left
     private final DefaultListModel<String> frames = new DefaultListModel<>();
     private final JList<String> list = new JList<>(frames);
 
@@ -31,8 +32,10 @@ public class CallStackPanel extends JPanel implements TraceListener {
                                                           boolean selected, boolean focused) {
                 super.getListCellRendererComponent(list, value, index, false, false);
                 setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
-                setFont(list.getFont().deriveFont(index == 0 ? Font.BOLD : Font.PLAIN));
-                setForeground(index == 0 ? Style.ACCENT : Style.INK_SOFT);
+                boolean left = String.valueOf(value).startsWith(LEFT_MARK);
+                boolean running = !left && (index == 0 || String.valueOf(frames.get(index - 1)).startsWith(LEFT_MARK));
+                setFont(list.getFont().deriveFont(running ? Font.BOLD : Font.PLAIN));
+                setForeground(left ? Style.MUTED : running ? Style.ACCENT : Style.INK_SOFT);
                 return this;
             }
         });
@@ -50,6 +53,14 @@ public class CallStackPanel extends JPanel implements TraceListener {
         }
         for (FrameSnapshot frame : snapshot.getFrames()) {
             frames.addElement(String.format("%-14s :%d", frame.getMethodName() + "()", frame.getLine()));
+        }
+        // The methods a caught exception just left, each stopped in the middle: greyed, above the
+        // method that caught it, where they were on the stack.
+        if (snapshot.getThrown() != null) {
+            java.util.List<String> left = snapshot.getThrown().leftMethods(); // from the one that threw, outwards
+            for (int i = 0; i < left.size(); i++) {
+                frames.add(i, LEFT_MARK + left.get(i) + "()  (left)");
+            }
         }
     }
 }

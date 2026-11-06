@@ -325,6 +325,52 @@ class TracerTest {
         assertTrue(list.getElements().isEmpty());
     }
 
+    // A caught exception is shown on the first step of its catch, with where it was thrown (the
+    // student's line that called Integer.parseInt) and the methods it left.
+    @Test
+    void aCaughtExceptionIsRecordedWithItsJump() throws Exception {
+        Trace trace = run("""
+                public class Main {
+                    static int parse(String s) {
+                        return Integer.parseInt(s);
+                    }
+                    public static void main(String[] args) {
+                        try {
+                            int x = parse("abc");
+                        } catch (NumberFormatException e) {
+                            System.out.println("bad");
+                        }
+                    }
+                }
+                """, "");
+        raphael.model.ThrownException thrown = trace.getSnapshots().stream()
+                .map(Snapshot::getThrown).filter(java.util.Objects::nonNull).findFirst().orElseThrow();
+        assertEquals("NumberFormatException", thrown.type());
+        assertEquals(3, thrown.throwLine());
+        assertEquals(8, thrown.catchLine());
+        assertEquals(List.of("parse"), thrown.leftMethods());
+    }
+
+    // Java throws and catches exceptions inside itself all the time; none of those is shown.
+    @Test
+    void javasOwnExceptionsAreNotShown() throws Exception {
+        Trace trace = run("""
+                import java.util.*;
+                public class Main {
+                    public static void main(String[] args) {
+                        Scanner in = new Scanner(System.in);
+                        Map<String, Integer> counts = new HashMap<>();
+                        while (in.hasNext()) {
+                            counts.merge(in.next(), 1, Integer::sum);
+                        }
+                        System.out.println(String.format("%s %.2f", counts, Math.PI));
+                    }
+                }
+                """, "a b a c");
+        assertTrue(trace.getSnapshots().stream().allMatch(step -> step.getThrown() == null));
+        assertEquals(EndReason.FINISHED, trace.getEndReason());
+    }
+
     @Test
     void theStepLimitFromSettingsIsUsed() throws Exception {
         CompileResult program = new SourceCompiler().compile("""

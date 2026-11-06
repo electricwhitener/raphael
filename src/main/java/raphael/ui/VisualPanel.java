@@ -23,6 +23,8 @@ import raphael.model.Snapshot;
 import raphael.render.Animator;
 import raphael.render.Scene;
 import raphael.render.ScenePainter;
+import raphael.explain.ErrorExplainer;
+import raphael.model.ThrownException;
 import raphael.render.Style;
 
 // The picture of the current step: the program's arrays, lists, trees and objects.
@@ -156,7 +158,13 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (messageTitle != null) {
             banner((Graphics2D) g, messageTitle, messageDetail);
         } else if (snapshot != null && snapshot.getException() != null) {
-            banner((Graphics2D) g, "crashed here:", snapshot.getException());
+            String crash = snapshot.getException();
+            int colon = crash.indexOf(": ");
+            String explanation = colon < 0 ? ErrorExplainer.explain(crash, null)
+                    : ErrorExplainer.explain(crash.substring(0, colon), crash.substring(colon + 2));
+            banner((Graphics2D) g, "crashed here:", crash + "\n\n" + explanation);
+        } else if (snapshot != null && snapshot.getThrown() != null) {
+            caughtCard((Graphics2D) g, snapshot.getThrown());
         }
         if (zoom != 1) {
             badge((Graphics2D) g, Math.round(zoom * 100) + "%");
@@ -259,6 +267,78 @@ public class VisualPanel extends JPanel implements TraceListener {
         for (int i = 0; i < lines.size(); i++) {
             g.drawString(lines.get(i), visible.x + Style.MARGIN, visible.y + 18 + i * 18);
         }
+    }
+
+    // A caught exception, on the first step of its catch: an outlined card at the bottom of the
+    // picture (the drawing is usually centred, so it rarely covers anything) that says what was
+    // thrown, where it was thrown and caught, and what it means. Red outline, not filled: the
+    // program handled it, so it isn't a crash.
+    private void caughtCard(Graphics2D g, ThrownException thrown) {
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        Rectangle visible = getVisibleRect();
+        int width = Math.min(560, visible.width - 2 * Style.SPACE_6);
+        int inner = width - 2 * Style.SPACE_3;
+        java.awt.Font title = Style.sans(true, 13f);
+        java.awt.Font body = Style.sans(false, 12.5f);
+        String where = (thrown.throwLine() > 0 ? "thrown at line " + thrown.throwLine() + " · " : "")
+                + "caught at line " + thrown.catchLine()
+                + (thrown.leftMethods().isEmpty() ? "" : " · left " + String.join("(), ", thrown.leftMethods()) + "()");
+        List<String> what = wrap(thrown.text(), g.getFontMetrics(Style.UI_FONT.deriveFont(12f)), inner);
+        // Advice for this kind of exception if there is some; otherwise what the catch just did.
+        String meaning = ErrorExplainer.hasAdvice(thrown.type()) ? ErrorExplainer.explain(thrown.type(), thrown.message())
+                : "The rest of the try was skipped" + (thrown.leftMethods().isEmpty() ? ""
+                        : ", and " + String.join("(), ", thrown.leftMethods()) + "() stopped where "
+                        + (thrown.leftMethods().size() == 1 ? "it was" : "they were"))
+                        + ". The program goes on in this catch.";
+        List<String> explanation = wrap(meaning, g.getFontMetrics(body), inner);
+        int line = 18;
+        int height = Style.SPACE_3 * 2 + line * (2 + what.size() + explanation.size()) + Style.SPACE_1;
+        int x = visible.x + Style.SPACE_6;
+        int y = visible.y + visible.height - height - Style.SPACE_3;
+        g.setColor(Style.BACKGROUND);
+        g.fillRoundRect(x, y, width, height, Style.ARC, Style.ARC);
+        g.setColor(Style.ERROR);
+        g.setStroke(new java.awt.BasicStroke(1.5f));
+        g.drawRoundRect(x, y, width, height, Style.ARC, Style.ARC);
+        int baseline = y + Style.SPACE_3 + 13;
+        g.setFont(title);
+        g.drawString("caught an exception", x + Style.SPACE_3, baseline);
+        g.setFont(Style.UI_FONT.deriveFont(12f));
+        g.setColor(Style.INK);
+        for (String part : what) {
+            baseline += line;
+            g.drawString(part, x + Style.SPACE_3, baseline);
+        }
+        g.setFont(body);
+        g.setColor(Style.MUTED);
+        baseline += line;
+        g.drawString(where, x + Style.SPACE_3, baseline);
+        g.setColor(Style.INK_SOFT);
+        baseline += Style.SPACE_1;
+        for (String part : explanation) {
+            baseline += line;
+            g.drawString(part, x + Style.SPACE_3, baseline);
+        }
+    }
+
+    // Splits text into lines no wider than width, at spaces.
+    private static List<String> wrap(String text, FontMetrics metrics, int width) {
+        List<String> lines = new ArrayList<>();
+        for (String paragraph : text.split("\n")) {
+            String current = "";
+            for (String word : paragraph.split(" ")) {
+                String longer = current.isEmpty() ? word : current + " " + word;
+                if (metrics.stringWidth(longer) > width && !current.isEmpty()) {
+                    lines.add(current);
+                    current = word;
+                } else {
+                    current = longer;
+                }
+            }
+            lines.add(current);
+        }
+        return lines;
     }
 
     private void badge(Graphics2D g, String text) {

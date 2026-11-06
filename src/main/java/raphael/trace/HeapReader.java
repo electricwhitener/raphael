@@ -38,6 +38,7 @@ import raphael.model.ObjectNode;
 import raphael.model.PrimitiveValue;
 import raphael.model.ReferenceValue;
 import raphael.model.Snapshot;
+import raphael.model.ThrownException;
 import raphael.model.Value;
 
 // Reads the paused program's memory and copies it into a Snapshot made of plain Raphael objects.
@@ -98,6 +99,11 @@ public class HeapReader {
     // Takes a Snapshot of a paused thread. outputLength is asked for last, so the output
     // threads have as much time as possible to catch up.
     public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception) {
+        return capture(thread, outputLength, exception, null);
+    }
+
+    // thrown: an exception the program caught just before this step, or null.
+    public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception, ThrownException thrown) {
         this.thread = thread;
         Deque<ObjectReference> toVisit = new ArrayDeque<>();
         List<FrameSnapshot> frames = readFrames(thread, toVisit);
@@ -110,7 +116,7 @@ public class HeapReader {
                 heap.put(object.uniqueID(), readObject(object, toVisit));
             }
         }
-        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception);
+        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception, thrown);
     }
 
     private List<FrameSnapshot> readFrames(ThreadReference thread, Deque<ObjectReference> toVisit) {

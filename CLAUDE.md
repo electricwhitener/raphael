@@ -149,7 +149,23 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - GitHub Pages serves `docs/` (`docs/index.html`, `docs/icon.png`).
   - The `release` job in `package.yml` publishes on `v*` tags.
   - 225 tests.
-- **Next:** the Stage 6 UI pass, then tag `v1.0.0`.
+  - **UI pass:**
+    - the README and the landing page put downloads first, with notes on the unsigned installers
+    - `updateNotice` is a persistent link in the status bar (`newerVersion` and `newerPage` in Preferences)
+    - `showAbout()` has Copy details and Website, and is the Mac About handler
+    - the settings checkbox can be toggled from its words
+    - `package.sh` clears `target/app`
+  - Verify with `mvn clean` builds: VS Code wrote a broken class into `target/` that Maven took as current.
+- **Stage 6 done, 2026-11-06.** The user pushed the `v1.0.0` tag themselves: the safety classifier blocks Claude from publishing releases, so ask the user to run the tag push. Raphael 1.0.0 is published at github.com/electricwhitener/raphael/releases/tag/v1.0.0 with the msi, dmg arm64 and x64, deb and tar.gz.
+- **Stage 7 (exceptions in the student's program): done, 2026-11-06.**
+  - `createExceptionRequest(null, true, true)`; `JdiTracer.caught()` keeps only throws or catches in student code, walks the frames for the throw line and the left methods, and attaches a `model/ThrownException` to the next snapshot (`Snapshot.getThrown()`).
+  - Shown three ways: `VisualPanel.caughtCard()`, the `LineNumbers.throwBracket()` gutter bracket (the gutter is 8 px wider) and `CallStackPanel` "↑ m() (left)" rows.
+  - `explain/ErrorExplainer` is abstract, with 11 nested subclasses: `explain()`, `hasAdvice()` and `describe()`. The crash banner adds the explanation.
+  - `compile/CompileHints` puts hints in the banner and the console.
+  - New `Exceptions` example (10 examples).
+  - Bench shows no cost from caught-exception events (A/B checked).
+  - 236 tests.
+- **Next:** the Stage 7 UI pass, then ROADMAP stage 8 (files and saving).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

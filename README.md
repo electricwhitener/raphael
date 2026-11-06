@@ -23,7 +23,7 @@ It began as an object-oriented programming course project and is now an open-sou
   - any other object, as a box titled with its class and parent class (`Savings extends Account`)
 - **Animates each change.** Nodes glide into place, arrows swing to new targets, copied values fly between cells, and changed values flash.
 - **Marks what the next line will do:** `i` and `j` markers under array cells, and outlines on the cells it will read or write.
-- **Explains problems.** Compile errors, crashes, missing input and infinite loops each get a clear message at the right line.
+- **Explains problems.** Compile errors get a plain hint ("a statement is missing the ; at its end"). A crash or a caught exception gets an explanation ("`curr` was null, so the line couldn't read its field `next`"), with the jump from `throw` to `catch` drawn beside the code. Missing input and endless loops get a clear message too.
 - **Works like a small IDE:** coloured code, undo, find, auto-indent, comment toggling, dark mode and adjustable text size.
 
 | Bubble sort: `i`/`j` markers, one cell being written and one read | Grid DP: the cell being computed and the two cells it reads |
@@ -127,6 +127,7 @@ The log never leaves your computer.
 | OffByOne | A crash: an index walks past the end of an array |
 | BTreeInsert | A B-tree, with keys moving during a split |
 | BankAccounts | OOP: an interface, an abstract class, inheritance, polymorphism and a caught exception |
+| Exceptions | `throw`, `catch` and `finally`, a checked exception of your own, and one exception wrapped in another |
 
 ### Keyboard shortcuts
 Every command is also in the menus (File, Edit, Run, View, Help), with its shortcut beside it. The **?** button (or F1) shows the keys in the app. On a Mac, use Cmd where this table says Ctrl, and Option where it says Alt; the app shows the Mac names there.
@@ -165,6 +166,7 @@ The status bar has a key to these: a swatch for each mark, from "Next" to "Reads
 - **Grey marks the line that just ran.** The picture shows the state after that line.
 - **Amber means "one step just changed this".** A changed value flashes and keeps a soft glow. Changed variables and newly printed output are tinted amber too. A jump with the slider or Home and End doesn't flash.
 - **Red means an error.** A red banner says what happened: a compile error, a crash or missing input. The line turns red. An index past the end of an array shows as a red ghost cell, if the run really crashes there.
+- **A caught exception** shows on the first line of its `catch`: an outlined card in the picture says what was thrown and where, a red bracket in the line numbers runs from the `throw` to the `catch`, and the call stack lists the methods it left.
 - **Faded means not in use.** An index just outside an array (-1, or the length, often why a loop stops) gets a faded ghost cell. A B-tree key past `n` is faded. An object still being constructed is a faded `new` cell.
 - **A dot in a slot is a reference**, and its arrow shows what it points at. A slash means `null`.
 
@@ -251,6 +253,7 @@ Safety:
 | **compile/** | | |
 | `SourceCompiler` | Compiles the editor's text with javac and finds the class with `main`; blanks the file rules first | `compile(source)`, `topLevelText()`, `withoutFileRules()` |
 | `CompileResult` | The result: success, errors (line + message), class folder, main class | record getters |
+| `CompileHints` | A plain hint for javac's common errors ("cannot find symbol" → which name, and what to check) | `hint(message)` |
 | `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
 | **trace/** | | |
 | `Tracer` | Interface: "run this program and record every step" | `trace(program, input)`, `trace(program)`, `stop()`, `stepsSoFar()` |
@@ -271,10 +274,12 @@ Safety:
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
 | `HeapObject` → `ObjectNode`, `ArrayNode` | An object in memory: one with fields, or an array (or a collection) | `describe(snapshot)`, `shortName()`, `getFields()`, `getElements()` |
 | `FrameSnapshot` | One running method: its name, line and local variables | getters |
-| `Snapshot` | Everything at one pause | `getLine()`, `getFrames()`, `getHeap()`, `getObject(id)` |
+| `Snapshot` | Everything at one pause, and an exception caught just before it | `getLine()`, `getFrames()`, `getThrown()`, `getHeap()`, `getObject(id)` |
+| `ThrownException` | An exception the program threw and caught: type, message, throw line, catch line, the methods it left | record |
 | `Trace` | The whole run: snapshots, output, why it ended | `size()`, `get(step)`, `getOutputAt(step)`, `getEndReason()` |
 | `EndReason` | Finished, step limit, exception, timeout or stopped | enum |
 | `Names` | Shortens type names: `Main$Node` → `Node`, a lambda's hidden class → `lambda` | `simple(name)` |
+| `ErrorExplainer` (explain/) | Turns an exception into advice; one subclass per kind (null, index, divide by zero, bad number…) | `explain(type, message)`, `hasAdvice(type)`, `describe()` |
 | **detect/** | | |
 | `StructureDetector` | Decides what each object is (array, grid, list, tree or box) from its fields' types and names | `detect(snapshot)`, `shapeOf()`, `buildTrees()`, `buildGrid()` |
 | `IndexUsage` | Reads the code: which variables index which arrays (also `x.keys[i]` and `keys[j + T]`), and which cells a line reads or writes | `rowVariables()`, `columnVariables()`, `accessesOnLine()`, `accessesIn()` |
@@ -338,11 +343,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
 | Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
 | Composition | `MainWindow` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
-| Inheritance | `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
+| Inheritance | the eleven `ErrorExplainer` subclasses extend it; `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
-| Polymorphism (overriding) | `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
+| Polymorphism (overriding) | `ErrorExplainer.describe()`, `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
 | Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
-| Exception handling | a family of checked exceptions under the abstract `RaphaelException`, each keeping its cause; `MainWindow.runFailed()` tells expected problems from bugs; `ErrorReporter` catches what nothing else did, on every thread; `SafeFiles.describe()` turns `NoSuchFileException` and `AccessDeniedException` into plain reasons; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
+| Exception handling | Raphael shows the student's own exceptions: caught ones too, with the jump from `throw` to `catch` and an explanation (`JdiTracer.caught()`, `ErrorExplainer`); a family of checked exceptions under the abstract `RaphaelException`, each keeping its cause; `MainWindow.runFailed()` tells expected problems from bugs; `ErrorReporter` catches what nothing else did, on every thread; `SafeFiles.describe()` turns `NoSuchFileException` and `AccessDeniedException` into plain reasons; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
 | Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
@@ -352,20 +357,27 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Design pattern: Builder | `Dialogs.question(...).body(...).buttons(...).ask()` | Builds a dialog step by step, so its many optional parts don't need one method with a dozen parameters. |
 | Design pattern: Decorator | `FileDrop` wraps the editor's `TransferHandler` | Adds dropping files, and passes copy and paste on to the handler it wraps. |
 | Design pattern: Factory | `StructureRenderer.forStructure()` | One method decides which renderer class to create, so no one else has to. |
-| Packages | `compile`, `trace`, `model`, `detect`, `render`, `ui`, `io` | One package per job. |
+| Packages | `compile`, `trace`, `model`, `detect`, `explain`, `render`, `ui`, `io` | One package per job. |
 
 ## Tests
 
-`mvn test` runs 213 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
+`mvn test` runs 236 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
 - `ExamplesTest`: every program in the examples menu runs to its expected end.
 - `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
 - `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
-- `TracerTest`: a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
+- `TracerTest`: a caught exception recorded with its throw and catch lines and the methods it left, and Java's own exceptions ignored; a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
 - `RememberingTest`: 38 programs recorded twice, once remembering unchanged objects and once reading everything, give the same steps; a 500-node list reads each node about once.
 - `SceneListTest`: a step's picture is the same however the user got there: forwards, backwards, or built again after the cache let it go.
 - `NamesTest`: short type names, including lambdas.
+- `ErrorExplainerTest`: a NullPointerException names the variable that was null; an index past the end says how many cells there are and mentions `<=`; the other common exceptions; which ones have advice.
+- `CompileHintsTest`: a plain hint for each common javac message, naming the variable or class it's about; rare messages are left as they are.
+- `DialogsTest`: buttons in each system's order (Windows, macOS, Linux); the draft's time reads "today at", "yesterday at" or a date.
+- `FileDropTest`: a dropped file is opened, and pasting text into the editor still works.
+- `WindowsFileDialogTest`: the PowerShell script for Windows' own dialog (quotes, the suggested name, the filter).
+- `UpdateCheckTest`: versions compared as numbers (1.10 is newer than 1.9); GitHub's answer read.
+- `ScreenshotTest` (not part of a normal `mvn test`): pictures of the real window and its dialogs, taken in CI on Windows at 150% and on a Mac.
 - `StructureDetectorTest`: array, grid, list, half-reversed list, doubly linked list, tree, B-tree, box, a cycle that doesn't hang, and a count field found on a Turkish-language computer.
 - `IndexUsageTest`: which variables index which arrays, reads vs writes, `x.keys[i]` and `keys[j + T]`, constants and comments.
 - `SceneBuilderTest`:

@@ -69,7 +69,7 @@ class RememberingTest {
     static Stream<String> programs() throws Exception {
         List<String> names = new ArrayList<>(List.of("tricky"));
         for (String example : new String[] {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths",
-                "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts"}) {
+                "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts", "Exceptions"}) {
             names.add("/examples/" + example + ".java");
         }
         try (Stream<Path> files = Files.list(folder("/edge"))) {

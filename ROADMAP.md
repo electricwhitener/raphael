@@ -200,7 +200,7 @@ Built in this stage (all seven), plus Windows' own file dialog inside WSL (`Wind
 
 ## Part 2 — Features (each one a 1.x release)
 
-### 7. Exceptions in the student's code
+### 7. Exceptions in the student's code (done, 2026-11-06)
 - **Trace caught exceptions too:**
   - `notifyCaught=true`, keeping only exceptions thrown or caught in the student's classes
   - the catch line from `ExceptionEvent.catchLocation()`

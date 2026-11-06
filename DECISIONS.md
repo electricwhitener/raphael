@@ -660,3 +660,30 @@ Pushing a version tag (`v1.0.0`) runs the installers workflow. It builds every i
 
 The animation, `docs/demo.gif`, is made from the real window by `DemoGif`, a tool kept with the tests. It records ReverseList playing at 2× speed. A GIF has at most 256 colours, so it uses the 256 most common colours in the frames, and frames that look the same as the one before are merged.
 
+## Stage 7: Exceptions in the student's program
+
+- How are caught exceptions found?
+
+Before, Raphael only asked JDI about exceptions nothing catches, which end the run. Now it asks about every exception (`createExceptionRequest(null, true, true)`), and JDI says where each was thrown and where it will be caught (`ExceptionEvent.catchLocation()`). Java throws and catches exceptions inside itself all the time, while loading classes for instance, so `JdiTracer.caught()` keeps only the ones the student's code throws or catches. `Integer.parseInt` throwing into the student's catch counts, because the catch is the student's. The tracer then walks the paused thread's stack, from the frame that threw out to the method with the catch. That gives the student's line the exception came from, and the methods it left on the way. All of this goes into a `ThrownException` record, kept on the next step, which is the first line of the catch. I checked with a timing run that listening for every exception costs nothing measurable.
+
+- How is it shown?
+
+On that step there are three things, so it can be seen and not just read:
+- an outlined card in the picture: "caught an exception", what was thrown, "thrown at line 27 · caught at line 52 · left pop()", and what it means
+- a red bracket in the line numbers, from the `throw` line to the `catch` line
+- the methods it left, greyed in the call stack above the method that caught it
+
+The card is outlined rather than filled red, because the program handled it, so it isn't a crash. It sits at the bottom of the picture, because the drawing is usually centred.
+
+- Where do the explanations come from?
+
+`ErrorExplainer` is an abstract class with one subclass for each common kind of exception: null, an index out of range, dividing by zero, text that isn't a number, wrong or missing input, a bad cast, endless recursion, changing a list during a for-each, running out of memory. `explain()` asks each subclass whether it handles the type and calls the first one's `describe()`, without knowing which one it is. That's polymorphism, with a fallback for everything else. The best source is Java's own message. Since Java 14, a NullPointerException says which variable was null ("because \"curr\" is null"), because Raphael compiles with `-g`. So the explanation can say "curr was null (it pointed to no object), so the line couldn't read its field next." "Index 5 out of bounds for length 5" becomes "The array has 5 cells, numbered 0 to 4, so there's no position 5. A loop that uses <= instead of < often does this." For the program's own exceptions there's no advice to give, so the card says what the catch just did instead: the rest of the try was skipped, the methods it left stopped where they were, and the program goes on in the catch.
+
+- And compile errors?
+
+`CompileHints` turns javac's common messages into a hint, shown under the error in the banner and in the console. Some hints read details out of the message: "cannot find symbol … variable totl" becomes "Java doesn't know the variable totl. Check that it's declared before this line … and spelled the same way (capitals count)."
+
+- What's the new example?
+
+`Exceptions` has a small stack with a checked exception of its own (`StackEmptyException`), an `IllegalStateException` when it's full, a `readAge` that turns a NumberFormatException into an IllegalArgumentException with the first as its cause, and try/catch/finally around all of it. A test checks its output and that each caught exception shows up, in order.
+
