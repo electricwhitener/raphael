@@ -56,6 +56,10 @@ public final class Style {
     public static final int SPACE_2 = 8;
     public static final int SPACE_3 = 12;
     public static final int SPACE_6 = 24;
+    // The cards in the picture (a caught exception, a crash, a compile error).
+    public static final int NOTE_MAX_W = 560;
+    public static final int NOTE_LINE_H = 18;
+    public static final int NOTE_GAP = SPACE_3;
     public static final int STATUS_H = 28;   // the status bar
     public static final int ARC = 8;         // corners of buttons and fields
     public static final int FOCUS_WIDTH = 2; // the ring around the focused control

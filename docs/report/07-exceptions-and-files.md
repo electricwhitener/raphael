@@ -95,9 +95,9 @@ These are stored in a `ThrownException` record on the next step, the first line 
 | `For input string: "twenty"` | "twenty" was turned into a number, but it isn't one. |
 | `/ by zero` | The line divided by zero (with / or %). Whole numbers can't be divided by zero; check the divisor first. |
 
-For exceptions a program throws on purpose (its own classes, `IllegalArgumentException` and the like), there is no advice to give, so a caught one is explained by what the `catch` did: the rest of the `try` was skipped, the methods it left stopped where they were, and the program continues in the `catch`. An uncaught one adds its explanation to the red crash banner.
+For exceptions a program throws on purpose (its own classes, `IllegalArgumentException` and the like), there is no advice to give, so a caught one is explained by what the `catch` did: the rest of the `try` was skipped, the methods it left stopped where they were, and the program continues in the `catch`. An uncaught one gets the same kind of card, filled red, titled "crashed at line N".
 
-**Compile errors.** `CompileHints` adds a plain hint to javac's common messages. For example, "cannot find symbol … variable totl" becomes "Java doesn't know the variable totl. Check that it's declared before this line, in this block or an outer one, and spelled the same way (capitals count)." The hint appears in the error banner and in the console.
+**Compile errors.** `CompileHints` adds a plain hint to javac's common messages. For example, "cannot find symbol … variable totl" becomes "Java doesn't know the variable totl. Check that it's declared before this line, in this block or an outer one, and spelled the same way (capitals count)." The hint appears in the error card and in the console.
 
 **The Exceptions example** shows all of this in one program:
 - a stack class with its own checked exception;
@@ -107,3 +107,5 @@ For exceptions a program throws on purpose (its own classes, `IllegalArgumentExc
 
 ## 7.3 File handling
 *ROADMAP stage 8.*
+
+**One card for every error.** After the stage, the design review found the three error messages (a caught exception, a crash, a compile error) looked like three different things, and that a card could cover the drawing. They now share one card: a red title, the exception or error in the code font, a grey line of facts (where it was thrown and caught), and the explanation. A crash or compile error fills the card with light red; a caught exception, which the program handled, is only outlined. The picture keeps a strip at its bottom for the tallest card of the whole run, so nothing moves when a card appears.

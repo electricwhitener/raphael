@@ -36,9 +36,12 @@ public class CallStackPanel extends JPanel implements TraceListener {
                 boolean running = !left && (index == 0 || String.valueOf(frames.get(index - 1)).startsWith(LEFT_MARK));
                 setFont(list.getFont().deriveFont(running ? Font.BOLD : Font.PLAIN));
                 setForeground(left ? Style.MUTED : running ? Style.ACCENT : Style.INK_SOFT);
+                setToolTipText(left ? "The exception ended " + String.valueOf(value).substring(LEFT_MARK.length()).split(" ")[0]
+                        + " before it finished" : null);
                 return this;
             }
         });
+        javax.swing.ToolTipManager.sharedInstance().registerComponent(list); // the renderer's tooltips
         JScrollPane scroll = new JScrollPane(list);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         add(Section.wrap(Section.header("call stack"), scroll));
@@ -59,7 +62,7 @@ public class CallStackPanel extends JPanel implements TraceListener {
         if (snapshot.getThrown() != null) {
             java.util.List<String> left = snapshot.getThrown().leftMethods(); // from the one that threw, outwards
             for (int i = 0; i < left.size(); i++) {
-                frames.add(i, LEFT_MARK + left.get(i) + "()  (left)");
+                frames.add(i, String.format("%-14s %s", LEFT_MARK + left.get(i) + "()", "exited"));
             }
         }
     }

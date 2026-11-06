@@ -1,5 +1,6 @@
 package raphael.ui;
 
+import java.awt.BasicStroke;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
@@ -25,6 +26,7 @@ import raphael.render.Scene;
 import raphael.render.ScenePainter;
 import raphael.explain.ErrorExplainer;
 import raphael.model.ThrownException;
+import raphael.model.Trace;
 import raphael.render.Style;
 
 // The picture of the current step: the program's arrays, lists, trees and objects.
@@ -49,8 +51,9 @@ public class VisualPanel extends JPanel implements TraceListener {
     private double zoom = 1; // the user's zoom, on top of that
     private boolean recording;
     private int recordedSteps; // shown while recording
-    private String messageTitle; // a red message from the window, or null
-    private String messageDetail;
+    private Note message;        // a message from the window (a compile error…), or null
+    private int reserve;         // room kept at the bottom, for the whole run, for its tallest card
+    private boolean compact;     // cards leave out their explanation, so the reserve stays small
     private Dimension size = new Dimension(400, 300);
 
     public VisualPanel(TraceModel model) {
@@ -80,7 +83,7 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     @Override
     public void traceChanged(TraceModel model) {
-        setMessage(null, null);
+        clearMessage();
         animator.show(model.getScene()); // a new run starts without animating from the old one
         shownStep = model.getStep();
         fitToRun();
@@ -103,8 +106,18 @@ public class VisualPanel extends JPanel implements TraceListener {
         Dimension run = model.getRunSize();
         Container room = SwingUtilities.getAncestorOfClass(JScrollPane.class, this);
         fit = 1;
+        reserve = 0;
+        compact = false;
         if (room != null && run.width > 0 && run.height > 0) {
-            double best = Math.min((room.getWidth() - 2.0) / run.width, (room.getHeight() - 2.0) / run.height);
+            // The cards (a caught exception, a crash) go in a strip at the bottom, kept for the
+            // whole run, so the drawing never jumps and never hides under one.
+            int width = cardWidth(room.getWidth());
+            reserve = tallestCard(width, false);
+            if (reserve > room.getHeight() * 0.4) { // a short window: shorter cards
+                compact = true;
+                reserve = tallestCard(width, true);
+            }
+            double best = Math.min((room.getWidth() - 2.0) / run.width, (room.getHeight() - 2.0 - reserve) / run.height);
             fit = Math.max(MIN_FIT, Math.min(MAX_FIT, best));
         }
         updateSize();
@@ -114,7 +127,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     private void updateSize() {
         Dimension run = model.getRunSize();
         Dimension scene = run.width > 0 ? run : new Dimension(400, 300);
-        Dimension wanted = new Dimension((int) (scene.width * fit * zoom), (int) (scene.height * fit * zoom));
+        Dimension wanted = new Dimension((int) (scene.width * fit * zoom), (int) (scene.height * fit * zoom) + reserve);
         if (!wanted.equals(size)) {
             size = wanted;
             revalidate();
@@ -133,7 +146,7 @@ public class VisualPanel extends JPanel implements TraceListener {
         ((Graphics2D) g).setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Graphics2D g2 = (Graphics2D) g.create();
         Scene scene = animator.getCurrent();
-        if (messageTitle != null && !model.hasSteps()) {
+        if (message != null && !model.hasSteps()) {
             // the message says it all
         } else if (scene == null || !model.hasSteps()) {
             if (recording) {
@@ -149,22 +162,18 @@ public class VisualPanel extends JPanel implements TraceListener {
             double scale = fit * zoom;
             // Whole pixels, so thin lines stay as sharp as the scale allows.
             g2.translate(Math.max(0, Math.round((getWidth() - run.width * scale) / 2)),
-                    Math.max(0, Math.round((getHeight() - run.height * scale) / 2)));
+                    Math.max(0, Math.round((getHeight() - reserve - run.height * scale) / 2)));
             g2.scale(scale, scale);
             painter.paint(g2, scene);
         }
         g2.dispose();
         Snapshot snapshot = model.getSnapshot();
-        if (messageTitle != null) {
-            banner((Graphics2D) g, messageTitle, messageDetail);
-        } else if (snapshot != null && snapshot.getException() != null) {
-            String crash = snapshot.getException();
-            int colon = crash.indexOf(": ");
-            String explanation = colon < 0 ? ErrorExplainer.explain(crash, null)
-                    : ErrorExplainer.explain(crash.substring(0, colon), crash.substring(colon + 2));
-            banner((Graphics2D) g, "crashed here:", crash + "\n\n" + explanation);
-        } else if (snapshot != null && snapshot.getThrown() != null) {
-            caughtCard((Graphics2D) g, snapshot.getThrown());
+        Note card = cardFor(snapshot);
+        if (card != null) {
+            note((Graphics2D) g, card);
+        }
+        if (message != null) {
+            note((Graphics2D) g, message);
         }
         if (zoom != 1) {
             badge((Graphics2D) g, Math.round(zoom * 100) + "%");
@@ -193,10 +202,15 @@ public class VisualPanel extends JPanel implements TraceListener {
         zoomBy(0, null);
     }
 
-    // A red message at the top of the picture, or null for none.
-    public void setMessage(String title, String detail) {
-        messageTitle = title;
-        messageDetail = detail;
+    // A message card at the top of the picture: a title ("didn't compile · 2 errors"), the
+    // headline, an optional line of facts, and an optional explanation or hint.
+    public void setMessage(String title, String headline, String facts, String explanation) {
+        message = new Note(title, headline, facts, explanation, true, false);
+        repaint();
+    }
+
+    public void clearMessage() {
+        message = null;
         repaint();
     }
 
@@ -230,7 +244,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     }
 
     public boolean hasMessage() {
-        return messageTitle != null;
+        return message != null;
     }
 
     private void hint(Graphics2D g, String text) {
@@ -242,83 +256,139 @@ public class VisualPanel extends JPanel implements TraceListener {
     }
 
     // A title, then the details wrapped to fit, on a plain band so they can be read over anything.
-    private void banner(Graphics2D g, String title, String detail) {
-        g.setFont(Style.LABEL_FONT);
-        FontMetrics metrics = g.getFontMetrics();
-        Rectangle visible = getVisibleRect();
-        List<String> lines = new ArrayList<>();
-        lines.add(title);
-        for (String line : detail.split("\n")) {
-            String current = "";
-            for (String word : line.split(" ")) {
-                String longer = current.isEmpty() ? word : current + " " + word;
-                if (metrics.stringWidth(longer) > visible.width - 2 * Style.MARGIN && !current.isEmpty()) {
-                    lines.add(current);
-                    current = word;
-                } else {
-                    current = longer;
-                }
-            }
-            lines.add(current);
-        }
-        g.setColor(Style.BACKGROUND);
-        g.fillRect(visible.x, visible.y, visible.width, lines.size() * 18 + 12);
-        g.setColor(Style.ERROR);
-        for (int i = 0; i < lines.size(); i++) {
-            g.drawString(lines.get(i), visible.x + Style.MARGIN, visible.y + 18 + i * 18);
-        }
+    // A card in the picture: a red title, a headline in the code font, a line of facts, and an
+    // explanation, which is the most useful line and so the strongest text. Three kinds share it:
+    //   a caught exception: outlined (the program handled it), at the bottom;
+    //   a crash: filled with the error tint, at the bottom;
+    //   a message from the window (a compile error, missing input): filled, near the top.
+    // OOP: a record, a small unchangeable data class.
+    private record Note(String title, String headline, String facts, String explanation, boolean filled, boolean atBottom) {
     }
 
-    // A caught exception, on the first step of its catch: an outlined card at the bottom of the
-    // picture (the drawing is usually centred, so it rarely covers anything) that says what was
-    // thrown, where it was thrown and caught, and what it means. Red outline, not filled: the
-    // program handled it, so it isn't a crash.
-    private void caughtCard(Graphics2D g, ThrownException thrown) {
-        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        Rectangle visible = getVisibleRect();
-        int width = Math.min(560, visible.width - 2 * Style.SPACE_6);
-        int inner = width - 2 * Style.SPACE_3;
-        java.awt.Font title = Style.sans(true, 13f);
-        java.awt.Font body = Style.sans(false, 12.5f);
+    // One line of a card, with its kind: title, headline, facts or body.
+    private record NoteLine(String text, String kind) {
+    }
+
+    private static final float BODY_SIZE = 12.5f;
+
+    // The card for this step, if it has one: a crash, or a caught exception.
+    private static Note cardFor(Snapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        if (snapshot.getException() != null) {
+            String crash = snapshot.getException();
+            int colon = crash.indexOf(": ");
+            String explanation = colon < 0 ? ErrorExplainer.explain(crash, null)
+                    : ErrorExplainer.explain(crash.substring(0, colon), crash.substring(colon + 2));
+            return new Note("crashed at line " + snapshot.getLine(), crash, null, explanation, true, true);
+        }
+        ThrownException thrown = snapshot.getThrown();
+        if (thrown == null) {
+            return null;
+        }
+        List<String> left = thrown.leftMethods();
         String where = (thrown.throwLine() > 0 ? "thrown at line " + thrown.throwLine() + " · " : "")
                 + "caught at line " + thrown.catchLine()
-                + (thrown.leftMethods().isEmpty() ? "" : " · left " + String.join("(), ", thrown.leftMethods()) + "()");
-        List<String> what = wrap(thrown.text(), g.getFontMetrics(Style.UI_FONT.deriveFont(12f)), inner);
+                + (left.isEmpty() ? "" : " · left " + String.join("(), ", left) + "()");
         // Advice for this kind of exception if there is some; otherwise what the catch just did.
         String meaning = ErrorExplainer.hasAdvice(thrown.type()) ? ErrorExplainer.explain(thrown.type(), thrown.message())
-                : "The rest of the try was skipped" + (thrown.leftMethods().isEmpty() ? ""
-                        : ", and " + String.join("(), ", thrown.leftMethods()) + "() stopped where "
-                        + (thrown.leftMethods().size() == 1 ? "it was" : "they were"))
+                : "The rest of the try was skipped" + (left.isEmpty() ? ""
+                        : ", and " + String.join("(), ", left) + "() stopped where " + (left.size() == 1 ? "it was" : "they were"))
                         + ". The program goes on in this catch.";
-        List<String> explanation = wrap(meaning, g.getFontMetrics(body), inner);
-        int line = 18;
-        int height = Style.SPACE_3 * 2 + line * (2 + what.size() + explanation.size()) + Style.SPACE_1;
-        int x = visible.x + Style.SPACE_6;
-        int y = visible.y + visible.height - height - Style.SPACE_3;
-        g.setColor(Style.BACKGROUND);
+        return new Note("caught an exception", thrown.text(), where, meaning, false, true);
+    }
+
+    private static int cardWidth(int roomWidth) {
+        return Math.max(200, Math.min(Style.NOTE_MAX_W, roomWidth - 2 * Style.SPACE_6));
+    }
+
+    // The room the run's tallest bottom card needs, gaps included, or 0 if the run has none.
+    private int tallestCard(int width, boolean shortened) {
+        Trace trace = model.getTrace();
+        int tallest = 0;
+        if (trace != null) {
+            for (Snapshot step : trace.getSnapshots()) {
+                Note card = cardFor(step);
+                if (card != null) {
+                    tallest = Math.max(tallest, cardHeight(lines(card, width, shortened)));
+                }
+            }
+        }
+        return tallest == 0 ? 0 : tallest + 2 * Style.NOTE_GAP;
+    }
+
+    // The card's lines, wrapped to fit inside a card this wide. A shortened card leaves out the
+    // explanation, for windows too short to keep room for it.
+    private List<NoteLine> lines(Note card, int width, boolean shortened) {
+        int inside = width - 2 * Style.SPACE_3;
+        FontMetrics body = getFontMetrics(Style.sans(false, BODY_SIZE));
+        List<NoteLine> lines = new ArrayList<>();
+        lines.add(new NoteLine(card.title(), "title"));
+        if (card.headline() != null) {
+            for (String line : wrap(card.headline(), getFontMetrics(Style.UI_FONT.deriveFont(12f)), inside)) {
+                lines.add(new NoteLine(line, "headline"));
+            }
+        }
+        if (card.facts() != null) {
+            for (String line : wrap(card.facts(), body, inside)) {
+                lines.add(new NoteLine(line, "facts"));
+            }
+        }
+        if (card.explanation() != null && !shortened) {
+            for (String line : wrap(card.explanation(), body, inside)) {
+                lines.add(new NoteLine(line, "body"));
+            }
+        }
+        return lines;
+    }
+
+    private static int cardHeight(List<NoteLine> lines) {
+        boolean hasBody = lines.stream().anyMatch(line -> line.kind().equals("body"));
+        return 2 * Style.SPACE_3 + lines.size() * Style.NOTE_LINE_H + (hasBody ? Style.SPACE_1 : 0) - 4;
+    }
+
+    private void note(Graphics2D g, Note card) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        Rectangle visible = getVisibleRect();
+        int width = cardWidth(visible.width);
+        List<NoteLine> lines = lines(card, width, card.atBottom() && compact);
+        int height = cardHeight(lines);
+        int x = visible.x + (visible.width - width) / 2;
+        int y = card.atBottom() ? visible.y + visible.height - height - Style.NOTE_GAP : visible.y + Style.SPACE_6;
+        g.setColor(card.filled() ? Style.ERROR_TINT : Style.BACKGROUND);
         g.fillRoundRect(x, y, width, height, Style.ARC, Style.ARC);
         g.setColor(Style.ERROR);
-        g.setStroke(new java.awt.BasicStroke(1.5f));
+        g.setStroke(new BasicStroke(card.filled() ? 1f : 1.5f));
         g.drawRoundRect(x, y, width, height, Style.ARC, Style.ARC);
-        int baseline = y + Style.SPACE_3 + 13;
-        g.setFont(title);
-        g.drawString("caught an exception", x + Style.SPACE_3, baseline);
-        g.setFont(Style.UI_FONT.deriveFont(12f));
-        g.setColor(Style.INK);
-        for (String part : what) {
-            baseline += line;
-            g.drawString(part, x + Style.SPACE_3, baseline);
-        }
-        g.setFont(body);
-        g.setColor(Style.MUTED);
-        baseline += line;
-        g.drawString(where, x + Style.SPACE_3, baseline);
-        g.setColor(Style.INK_SOFT);
-        baseline += Style.SPACE_1;
-        for (String part : explanation) {
-            baseline += line;
-            g.drawString(part, x + Style.SPACE_3, baseline);
+        int baseline = y + Style.SPACE_3 + 10;
+        String before = "";
+        for (NoteLine line : lines) {
+            switch (line.kind()) {
+                case "title" -> {
+                    g.setFont(Style.sans(true, 13f));
+                    g.setColor(Style.ERROR);
+                }
+                case "headline" -> {
+                    g.setFont(Style.UI_FONT.deriveFont(12f));
+                    g.setColor(Style.INK);
+                }
+                case "facts" -> {
+                    g.setFont(Style.sans(false, BODY_SIZE));
+                    g.setColor(Style.MUTED);
+                }
+                default -> {
+                    g.setFont(Style.sans(false, BODY_SIZE));
+                    g.setColor(Style.INK);
+                    if (!before.equals("body")) {
+                        baseline += Style.SPACE_1; // a little room before the explanation
+                    }
+                }
+            }
+            g.drawString(line.text(), x + Style.SPACE_3, baseline);
+            baseline += Style.NOTE_LINE_H;
+            before = line.kind();
         }
     }
 

@@ -165,7 +165,13 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - New `Exceptions` example (10 examples).
   - Bench shows no cost from caught-exception events (A/B checked).
   - 236 tests.
-- **Next:** the Stage 7 UI pass, then ROADMAP stage 8 (files and saving).
+- **Stage 7 UI pass: done, 2026-11-06.**
+  - One card style in `VisualPanel` (`Note` record, `note()`, `cardFor()`): caught = outlined at the bottom, crash = filled at the bottom, window messages (compile error, needs input) = filled near the top. `setMessage(title, headline, facts, explanation)` and `clearMessage()`.
+  - `fitToRun` keeps a bottom strip (`reserve`) for the run's tallest card; cards drop their explanation (`compact`) if the strip would pass 40% of the height. `Style.NOTE_MAX_W`, `NOTE_LINE_H`, `NOTE_GAP`.
+  - Gutter bracket 12 px; an off-screen throw line shows a triangle and its number at the edge; the code scrolls to show both lines if they fit.
+  - Status bar shows `[caught] Type · thrown at line N, caught at line M` on caught steps (`showCaughtOrSaid`); call stack rows say "exited", with a tooltip.
+  - 236 tests.
+- **Next:** ROADMAP stage 8 (files and saving).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
