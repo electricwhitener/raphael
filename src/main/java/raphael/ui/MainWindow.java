@@ -2,6 +2,7 @@ package raphael.ui;
 
 import com.formdev.flatlaf.FlatLaf;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
@@ -62,6 +63,7 @@ import raphael.compile.SourceCompiler;
 import raphael.io.AppFolders;
 import raphael.io.AppLog;
 import raphael.io.DraftStore;
+import raphael.io.ExampleCatalog;
 import raphael.io.SafeFiles;
 import raphael.io.UpdateCheck;
 import raphael.model.EndReason;
@@ -106,6 +108,7 @@ public class MainWindow extends JFrame {
             the editor
               Ctrl+N, O, S       new, open, save
               Ctrl+Shift+S       save as
+              Ctrl+W             close, back to the welcome page
               Ctrl+Z, Ctrl+Y     undo, redo
               Ctrl+F, F3         find, find next
               Ctrl+/             comment or uncomment lines
@@ -119,7 +122,8 @@ public class MainWindow extends JFrame {
               Ctrl+,             settings
               F6, Shift+F6       move between toolbar, code and picture
             """;
-    private static final String[] EXAMPLES = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts", "Exceptions"};
+    // The examples the empty picture offers with one click; the rest are in the Examples menu.
+    private static final String[] FEATURED = {"BubbleSort", "ReverseList", "BSTInsert", "Inheritance", "BFS", "MergeSort"};
 
     private final TraceModel model = new TraceModel();
     private final CodePanel code = new CodePanel(model);
@@ -148,6 +152,11 @@ public class MainWindow extends JFrame {
     private Color saidColor = Style.INK;
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
+    // The middle of the window: the welcome page when no program is open, otherwise the editor,
+    // the picture and the panels below them.
+    private final JPanel workArea = new JPanel(new CardLayout());
+    private WelcomePage welcome;
+    private boolean welcomeShown;
     private final Tracer tracer = new JdiTracer();
     private JSplitPane top;
     private File currentFile;
@@ -208,7 +217,7 @@ public class MainWindow extends JFrame {
         picture.getViewport().setBackground(Style.BACKGROUND);
         pictureArea.setBorder(Section.hairline(0, 1, 0, 0));
         pictureArea.add(picture, "picture");
-        emptyState = new EmptyState(EXAMPLES, !WindowsFileDialog.available(), this::loadExample,
+        emptyState = new EmptyState(FEATURED, !WindowsFileDialog.available(), this::loadExample,
                 () -> examplesMenu.show(examplesButton, 0, examplesButton.getHeight()));
         JScrollPane guide = new JScrollPane(emptyState, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -241,7 +250,17 @@ public class MainWindow extends JFrame {
             }
         });
         middle.setBorder(Section.hairline(1, 0, 0, 0));
-        add(middle, BorderLayout.CENTER);
+        welcome = new WelcomePage(new WelcomePage.Actions(this::newProgram, this::open, this::pasteProgram,
+                this::loadExample, file -> {
+                    if (okToReplaceCode()) {
+                        openFile(file);
+                    }
+                }));
+        welcome.setBorder(Section.hairline(1, 0, 0, 0));
+        welcome.setTransferHandler(new FileDrop(null, this::openDropped));
+        workArea.add(welcome, "welcome");
+        workArea.add(middle, "work");
+        add(workArea, BorderLayout.CENTER);
 
         status.setFont(Style.UI_FONT.deriveFont(12f));
         status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
@@ -295,14 +314,18 @@ public class MainWindow extends JFrame {
         setLocationRelativeTo(null);
         applyTheme();
         applyTextSize();
-        loadExample("BSTInsert");
+        showWelcome();
         tracer.setLimits(limits);
         autosave.start();
         useAppMenu();
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent e) {
-                code.getEditor().requestFocusInWindow(); // ready to type or paste, not on the first toolbar button
+                if (welcomeShown) {
+                    welcome.focusExamples();
+                } else {
+                    code.getEditor().requestFocusInWindow(); // ready to type or paste, not on the first toolbar button
+                }
                 checkForUpdatesQuietly();
             }
         });
@@ -548,11 +571,7 @@ public class MainWindow extends JFrame {
         examples.setToolTipText("Load an example program");
         examples.setRequestFocusEnabled(false);
         examples.putClientProperty("JButton.buttonType", "toolBarButton");
-        for (String name : EXAMPLES) {
-            JMenuItem item = new JMenuItem(name);
-            item.addActionListener(e -> loadExample(name));
-            examplesMenu.add(item);
-        }
+        addExamples(examplesMenu);
         examples.addActionListener(e -> examplesMenu.show(examples, 0, examples.getHeight()));
         themeButton.addActionListener(e -> toggleTheme());
         JButton settings = ControlsBar.button(Icons.Glyph.SETTINGS, "Settings", "Settings: steps, time, memory, text size, theme  (Ctrl+,)");
@@ -644,7 +663,13 @@ public class MainWindow extends JFrame {
         }
         bind("control SUBTRACT", () -> changeTextSize(-1));
         // Only heard when the keyboard is outside the editor; inside it, these keys already work.
-        bind("control V", code::pasteHere);
+        bind("control V", () -> {
+            if (welcomeShown) {
+                pasteProgram();
+            } else {
+                code.pasteHere();
+            }
+        });
         bind("control A", code::selectAllHere);
         bind("RIGHT", model::next);
         bind("alt RIGHT", model::next);
@@ -666,10 +691,9 @@ public class MainWindow extends JFrame {
         file.add(item("New", "control N", this::newProgram));
         file.add(item("Open…", "control O", this::open));
         JMenu examples = menu("Open example", KeyEvent.VK_E);
-        for (String name : EXAMPLES) {
-            examples.add(item(name, null, () -> loadExample(name)));
-        }
+        addExamples(examples);
         file.add(examples);
+        file.add(item("Close", "control W", this::closeProgram));
         file.addSeparator();
         file.add(item("Save", "control S", this::save));
         file.add(item("Save As…", "shift control S", this::saveAs));
@@ -901,6 +925,9 @@ public class MainWindow extends JFrame {
         if (running) {
             tracer.stop(); // while recording, the run button is the stop button
             return;
+        }
+        if (welcomeShown) {
+            return; // no program is open
         }
         String source = code.getCode();
         String input = console.getInput();
@@ -1198,6 +1225,7 @@ public class MainWindow extends JFrame {
                 .buttons("Restore", null, "Discard it")
                 .ask();
         if ("Restore".equals(answer)) {
+            showWork();
             code.setCode(saved);
             code.markUnsaved();
             top.setDividerLocation(dividerForCode());
@@ -1247,6 +1275,7 @@ public class MainWindow extends JFrame {
         if (!okToReplaceCode()) {
             return;
         }
+        showWork();
         code.setCode(NEW_PROGRAM);
         code.startTypingAt(3, 8);
         currentFile = null;
@@ -1255,18 +1284,109 @@ public class MainWindow extends JFrame {
     }
 
     private void loadExample(String name) {
+        loadExample(ExampleCatalog.find(name));
+    }
+
+    private void loadExample(ExampleCatalog.Example example) {
         if (!okToReplaceCode()) {
             return;
         }
-        try (InputStream in = getClass().getResourceAsStream("/examples/" + name + ".java")) {
-            code.setCode(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-            top.setDividerLocation(dividerForCode());
-            currentFile = null;
-            setDocument(name + ".java (example)");
-            say("loaded " + name + Shortcuts.label(".java · press run (ctrl+enter)"), Style.INK_SOFT);
-        } catch (IOException | NullPointerException e) { // the examples are inside Raphael, so this is a bug
-            ErrorReporter.report(e);
-            say("[error] could not load the example " + name, Style.ERROR);
+        showWork();
+        code.setCode(ExampleCatalog.source(example));
+        top.setDividerLocation(dividerForCode());
+        currentFile = null;
+        setDocument(example.name() + ".java (example)");
+        say(example.title() + ": " + example.blurb().toLowerCase(Locale.ROOT).replaceAll("\\.$", "")
+                + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
+    }
+
+    // The examples, grouped: a heading for each section (Java, Algorithms…), then a submenu for
+    // each group. Hovering an example says what it shows.
+    private void addExamples(JComponent menu) {
+        String section = null;
+        for (ExampleCatalog.Group group : ExampleCatalog.groups()) {
+            if (!group.section().equals(section)) {
+                if (section != null) {
+                    menu.add(new JPopupMenu.Separator());
+                }
+                section = group.section();
+                JLabel heading = new JLabel(section.toUpperCase(Locale.ROOT)) {
+                    @Override
+                    public Color getForeground() {
+                        return Style.MUTED;
+                    }
+                };
+                heading.setFont(Style.sans(true, 10.5f));
+                heading.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+                menu.add(heading);
+            }
+            JMenu submenu = new JMenu(group.name());
+            for (ExampleCatalog.Example example : group.examples()) {
+                JMenuItem item = item(example.title(), null, () -> loadExample(example));
+                item.setToolTipText(example.blurb());
+                submenu.add(item);
+            }
+            menu.add(submenu);
+        }
+    }
+
+    // A program pasted from the clipboard, in place of the welcome page.
+    private void pasteProgram() {
+        String text;
+        try {
+            text = (String) java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+        } catch (java.awt.datatransfer.UnsupportedFlavorException | IOException | IllegalStateException e) {
+            text = null; // nothing usable on the clipboard (an image, say, or it's busy)
+        }
+        if (text == null || text.isBlank()) {
+            say(Shortcuts.label("the clipboard has no text · copy a Java program first, then press ctrl+v"), Style.INK_SOFT);
+            return;
+        }
+        if (!okToReplaceCode()) {
+            return;
+        }
+        showWork();
+        code.setCode(text);
+        top.setDividerLocation(dividerForCode());
+        currentFile = null;
+        setDocument("pasted program");
+        code.markUnsaved();
+        say(Shortcuts.label("pasted your program · press run (ctrl+enter)"), Style.INK_SOFT);
+    }
+
+    // The welcome page, in place of the editor: no program is open.
+    private void showWelcome() {
+        model.clear();
+        code.setCode("");
+        code.showErrors(List.of());
+        visual.clearMessage();
+        console.showMessage("");
+        currentFile = null;
+        ((CardLayout) workArea.getLayout()).show(workArea, "welcome");
+        welcomeShown = true;
+        runButton.setEnabled(false); // there's nothing to run
+        setDocument("Welcome");
+        say("start a new program, open a file, or pick an example", Style.INK_SOFT);
+        welcome.focusExamples();
+    }
+
+    private void showWork() {
+        if (welcomeShown) {
+            welcomeShown = false;
+            runButton.setEnabled(true);
+            ((CardLayout) workArea.getLayout()).show(workArea, "work");
+            fitBottomRow();
+        }
+    }
+
+    // File → Close: back to the welcome page, after asking about unsaved code.
+    private void closeProgram() {
+        if (running) {
+            tracer.stop();
+            return; // closing waits until the recording has stopped
+        }
+        if (!welcomeShown && okToLoseCode()) {
+            showWelcome();
         }
     }
 
@@ -1307,7 +1427,9 @@ public class MainWindow extends JFrame {
 
     private void openFile(File file) {
         try {
-            code.setCode(SafeFiles.readCode(file.toPath()));
+            String text = SafeFiles.readCode(file.toPath());
+            showWork();
+            code.setCode(text);
             top.setDividerLocation(dividerForCode());
             currentFile = file;
             setDocument(file.getName());

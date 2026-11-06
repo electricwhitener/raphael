@@ -49,7 +49,7 @@ public class DemoGif {
             }
         }
         Thread.sleep(1500);
-        click(window, "ReverseList");
+        ScreenshotTest.openExample(window, "Linked lists", "Reverse (iterative)");
         Thread.sleep(800);
         JComboBox<?> speed = find(window, JComboBox.class);
         SwingUtilities.invokeAndWait(() -> speed.setSelectedIndex(2)); // 2×

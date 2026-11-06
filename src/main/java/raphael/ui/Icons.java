@@ -145,6 +145,15 @@ public final class Icons {
                 g.drawString("?", 5.6f, 11.4f);
             }
         },
+        PASTE { // a clipboard
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(new RoundRectangle2D.Float(3, 3.5f, 10, 10.5f, 2, 2));
+                g.draw(new RoundRectangle2D.Float(6, 2, 4, 3, 1, 1));
+                g.draw(new Line2D.Float(5.5f, 8.5f, 10.5f, 8.5f));
+                g.draw(new Line2D.Float(5.5f, 11, 9, 11));
+            }
+        },
         CHEVRON_DOWN {
             @Override
             void draw(Graphics2D g) {

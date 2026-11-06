@@ -21,7 +21,7 @@ public final class SelfTest {
     }
 
     public static int run() {
-        try (InputStream example = SelfTest.class.getResourceAsStream("/examples/BubbleSort.java")) {
+        try (InputStream example = SelfTest.class.getResourceAsStream("/examples/sorting/BubbleSort.java")) {
             String source = new String(example.readAllBytes(), StandardCharsets.UTF_8);
             CompileResult program = new SourceCompiler().compile(source);
             if (!program.success()) {

@@ -4,6 +4,12 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**A welcome page and 100 examples**
+- Raphael opens on a welcome page, like an IDE's: start a new program, open a file, paste one, or pick an example. File → Close (Ctrl+W) goes back to it.
+- 100 short, commented examples in 15 groups: classes and objects, the OOP principles, exceptions, strings and collections, ten sorting algorithms, searching, recursion and backtracking, dynamic programming, arrays, every common linked-list operation, stacks and queues, trees and their traversals, heaps and hashing, graphs (BFS, DFS, shortest paths, Dijkstra, topological sort), and programs with a bug to find.
+- The Examples menu groups them the same way.
+- An empty `char[]` cell shows `'\0'` instead of a broken character.
+
 **Exceptions, explained**
 - Caught exceptions are shown too, on the first line of their `catch`: what was thrown, where it was thrown and caught, a red bracket in the line numbers from the `throw` to the `catch`, and the methods it left, greyed in the call stack.
 - Plain explanations for the common exceptions, built from Java's own messages: "`curr` was null, so the line couldn't read its field `next`", or "The array has 5 cells, numbered 0 to 4, so there's no position 5."

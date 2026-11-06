@@ -341,13 +341,30 @@ public class HeapReader {
         return fields;
     }
 
+    // A char as Java code writes it: 'a', or '\0' for an empty char[] cell (a char that isn't
+    // a letter has no glyph, so it would be drawn as a box).
+    static String charLiteral(char c) {
+        switch (c) {
+            case 0:
+                return "'\\0'";
+            case '\n':
+                return "'\\n'";
+            case '\t':
+                return "'\\t'";
+            case '\r':
+                return "'\\r'";
+            default:
+                return Character.isISOControl(c) ? String.format("'\\u%04x'", (int) c) : "'" + c + "'";
+        }
+    }
+
     // Turns a JDI value into a Raphael Value. Objects we should draw are queued for the BFS.
     private Value toValue(com.sun.jdi.Value value, Deque<ObjectReference> toVisit) {
         if (value == null) {
             return NullValue.INSTANCE;
         }
         if (value instanceof CharValue) {
-            return new PrimitiveValue("'" + ((CharValue) value).value() + "'");
+            return new PrimitiveValue(charLiteral(((CharValue) value).value()));
         }
         if (value instanceof com.sun.jdi.PrimitiveValue) {
             return new PrimitiveValue(value.toString());

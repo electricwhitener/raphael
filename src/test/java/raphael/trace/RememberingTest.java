@@ -17,6 +17,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
+import raphael.io.ExampleCatalog;
 import raphael.model.ArrayNode;
 import raphael.model.FrameSnapshot;
 import raphael.model.HeapObject;
@@ -68,9 +69,10 @@ class RememberingTest {
 
     static Stream<String> programs() throws Exception {
         List<String> names = new ArrayList<>(List.of("tricky"));
-        for (String example : new String[] {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths",
-                "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts", "Exceptions"}) {
-            names.add("/examples/" + example + ".java");
+        for (ExampleCatalog.Example example : ExampleCatalog.all()) {
+            if (!example.name().equals("MissingBaseCase")) { // 2,000 steps of the same call, twice: slow and adds nothing
+                names.add("/examples/" + example.path() + ".java");
+            }
         }
         try (Stream<Path> files = Files.list(folder("/edge"))) {
             // Left out: programs that sleep, don't compile, or run two threads (those interleave
