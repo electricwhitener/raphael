@@ -16,9 +16,17 @@ public class Snapshot {
     private final Map<String, Value> statics;  // e.g. "Main.count" → value
     private final int outputLength;            // how many characters had been printed so far
     private final String exception;            // null unless the program crashed at this step
+    private final ThrownException thrown;      // an exception caught just before this step, or null
 
     public Snapshot(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> statics,
                     int outputLength, String exception) {
+        this(frames, heap, statics, outputLength, exception, null);
+    }
+
+    // thrown: an exception caught just before this step (the first line of its catch), or null.
+    public Snapshot(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> statics,
+                    int outputLength, String exception, ThrownException thrown) {
+        this.thrown = thrown;
         this.frames = List.copyOf(frames);
         this.heap = Collections.unmodifiableMap(new LinkedHashMap<>(heap));
         this.statics = Collections.unmodifiableMap(new LinkedHashMap<>(statics));
@@ -50,6 +58,10 @@ public class Snapshot {
 
     public int getOutputLength() {
         return outputLength;
+    }
+
+    public ThrownException getThrown() {
+        return thrown;
     }
 
     public String getException() {

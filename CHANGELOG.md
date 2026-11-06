@@ -2,6 +2,14 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**Exceptions, explained**
+- Caught exceptions are shown too, on the first line of their `catch`: what was thrown, where it was thrown and caught, a red bracket in the line numbers from the `throw` to the `catch`, and the methods it left, greyed in the call stack.
+- Plain explanations for the common exceptions, built from Java's own messages: "`curr` was null, so the line couldn't read its field `next`", or "The array has 5 cells, numbered 0 to 4, so there's no position 5."
+- Hints for the common compile errors, like "Java doesn't know the variable `totl`: check its spelling (capitals count)."
+- A new Exceptions example: a checked exception of your own, `finally`, and one exception wrapped in another.
+
 ## 1.0.0 (2026-11-05)
 
 The first public release.

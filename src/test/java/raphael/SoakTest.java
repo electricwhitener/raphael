@@ -24,7 +24,7 @@ class SoakTest {
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne",
-            "BTreeInsert", "BankAccounts"})
+            "BTreeInsert", "BankAccounts", "Exceptions"})
     void everyRunTakesTheSameSteps(String name) throws Exception {
         String source = new String(getClass().getResourceAsStream("/examples/" + name + ".java").readAllBytes(),
                 StandardCharsets.UTF_8);

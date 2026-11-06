@@ -4,6 +4,8 @@ import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.ClassType;
 import com.sun.jdi.Field;
+import com.sun.jdi.IncompatibleThreadStateException;
+import com.sun.jdi.StackFrame;
 import com.sun.jdi.Location;
 import com.sun.jdi.Method;
 import com.sun.jdi.ObjectReference;
@@ -43,6 +45,7 @@ import raphael.model.EndReason;
 import raphael.model.FrameSnapshot;
 import raphael.model.Names;
 import raphael.model.Snapshot;
+import raphael.model.ThrownException;
 import raphael.model.Trace;
 
 // Runs the student's program in a second JVM in debug mode, using JDI (the Java Debug Interface),
@@ -161,6 +164,7 @@ public class JdiTracer implements Tracer {
         private EndReason endReason = EndReason.FINISHED;
         private String endMessage = "Program finished.";
         private ThreadReference firstThread; // the thread of the first step
+        private ThrownException justCaught;  // shown on the next step, the first line of its catch
         private volatile boolean stopRequested;
         private volatile int steps;
 
@@ -188,9 +192,10 @@ public class JdiTracer implements Tracer {
             }
             classLoaded.addClassExclusionFilter(RAPHAEL_PACKAGE + "*");
             classLoaded.enable();
-            // ...and when an exception is thrown that nothing catches.
-            ExceptionRequest crash = requests.createExceptionRequest(null, false, true);
-            crash.enable();
+            // ...and when an exception is thrown, caught or not. One nothing catches ends the run;
+            // one the student's code throws or catches is shown on the step its catch begins.
+            ExceptionRequest exceptions = requests.createExceptionRequest(null, true, true);
+            exceptions.enable();
 
             try {
                 // The program starts paused, and the first event ("the VM started") releases it.
@@ -252,7 +257,12 @@ public class JdiTracer implements Tracer {
             } else if (event instanceof BreakpointEvent) {
                 lineReached(((BreakpointEvent) event).thread());
             } else if (event instanceof ExceptionEvent) {
-                crashed((ExceptionEvent) event);
+                ExceptionEvent exception = (ExceptionEvent) event;
+                if (exception.catchLocation() == null) {
+                    crashed(exception);
+                } else {
+                    caught(exception);
+                }
             } else if (event instanceof ModificationWatchpointEvent) {
                 ObjectReference object = ((ModificationWatchpointEvent) event).object();
                 if (object != null) {
@@ -301,7 +311,8 @@ public class JdiTracer implements Tracer {
             } else if (!thread.equals(firstThread)) {
                 reader.stopRemembering(); // a second thread runs the student's code
             }
-            snapshots.add(reader.capture(thread, output::length, null));
+            snapshots.add(reader.capture(thread, output::length, null, justCaught));
+            justCaught = null;
             steps = snapshots.size();
             if (snapshots.size() >= limits.maxSteps()) {
                 String method = recursingMethod(snapshots.get(snapshots.size() - 1));
@@ -328,6 +339,50 @@ public class JdiTracer implements Tracer {
                 }
             }
             return method + "()";
+        }
+
+        // An exception that will be caught. Java's own code throws and catches many exceptions
+        // inside itself (while loading classes, for instance), so only the ones the student's code
+        // throws or catches are kept: Integer.parseInt throwing into the student's catch counts.
+        private void caught(ExceptionEvent event) {
+            Location thrownAt = event.location();
+            Location caughtAt = event.catchLocation();
+            if (!isStudentCode(thrownAt) && !isStudentCode(caughtAt)) {
+                return;
+            }
+            ObjectReference exception = event.exception();
+            String type = Names.simple(exception.referenceType().name());
+            String message = messageOf(exception, event.thread());
+            int throwLine = -1;
+            List<String> left = new ArrayList<>();
+            try {
+                // From the frame that threw, outwards, to the frame whose method has the catch:
+                // the student's methods in between are the ones the exception left.
+                for (StackFrame frame : event.thread().frames()) {
+                    Location at = frame.location();
+                    if (at.method().equals(caughtAt.method())) {
+                        if (throwLine < 0) {
+                            throwLine = at.lineNumber(); // thrown in the same method that catches it
+                        }
+                        break;
+                    }
+                    if (isStudentCode(at)) {
+                        if (throwLine < 0) {
+                            throwLine = at.lineNumber(); // the student's line the exception came from
+                        }
+                        String method = at.method().name();
+                        left.add(method.equals("<init>") ? Names.simple(at.declaringType().name()) : method); // a constructor by its class
+                    }
+                }
+            } catch (IncompatibleThreadStateException e) {
+                // The thread isn't paused after all: keep what's known.
+            }
+            justCaught = new ThrownException(type, message, throwLine, caughtAt.lineNumber(), left);
+        }
+
+        private static boolean isStudentCode(Location at) {
+            String name = at.declaringType().name();
+            return !isJdkClass(name) && !name.startsWith(RAPHAEL_PACKAGE);
         }
 
         // An exception nothing catches: record it as the last step, then let the program finish

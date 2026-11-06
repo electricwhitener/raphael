@@ -46,6 +46,7 @@ import javax.swing.text.View;
 import javax.swing.undo.UndoManager;
 import raphael.compile.CompileResult;
 import raphael.model.Snapshot;
+import raphael.model.ThrownException;
 import raphael.render.Style;
 
 // The code editor. While stepping, two lines are marked: the line about to run (blue, with a ▶
@@ -274,6 +275,8 @@ public class CodePanel extends JPanel implements TraceListener {
             scrollToLine(current);
         }
         lineNumbers.show(current, previous, crashed, model.hasSteps());
+        ThrownException thrown = now == null ? null : now.getThrown();
+        lineNumbers.showThrow(thrown == null ? -1 : thrown.throwLine(), thrown == null ? -1 : thrown.catchLine());
     }
 
     private void bindEditKey(String key, Runnable action) {
@@ -430,11 +433,15 @@ public class CodePanel extends JPanel implements TraceListener {
     // one at the line that just ran. Clicking a number jumps to the next time that line runs.
     private static class LineNumbers extends JComponent {
 
+        private static final int BRACKET = 8; // room at the left for a caught exception's jump
+
         private final JTextArea editor;
         private int current = -1;
         private int previous = -1;
         private boolean crashed;
         private boolean clickable;
+        private int throwLine = -1; // a caught exception's jump, from the line that threw it
+        private int catchLine = -1; // to the line of its catch, or -1 for none
 
         LineNumbers(JTextArea editor, IntConsumer onClick) {
             this.editor = editor;
@@ -480,10 +487,16 @@ public class CodePanel extends JPanel implements TraceListener {
             repaint();
         }
 
+        void showThrow(int from, int to) {
+            throwLine = from;
+            catchLine = to;
+            repaint();
+        }
+
         @Override
         public Dimension getPreferredSize() {
             int digits = Math.max(2, String.valueOf(editor.getLineCount()).length());
-            return new Dimension(getFontMetrics(getFont()).charWidth('0') * digits + 30, editor.getHeight());
+            return new Dimension(getFontMetrics(getFont()).charWidth('0') * digits + 30 + BRACKET, editor.getHeight());
         }
 
         @Override
@@ -510,19 +523,49 @@ public class CodePanel extends JPanel implements TraceListener {
                     if (number == current) {
                         color = crashed ? Style.ERROR : Style.ACCENT;
                         font = getFont().deriveFont(Font.BOLD);
-                        arrow(g2, 6, middle, 5, color);
+                        arrow(g2, BRACKET + 6, middle, 5, color);
                     } else if (number == previous) {
                         color = Style.INK_SOFT;
-                        arrow(g2, 7, middle, 3.5, Style.MUTED);
+                        arrow(g2, BRACKET + 7, middle, 3.5, Style.MUTED);
                     }
                     String text = String.valueOf(number);
                     g2.setFont(font);
                     g2.setColor(color);
                     g2.drawString(text, getWidth() - 8 - g2.getFontMetrics().stringWidth(text), baseline);
                 }
+                if (throwLine > 0 && catchLine > 0 && throwLine != catchLine) {
+                    throwBracket(g2);
+                }
             } catch (BadLocationException e) {
                 // the text changed while painting; the next repaint fixes it
             }
+        }
+
+        // A caught exception's jump, in the gutter's left edge: a dot at the line that threw it,
+        // a red line along the edge, and an arrowhead at the line of its catch.
+        private void throwBracket(Graphics2D g) throws BadLocationException {
+            double from = middleOf(throwLine);
+            double to = middleOf(catchLine);
+            g.setColor(Style.ERROR);
+            g.setStroke(new java.awt.BasicStroke(1.5f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+            Path2D line = new Path2D.Double();
+            line.moveTo(BRACKET - 1, from);
+            line.lineTo(3, from);
+            line.lineTo(3, to);
+            line.lineTo(BRACKET - 2, to);
+            g.draw(line);
+            g.fill(new java.awt.geom.Ellipse2D.Double(BRACKET - 3, from - 2, 4, 4));
+            Path2D head = new Path2D.Double();
+            head.moveTo(BRACKET, to);
+            head.lineTo(BRACKET - 4, to - 3);
+            head.lineTo(BRACKET - 4, to + 3);
+            head.closePath();
+            g.fill(head);
+        }
+
+        private double middleOf(int line) throws BadLocationException {
+            Rectangle2D where = editor.modelToView2D(editor.getLineStartOffset(Math.min(line, editor.getLineCount()) - 1));
+            return where.getY() + where.getHeight() / 2;
         }
 
         private static void arrow(Graphics2D g, double x, double middle, double size, Color color) {

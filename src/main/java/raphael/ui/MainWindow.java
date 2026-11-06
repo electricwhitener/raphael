@@ -56,6 +56,7 @@ import javax.swing.SwingWorker;
 import javax.swing.text.JTextComponent;
 import raphael.App;
 import raphael.RaphaelException;
+import raphael.compile.CompileHints;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
 import raphael.io.AppFolders;
@@ -116,7 +117,7 @@ public class MainWindow extends JFrame {
               Ctrl+,             settings
               F6, Shift+F6       move between toolbar, code and picture
             """;
-    private static final String[] EXAMPLES = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts"};
+    private static final String[] EXAMPLES = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne", "BTreeInsert", "BankAccounts", "Exceptions"};
 
     private final TraceModel model = new TraceModel();
     private final CodePanel code = new CodePanel(model);
@@ -1006,12 +1007,17 @@ public class MainWindow extends JFrame {
             StringBuilder text = new StringBuilder();
             for (CompileResult.CompileError error : errors) {
                 text.append(error.line() > 0 ? "line " + error.line() + ": " : "").append(error.message()).append("\n");
+                String hint = CompileHints.hint(error.message());
+                if (hint != null) {
+                    text.append("  hint: ").append(hint).append("\n");
+                }
             }
             console.showMessage(text.toString());
             CompileResult.CompileError first = errors.get(0);
             String where = (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
             String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the console)" : "";
-            visual.setMessage("didn't compile:", where + more);
+            String hint = CompileHints.hint(first.message());
+            visual.setMessage("didn't compile:", where + more + (hint == null ? "" : "\n\n" + hint));
             say("[error] " + where.lines().findFirst().orElse("") + more, Style.ERROR);
             return;
         }

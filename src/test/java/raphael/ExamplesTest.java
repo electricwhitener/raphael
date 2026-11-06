@@ -28,7 +28,7 @@ class ExamplesTest {
     @Test
     void everyExampleInTheMenuRunsToItsExpectedEnd() throws Exception {
         for (String name : new String[] {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList",
-                "BTreeInsert", "BankAccounts"}) {
+                "BTreeInsert", "BankAccounts", "Exceptions"}) {
             assertEquals(EndReason.FINISHED, run(name).getEndReason(), name);
         }
         assertEquals(EndReason.EXCEPTION, run("OffByOne").getEndReason(), "OffByOne crashes on purpose");
@@ -38,5 +38,22 @@ class ExamplesTest {
     void bankAccountsPrintsWhatItShould() throws Exception {
         assertEquals("> 1 earns 5.5\n> 2 earns 0.0\n> amount must be positive",
                 run("BankAccounts").getOutput().trim().replace("\r\n", "\n"));
+    }
+
+    // The exceptions example shows every caught exception on the first step of its catch.
+    @Test
+    void exceptionsShowsEachCaughtException() throws Exception {
+        Trace trace = run("Exceptions");
+        assertEquals("popped 20\npopped 10\nstopped: pop on an empty stack\nfinally runs either way\nage 19\n"
+                + "not an age: twenty, because For input string: \"twenty\"\nfull after 4 pushes",
+                trace.getOutput().trim().replace("\r\n", "\n"));
+        java.util.List<String> caught = new java.util.ArrayList<>();
+        for (raphael.model.Snapshot step : trace.getSnapshots()) {
+            if (step.getThrown() != null) {
+                caught.add(step.getThrown().type());
+            }
+        }
+        assertEquals(java.util.List.of("StackEmptyException", "NumberFormatException", "IllegalArgumentException",
+                "IllegalStateException"), caught);
     }
 }
