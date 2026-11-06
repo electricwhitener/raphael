@@ -4,6 +4,8 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**A new logo**: Raphael's own character, on a rounded tile that suits light and dark alike.
+
 **Files and saving**
 - Save a recording (File → Save recording): the program and every step in a `.raphael` file that opens and plays without running anything. Installing Raphael makes double-clicking one open it.
 - Export the steps as a CSV table for a spreadsheet: each step's line, variables and output.
