@@ -184,7 +184,7 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Examples: a Files group (WriteAndRead, MissingFile, AppendLog), 103 in all. `--self-test` also saves and reopens a recording.
   - UI pass: the welcome page lays itself out in `doLayout()`; focus rings; `showWelcomeControls()` turns off the commands that need a program; the recording chip; copy fixes.
   - 442 tests.
-- **Next:** ROADMAP stage 9 (more views, all synchronised).
+- **Next:** ROADMAP stage 9 (more views, all synchronised). **At the start of a session, read `.claude/HANDOFF.md`**: open decisions (the logo, the v1.1.0 release), the subagents and how to brief them, the verification tools in `.claude/tools/`, and pitfalls.
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.
