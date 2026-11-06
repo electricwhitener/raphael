@@ -10,12 +10,7 @@ Written 2026-11-06, at the end of the session that built Stages 7 and 8. Read th
 - **Next stage:** ROADMAP **Stage 9, more views, all synchronised**: a view layout with tabs, a trace table, history, a memory view, a sequence diagram, a flowchart, an input view, and (stretch) a streams view. Explain it to the user before building it (what, why, which OOP concepts), as with every stage.
 
 ## Open decisions and to-dos
-1. **Logo.** The user asked for `C:\Users\amulb\Downloads\raphael.jpg`, a chibi drawing of Rimuru Tempest, as the logo in both themes. Claude didn't add it. It's copyrighted character art, and Raphael is public and MIT-licensed, with installers and a website, so it would redistribute someone else's art under a licence the user can't grant. Ask the user which way to go:
-   - keep the current `ui/Logo` (three nodes, drawn in Java 2D);
-   - an **original** mark that keeps the spirit: a soft blue drop or slime shape with a gold "sage" spark, drawn in `ui/Logo` so it stays sharp and themable;
-   - use the image only on their own machine, never committed.
-
-   The name "Raphael" itself is fine.
+1. **Logo: done.** The user's custom character art (they have permission) is the logo, in `src/main/resources/logo/raphael.jpg`. It isn't under MIT, and the README's licence section says so; keep that line. `ui/Logo` draws it on a rounded tile. To regenerate the icons, run `java -cp target/classes scripts/AppIcon.java target/icons`, then copy `target/icons/raphael.png` to `docs/icon.png`.
 2. **Release v1.1.0** when the user wants Stages 7–8 shipped:
    1. Bump `<version>` in `pom.xml` to 1.1.0.
    2. Turn "Unreleased" in `CHANGELOG.md` into "1.1.0 (date)".

@@ -740,3 +740,9 @@ A CSV export of the steps (one row per step, a column per variable), which is th
 - What changed in the UI pass?
 
 The designer found that the welcome page fell apart at the smallest window size. It asked its parent for its own size, which a layout manager must never be asked to do, so it now places itself in `doLayout()`. Tabbing through the page showed no focus at all, so the buttons now use the toolbar's style, which draws FlatLaf's focus ring, and the lists draw a 2 px ring of their own. On the welcome page, everything that needs a program is switched off (Save, Undo, Find, the Run menu, the speed box), and so are its keys: before, Ctrl+S opened a Save dialog for an empty program. The status bar no longer lowercases the example's description, which had turned FileWriter into "filewriter". A recording opened from a file keeps a "saved recording · 163 steps" chip in the status bar until another run replaces it. The files panel opens only for code that names one of Java's file classes, not for every program that imports `IOException`, and its links look like links.
+
+## The logo
+
+- Why a picture instead of the drawn tree?
+
+The user wanted Raphael's own character as its face. It's a custom character the user has permission to use, so the art isn't under the MIT licence, and the README says so. `Logo` puts it on a rounded tile, the shape of an app icon, which looks the same on light and dark backgrounds. At 32 px and below, the whole figure is a blur, so the small icons show only the face. The picture is shrunk in halving steps, because one big jump from 400 px to 16 px skips most of the pixels.

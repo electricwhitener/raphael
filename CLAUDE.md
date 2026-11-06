@@ -184,6 +184,7 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Examples: a Files group (WriteAndRead, MissingFile, AppendLog), 103 in all. `--self-test` also saves and reopens a recording.
   - UI pass: the welcome page lays itself out in `doLayout()`; focus rings; `showWelcomeControls()` turns off the commands that need a program; the recording chip; copy fixes.
   - 442 tests.
+- **Logo: 2026-11-06.** The user's own character art (`src/main/resources/logo/raphael.jpg`, used with permission, not under MIT; the README says so). `ui/Logo` puts it on a rounded tile, with the face only at 32 px and below. `docs/icon.png` is made from it with `scripts/AppIcon.java`.
 - **Next:** ROADMAP stage 9 (more views, all synchronised). **At the start of a session, read `.claude/HANDOFF.md`**: open decisions (the logo, the v1.1.0 release), the subagents and how to brief them, the verification tools in `.claude/tools/`, and pitfalls.
 
 ## Who you're working with

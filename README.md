@@ -344,7 +344,7 @@ Safety:
 | `WelcomePage` | What shows when no program is open: start actions, recent files and the examples by group | `showRecent()`, `focusExamples()` |
 | `FileDrop` | Opens a `.java` file dropped onto the window; wraps the editor's own copy and paste | `canImport()`, `importData()` |
 | `WindowsFileDialog` | Inside WSL, shows Windows' own Open and Save dialog through PowerShell | `available()`, `choose()`, `script()` |
-| `Logo` | The app icon, drawn with Java 2D; the window and the installers use it | `draw(size)`, `windowIcons()` |
+| `Logo` | The app icon: the logo art on a rounded tile (only the face at 32 px and below); the window, the welcome page and the installers use it | `draw(size)`, `windowIcons()` |
 | `Shortcuts` | The shortcut key on this computer: Ctrl, or Cmd on a Mac; the key names shown to the user | `key()`, `label()`, `isDown()` |
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
@@ -460,6 +460,8 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 ## Licence
 Raphael is free and open source, under the [MIT License](LICENSE).
+
+The logo art (`src/main/resources/logo/raphael.jpg`, and the icons made from it) is an original character used with permission. It is not covered by the MIT License.
 
 The bundled fonts are under the SIL Open Font License: JetBrains Mono NL (`src/main/resources/fonts/OFL.txt`) and Inter (`src/main/resources/fonts/Inter-OFL.txt`). FlatLaf and JUnit keep their own licences, listed above.
 
