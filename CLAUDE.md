@@ -171,6 +171,11 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - Gutter bracket 12 px; an off-screen throw line shows a triangle and its number at the edge; the code scrolls to show both lines if they fit.
   - Status bar shows `[caught] Type · thrown at line N, caught at line M` on caught steps (`showCaughtOrSaid`); call stack rows say "exited", with a tooltip.
   - 236 tests.
+- **Welcome page and example library: done, 2026-11-06.** The user asked for an IDE-like start page and a curated, grouped example menu.
+  - `ui/WelcomePage` (Start: new, open, paste; Recent; an example browser of groups and examples) in a `CardLayout` with the editor (`showWelcome()`, `showWork()`); File → Close (Ctrl+W); Run is disabled on it; `pasteProgram()`.
+  - `io/ExampleCatalog` reads `examples/catalog.txt` (`## section`, `# group`, `path | title | blurb`); 100 examples in folders (java, strings, sorting, searching, recursion, dp, arrays, lists, stacks, trees, hashing, graphs, bugs). `addExamples()` builds grouped menus for the toolbar and File → Open example.
+  - `HeapReader.charLiteral`: `'\0'` instead of a box.
+  - `ExamplesTest` runs every example against `src/test/resources/expected-output.txt`; `RememberingTest` covers every example (but MissingBaseCase). 426 tests, about 2.5 min.
 - **Next:** ROADMAP stage 8 (files and saving).
 
 ## Who you're working with

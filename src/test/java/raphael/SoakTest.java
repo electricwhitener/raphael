@@ -3,7 +3,6 @@ package raphael;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -12,6 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
 import raphael.model.Snapshot;
+import raphael.io.ExampleCatalog;
 import raphael.model.Trace;
 import raphael.trace.JdiTracer;
 
@@ -26,8 +26,7 @@ class SoakTest {
     @ValueSource(strings = {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList", "OffByOne",
             "BTreeInsert", "BankAccounts", "Exceptions"})
     void everyRunTakesTheSameSteps(String name) throws Exception {
-        String source = new String(getClass().getResourceAsStream("/examples/" + name + ".java").readAllBytes(),
-                StandardCharsets.UTF_8);
+        String source = ExampleCatalog.source(ExampleCatalog.find(name));
         CompileResult program = new SourceCompiler().compile(source);
         int runs = Integer.getInteger("soak.runs", 100);
         Trace first = new JdiTracer().trace(program, "");

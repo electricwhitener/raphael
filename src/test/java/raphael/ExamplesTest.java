@@ -4,19 +4,35 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
+import raphael.io.ExampleCatalog;
 import raphael.model.EndReason;
 import raphael.model.Trace;
 import raphael.render.SceneBuilder;
 import raphael.trace.JdiTracer;
 
+// Every example in the catalog compiles, runs to the end it's meant to have, and prints what it
+// should. The outputs are in expected-output.txt, under a "## path" line each.
 class ExamplesTest {
 
+    // The examples that end some other way on purpose: they're in "Find the bug".
+    private static final Map<String, EndReason> ENDINGS = Map.of(
+            "OffByOne", EndReason.EXCEPTION, "NullNode", EndReason.EXCEPTION, "MissingBaseCase", EndReason.STEP_LIMIT);
+
     private Trace run(String name) throws Exception {
-        String source = new String(getClass().getResourceAsStream("/examples/" + name + ".java").readAllBytes(),
-                StandardCharsets.UTF_8);
+        String source = ExampleCatalog.source(ExampleCatalog.find(name));
         CompileResult program = new SourceCompiler().compile(source);
         assertTrue(program.success(), () -> name + " didn't compile: " + program.errors());
         Trace trace = new JdiTracer().trace(program, "");
@@ -25,13 +41,63 @@ class ExamplesTest {
         return trace;
     }
 
-    @Test
-    void everyExampleInTheMenuRunsToItsExpectedEnd() throws Exception {
-        for (String name : new String[] {"BubbleSort", "ReverseList", "BSTInsert", "FibDP", "GridPaths", "BuggyList",
-                "BTreeInsert", "BankAccounts", "Exceptions"}) {
-            assertEquals(EndReason.FINISHED, run(name).getEndReason(), name);
+    static Stream<String> examples() {
+        return ExampleCatalog.all().stream().map(ExampleCatalog.Example::name);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("examples")
+    void everyExampleRunsToItsExpectedEnd(String name) throws Exception {
+        Trace trace = run(name);
+        assertEquals(ENDINGS.getOrDefault(name, EndReason.FINISHED), trace.getEndReason(), name);
+        if (trace.getEndReason() == EndReason.FINISHED) {
+            String path = ExampleCatalog.find(name).path();
+            assertEquals(expectedOutputs().get(path), trace.getOutput().trim().replace("\r\n", "\n"), path);
         }
-        assertEquals(EndReason.EXCEPTION, run("OffByOne").getEndReason(), "OffByOne crashes on purpose");
+    }
+
+    private static Map<String, String> expected;
+
+    private static synchronized Map<String, String> expectedOutputs() throws Exception {
+        if (expected == null) {
+            expected = new HashMap<>();
+            String path = null;
+            StringBuilder text = new StringBuilder();
+            for (String line : new String(ExamplesTest.class.getResourceAsStream("/expected-output.txt").readAllBytes(),
+                    StandardCharsets.UTF_8).split("\n", -1)) {
+                if (line.startsWith("## ")) {
+                    if (path != null) {
+                        expected.put(path, text.toString().trim());
+                    }
+                    path = line.substring(3).trim();
+                    text.setLength(0);
+                } else {
+                    text.append(line).append("\n");
+                }
+            }
+            expected.put(path, text.toString().trim());
+        }
+        return expected;
+    }
+
+    // Each example file is in the catalog, once, so none is left out of the menu by mistake.
+    @Test
+    void theCatalogListsEveryExampleOnce() throws Exception {
+        Path folder = Path.of(ExamplesTest.class.getResource("/examples").toURI());
+        Set<String> files = new HashSet<>();
+        try (Stream<Path> walk = Files.walk(folder)) {
+            walk.filter(p -> p.toString().endsWith(".java"))
+                    .forEach(p -> files.add(folder.relativize(p).toString().replace('\\', '/').replace(".java", "")));
+        }
+        Set<String> listed = new HashSet<>();
+        Set<String> names = new HashSet<>();
+        for (ExampleCatalog.Example example : ExampleCatalog.all()) {
+            assertTrue(listed.add(example.path()), example.path() + " is listed twice");
+            assertTrue(names.add(example.name()), "two examples are called " + example.name());
+            assertTrue(!example.title().isEmpty() && !example.blurb().isEmpty(), example.path() + " needs a title and a blurb");
+        }
+        assertEquals(files, listed);
+        assertTrue(ExampleCatalog.groups().size() >= 10);
     }
 
     @Test

@@ -39,6 +39,9 @@ class ScreenshotTest {
         Thread.sleep(1500);
         dismissDialogs();
         String theme = raphael.render.Style.isDark() ? "dark" : "light";
+        take(window, theme + "-welcome");
+        openExample(window, "Trees", "BST insert");
+        Thread.sleep(800);
         take(window, theme + "-guide");
         click(window, "Run");
         Thread.sleep(6000);
@@ -72,6 +75,28 @@ class ScreenshotTest {
         } catch (AWTException | SecurityException | UnsupportedOperationException e) {
             System.out.println("no screen capture here: " + e);
         }
+    }
+
+    // Opens an example through File → Open example → group → title, as a user would.
+    static void openExample(JFrame window, String group, String title) throws Exception {
+        javax.swing.JMenu file = window.getJMenuBar().getMenu(0);
+        for (int i = 0; i < file.getItemCount(); i++) {
+            if (file.getItem(i) instanceof javax.swing.JMenu && file.getItem(i).getText().equals("Open example")) {
+                javax.swing.JMenu examples = (javax.swing.JMenu) file.getItem(i);
+                for (Component part : examples.getMenuComponents()) {
+                    if (part instanceof javax.swing.JMenu && ((javax.swing.JMenu) part).getText().equals(group)) {
+                        javax.swing.JMenu menu = (javax.swing.JMenu) part;
+                        for (int k = 0; k < menu.getItemCount(); k++) {
+                            if (menu.getItem(k).getText().equals(title)) {
+                                SwingUtilities.invokeAndWait(menu.getItem(k)::doClick);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        throw new IllegalArgumentException("no example " + group + " → " + title);
     }
 
     private static void click(Container in, String name) {

@@ -2,11 +2,11 @@ package raphael.render;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import raphael.compile.SourceCompiler;
+import raphael.io.ExampleCatalog;
 import raphael.model.Trace;
 import raphael.trace.JdiTracer;
 
@@ -18,8 +18,7 @@ class SceneListTest {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"ReverseList", "BuggyList", "BSTInsert", "BubbleSort", "BTreeInsert", "GridPaths"})
     void everyStepIsTheSameInAnyOrder(String example) throws Exception {
-        String source = new String(getClass().getResourceAsStream("/examples/" + example + ".java").readAllBytes(),
-                StandardCharsets.UTF_8);
+        String source = ExampleCatalog.source(ExampleCatalog.find(example));
         Trace trace = new JdiTracer().trace(new SourceCompiler().compile(source), "");
         SceneList forwards = new SceneBuilder(source).build(trace);
         SceneList backwards = new SceneBuilder(source).build(trace);

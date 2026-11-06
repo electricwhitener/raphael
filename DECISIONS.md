@@ -690,3 +690,21 @@ The card is outlined rather than filled red, because the program handled it, so 
 - What changed in the UI pass?
 
 The designer found the card could cover the drawing, and that the crash banner, the caught card and the compile banner looked like three different things. Now there's one card for all three. The crash card and the compile card are filled with a light red, and the caught card is only outlined. Each has a red title ("caught an exception", "crashed at line 9", "didn't compile · 2 errors"), the exception or error in the code font, a grey line of facts, and then the explanation. The picture keeps a strip at the bottom for the run's tallest card, for the whole run, so the drawing never jumps when a card appears and never hides under one. In a short window the cards leave out their explanation, so the strip stays small. The bracket in the line numbers is wider. When the throw line is scrolled out of view, it ends at the edge with a small triangle and the line's number. On a caught step the status bar says "[caught] StackEmptyException · thrown at line 27, caught at line 52", and the call stack marks the methods it left as "exited".
+
+## A welcome page and an example library
+
+- Why a welcome page?
+
+Raphael used to start with BSTInsert already in the editor, which looked as if someone else's file was open. IDEs start on a page that says how to begin, and Raphael does too now: a new program, a file, a pasted program, the recent files, and the examples. Closing a program (Ctrl+W) goes back there. Run is switched off on that page, because there's nothing to run.
+
+- How are the examples organised?
+
+There are 100, so a flat menu wasn't going to work. They're grouped the way a course meets them: Java (classes and objects, the OOP principles, exceptions, strings and collections), algorithms (sorting, searching, recursion, dynamic programming), data structures (arrays, linked lists, stacks and queues, trees, heaps and hashing, graphs) and a "find the bug" group. Each one does one thing, so "insert at the tail" and "delete by value" are separate programs, and each is short with a few comments.
+
+The list lives in a text file, `examples/catalog.txt`, with one line per example: its file, its title and a sentence about it. `ExampleCatalog` reads it. Adding an example means adding a file and a line, not changing code. A test checks that every file is listed once and that every example runs and prints exactly what it should.
+
+- How were they checked?
+
+Every example was run and its output checked by hand. Its picture was drawn at two points in the run and looked at. That found a few things to change. Graphs built from an `edges` array spent most of the picture on that array, so they now call `addEdge()`. Coin change used `Integer.MAX_VALUE` as "not possible yet", which made every cell so wide the table was tiny. Fibonacci and Overloading had nothing to draw, so Fibonacci counts its calls in an array (which also shows the wasted work) and Overloading stores which method ran. It also found a bug in Raphael: an empty `char[]` cell held `'\0'`, which has no glyph, so it was drawn as a box. It's now written `'\0'`, as in Java code.
+
+Graphs are still drawn as their adjacency list or matrix, and heaps as arrays. Drawing them as graphs and trees is stage 10.

@@ -98,7 +98,7 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
 
 ## Using Raphael
-1. **Choose a program.** Click an example in the guide that fills the picture area at first (or **Examples** in the toolbar), press **New** to type or paste your own (Ctrl+A then Ctrl+V replaces everything), **Open** a `.java` file with your system's own file dialog, or drop one onto the window.
+1. **Choose a program.** Raphael opens on a welcome page: start a **New program**, **Open** a `.java` file with your system's own file dialog, **Paste** one from the clipboard (Ctrl+V), drop one onto the window, or pick one of the 100 examples. **Examples** in the toolbar has them too. Ctrl+W closes the program and goes back to the welcome page.
 2. **Give it input, if it needs some.** A **stdin** box appears when the code mentions `System.in`. Type the input there before running.
 3. **Press Run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the picture counts the steps and the button becomes **Stop**; stopping keeps the steps recorded so far.
 4. **Move through the steps** with the keys below. Any manual move pauses playing. Click in the editor to type again.
@@ -116,18 +116,27 @@ Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `e
 The log never leaves your computer.
 
 ### Examples
-| Example | Shows |
+100 short programs, each with a few comments, grouped the way a course meets them. The welcome page lists them with a line on what each shows. `src/main/resources/examples/catalog.txt` is the list.
+
+| Group | Examples |
 |---|---|
-| BubbleSort | `i`/`j` markers, read and write outlines, values flying between cells |
-| ReverseList | A linked list being reversed: the arrows swing and the nodes stay put |
-| BSTInsert | Recursion building a binary search tree |
-| FibDP | A 1D dynamic programming table filling in |
-| GridPaths | A 2D dynamic programming table, and the cells each line reads |
-| BuggyList | A bug you can see: the rest of a list being lost |
-| OffByOne | A crash: an index walks past the end of an array |
-| BTreeInsert | A B-tree, with keys moving during a split |
-| BankAccounts | OOP: an interface, an abstract class, inheritance, polymorphism and a caught exception |
-| Exceptions | `throw`, `catch` and `finally`, a checked exception of your own, and one exception wrapped in another |
+| Classes and objects | Classes and objects, references, constructors, static and instance, pass by value |
+| OOP principles | Encapsulation, inheritance, polymorphism, abstract classes, interfaces, composition, overloading, generics, bank accounts (all of them together) |
+| Exceptions | try/catch/finally, your own checked exception, exceptions in a stack |
+| Strings and collections | Palindrome, counting letters, `ArrayList`, `HashMap`, enums |
+| Sorting | Bubble, selection, insertion, Shell, merge, quick, heap, counting, radix and bucket sort; sorting objects with `Comparable` and a `Comparator` |
+| Searching | Linear search, binary search, two pointers |
+| Recursion and backtracking | Factorial, Fibonacci, Towers of Hanoi, permutations, N queens |
+| Dynamic programming | Fibonacci table, grid paths, coin change, 0/1 knapsack, longest common subsequence |
+| Arrays | Reverse, rotate, prefix sums, largest sum (Kadane), transpose |
+| Linked lists | Walk; insert at the head, tail, a position, in order; delete the head, tail, a value, a position; reverse (iterative and recursive); find the middle; detect a cycle; merge two sorted lists; remove duplicates; doubly linked; circular |
+| Stacks and queues | Array and linked stacks, balanced brackets, postfix expressions, circular-array and linked queues |
+| Trees | BST insert, search and delete (all three cases); inorder, preorder, postorder and level order; height and size; trie; B-tree |
+| Heaps and hashing | Min-heap, hash table with chaining, hash table with linear probing |
+| Graphs | Adjacency matrix, BFS, DFS (recursive and with a stack), shortest path, Dijkstra, topological sort |
+| Find the bug | A broken reverse, off by one, a missing base case, integer division, a null node, comparing strings with `==` |
+
+Graphs are drawn as their adjacency list or matrix for now; a drawing of the graph itself is planned, as are heaps drawn as trees.
 
 ### Keyboard shortcuts
 Every command is also in the menus (File, Edit, Run, View, Help), with its shortcut beside it. The **?** button (or F1) shows the keys in the app. On a Mac, use Cmd where this table says Ctrl, and Option where it says Alt; the app shows the Mac names there.
@@ -143,6 +152,7 @@ Every command is also in the menus (File, Edit, Run, View, Help), with its short
 | Click a line number | Jump to the next time that line runs |
 | Ctrl+N, Ctrl+O, Ctrl+S | New, open, save (open and save use your system's own file dialog) |
 | Ctrl+Shift+S | Save as |
+| Ctrl+W | Close the program and go back to the welcome page |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | Ctrl+F, F3 | Find, find next |
 | Ctrl+/ | Comment or uncomment lines |
@@ -269,6 +279,7 @@ Safety:
 | `AppLog` | The log file: java.util.logging, 3 files of 1 MB, one line per message | `setup()`, `folder()`, `LineFormatter.format()` |
 | `SafeFiles` | Saving that never leaves a half-written file; reading that refuses huge or binary files; plain reasons for file errors | `write()`, `readCode()`, `describe()` |
 | `DraftStore` | The autosaved draft | `save()`, `load()`, `clear()` |
+| `ExampleCatalog` | The example programs and their groups, read from `examples/catalog.txt` | `groups()`, `all()`, `find()`, `source()` |
 | `UpdateCheck` | Asks GitHub, at most once a day, whether a newer Raphael exists | `newer()`, `isNewer()`, `currentVersion()` |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
@@ -307,7 +318,7 @@ Safety:
 | `Diff` | What changed between two scenes: added, removed, moved, changed | `between(before, after)` |
 | `Style` | Every colour, size, font and timing; swaps all the colours for dark mode; loads the bundled font | constants, `useTheme(dark)`, `setCodeSize()`, `textWidth()`, `pickMono()` |
 | **ui/** | | |
-| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
+| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `addExamples()`, `showWelcome()`, `pasteProgram()`, `closeProgram()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
 | `TraceModel` | Holds the run and the current step; tells listeners when it changes | `load()`, `setStep()`, `next()`, `stepOver()`, `stepOut()`, `jumpToLine()`, `getRunSize()` |
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks and undo | `showErrors()`, `stepChanged()`, `undo()`, `isDirty()`, `widthForLongestLine()`, `pasteHere()`, `ColoredView.drawUnselectedText()` |
@@ -321,6 +332,7 @@ Safety:
 | `Icons` | The toolbar's icons, drawn with Java 2D; each `Glyph` (an enum) draws itself | `of(glyph, role)`, `Glyph.draw()` |
 | `Dialogs` | One look for every question and message, with buttons in each system's order (Builder pattern) | `question()`, `tell()`, `Question.ask()`, `order()` |
 | `EmptyState` | The guide in the picture area before the first run: three steps and example chips | constructor |
+| `WelcomePage` | What shows when no program is open: start actions, recent files and the examples by group | `showRecent()`, `focusExamples()` |
 | `FileDrop` | Opens a `.java` file dropped onto the window; wraps the editor's own copy and paste | `canImport()`, `importData()` |
 | `WindowsFileDialog` | Inside WSL, shows Windows' own Open and Save dialog through PowerShell | `available()`, `choose()`, `script()` |
 | `Logo` | The app icon, drawn with Java 2D; the window and the installers use it | `draw(size)`, `windowIcons()` |
@@ -328,7 +340,7 @@ Safety:
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
 | `SettingsDialog` | The settings window: run limits, text size, and a System / Light / Dark theme switch | `ask()`, `read()` |
-| **resources/examples/** | The nine example programs in the examples menu | — |
+| **resources/examples/** | The 100 example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
 | **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
 
 ## OOP concepts
@@ -361,14 +373,15 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 
 ## Tests
 
-`mvn test` runs 236 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
-- `ExamplesTest`: every program in the examples menu runs to its expected end.
+`mvn test` runs 426 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
+- `ExamplesTest`: each of the 100 examples compiles, runs to its expected end and prints exactly what `src/test/resources/expected-output.txt` says; every example file is in the catalog once, with a title and a description.
 - `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
 - `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
 - `TracerTest`: a caught exception recorded with its throw and catch lines and the methods it left, and Java's own exceptions ignored; a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
-- `RememberingTest`: 38 programs recorded twice, once remembering unchanged objects and once reading everything, give the same steps; a 500-node list reads each node about once.
+- `HeapReaderTest`: a `char` with no glyph, like an empty `char[]` cell, is written as Java writes it (`'\0'`).
+- `RememberingTest`: every example and edge-case program recorded twice, once remembering unchanged objects and once reading everything, give the same steps; a 500-node list reads each node about once.
 - `SceneListTest`: a step's picture is the same however the user got there: forwards, backwards, or built again after the cache let it go.
 - `NamesTest`: short type names, including lambdas.
 - `ErrorExplainerTest`: a NullPointerException names the variable that was null; an index past the end says how many cells there are and mentions `<=`; the other common exceptions; which ones have advice.

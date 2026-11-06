@@ -1,0 +1,137 @@
+## Java
+
+# Classes and objects
+java/ClassesAndObjects | Classes and objects | A class is a blueprint; each new makes another object with its own fields.
+java/References | References | Two variables can point at the same object, and null points at none.
+java/Constructors | Constructors | Overloaded constructors, and this(…) calling another one.
+java/StaticMembers | Static and instance | A static field is shared by every object; an instance field belongs to one.
+java/PassByValue | Pass by value | Java copies arguments: a method can change an object, but not your variable.
+
+# OOP principles
+java/Encapsulation | Encapsulation | Private fields, changed only through methods that check the values.
+java/Inheritance | Inheritance | A subclass gets its parent's fields and methods, and calls super(…).
+java/Polymorphism | Polymorphism | One call, area(), runs a different method for each kind of shape.
+java/Abstraction | Abstract classes | An abstract method each subclass must write for itself.
+java/Interfaces | Interfaces | A class can promise several abilities by implementing interfaces.
+java/Composition | Composition | An object built from other objects: a car has an engine.
+java/Overloading | Overloading | Methods with one name and different parameters.
+java/Generics | Generics | One Box class that holds any type, checked by the compiler.
+java/BankAccounts | All together: bank accounts | An interface, an abstract class, inheritance, polymorphism and an exception.
+
+# Exceptions
+java/TryCatchFinally | try, catch, finally | The catch runs only on an error; finally runs either way.
+java/CustomException | Your own exception | A checked exception class of your own, thrown and caught.
+java/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a cause, and finally.
+
+# Strings and collections
+strings/Palindrome | Palindrome check | Two indexes walk in from both ends of a string.
+strings/LetterCount | Counting letters | A char is a number: c - 'a' picks the counter for each letter.
+strings/ArrayListBasics | ArrayList | A list that grows: add, get, set and remove.
+strings/HashMapCount | HashMap | Counting words with a map from each word to its count.
+strings/Enums | Enums | A fixed set of named values, used in a switch.
+
+## Algorithms
+
+# Sorting
+sorting/BubbleSort | Bubble sort | Swaps neighbours until the biggest values bubble to the end.
+sorting/SelectionSort | Selection sort | Finds the smallest value left and swaps it to the front.
+sorting/InsertionSort | Insertion sort | Slides each value left until it's in order.
+sorting/ShellSort | Shell sort | Insertion sort on values far apart, with the gap shrinking to 1.
+sorting/MergeSort | Merge sort | Sorts each half, then merges the two sorted halves.
+sorting/QuickSort | Quick sort | Splits around a pivot, then sorts each side.
+sorting/HeapSort | Heap sort | Builds a max-heap, then moves the biggest value to the end.
+sorting/CountingSort | Counting sort | Counts each value, then writes them out in order.
+sorting/RadixSort | Radix sort | Sorts by the last digit, then the tens, then the hundreds.
+sorting/BucketSort | Bucket sort | Drops values into buckets by range, sorts each, joins them.
+sorting/SortingObjects | Sorting objects | Comparable and a Comparator decide the order of objects.
+
+# Searching
+searching/LinearSearch | Linear search | Checks each value in turn.
+searching/BinarySearch | Binary search | Halves a sorted array at every step.
+searching/TwoPointers | Two pointers | Finds a pair with a given sum, from both ends of a sorted array.
+
+# Recursion and backtracking
+recursion/Factorial | Factorial | A method that calls itself, and the base case that stops it.
+recursion/Fibonacci | Fibonacci | Two recursive calls each time: watch the call stack grow.
+recursion/TowersOfHanoi | Towers of Hanoi | Moving n disks means moving n−1 disks twice.
+recursion/Permutations | Permutations | Swap, recurse, swap back: every order of A, B and C.
+recursion/NQueens | N queens | Backtracking: place a queen, and undo it when it leads nowhere.
+
+# Dynamic programming
+dp/FibDP | Fibonacci table | Each answer is built from the two before it.
+dp/GridPaths | Grid paths | Ways to cross a grid, from the cells above and to the left.
+dp/CoinChange | Coin change | The fewest coins for each amount up to the target.
+dp/Knapsack | 0/1 knapsack | The best value for each item count and capacity.
+dp/LongestCommonSubsequence | Longest common subsequence | A table comparing two strings letter by letter.
+
+## Data structures
+
+# Arrays
+arrays/ReverseArray | Reverse an array | Swaps from both ends towards the middle.
+arrays/RotateArray | Rotate an array | Shifts every value one place, k times.
+arrays/PrefixSum | Prefix sums | Each cell holds the sum so far, so any range sum is one subtraction.
+arrays/MaxSubarray | Largest sum (Kadane) | The best sum ending at each index, in one pass.
+arrays/MatrixTranspose | Transpose a matrix | Rows become columns in a 2D array.
+
+# Linked lists
+lists/Traverse | Walk and count | Follow next from the head until null.
+lists/InsertAtHead | Insert at the head | The new node points at the old head.
+lists/InsertAtTail | Insert at the tail | Walk to the last node and link the new one after it.
+lists/InsertAtPosition | Insert at a position | Stop one node before the spot, then relink.
+lists/InsertSorted | Insert in order | Keep the list sorted as values arrive.
+lists/DeleteHead | Delete the head | The head moves to the second node.
+lists/DeleteTail | Delete the tail | Stop at the second-to-last node and cut it off.
+lists/DeleteByValue | Delete by value | Find the node before it and skip over it.
+lists/DeleteAtPosition | Delete at a position | Count to the node before, then unlink.
+lists/ReverseList | Reverse (iterative) | Three pointers turn every arrow around.
+lists/ReverseRecursive | Reverse (recursive) | Reverse the rest, then hook this node on the end.
+lists/FindMiddle | Find the middle | A slow and a fast pointer: when fast ends, slow is halfway.
+lists/DetectCycle | Detect a cycle | Floyd's tortoise and hare meet inside a loop.
+lists/MergeSorted | Merge two sorted lists | Take the smaller front node each time.
+lists/RemoveDuplicates | Remove duplicates | In a sorted list, skip nodes equal to the one before.
+lists/DoublyLinkedList | Doubly linked list | Each node points both ways: insert and delete in the middle.
+lists/CircularList | Circular list | The last node points back to the first.
+
+# Stacks and queues
+stacks/ArrayStack | Stack (array) | Push and pop at the top of an array.
+stacks/LinkedStack | Stack (linked) | Push and pop at the head of a linked list.
+stacks/BalancedBrackets | Balanced brackets | A stack checks that every bracket closes in order.
+stacks/PostfixEval | Postfix expressions | A stack works out 2 3 4 * + without brackets.
+stacks/ArrayQueue | Queue (circular array) | Front and back indexes wrap around the array.
+stacks/LinkedQueue | Queue (linked) | Add at the tail, remove at the head.
+
+# Trees
+trees/BSTInsert | BST insert | Smaller values go left, bigger ones right.
+trees/BSTSearch | BST search | Each comparison rules out half the tree.
+trees/BSTDelete | BST delete | The three cases: a leaf, one child, two children.
+trees/Inorder | Inorder traversal | Left, node, right: a BST comes out sorted.
+trees/Preorder | Preorder traversal | Node, left, right: the order to copy a tree.
+trees/Postorder | Postorder traversal | Left, right, node: children before their parent.
+trees/LevelOrder | Level order (BFS) | A queue visits the tree level by level.
+trees/TreeHeight | Height and size | Two recursive counts over the whole tree.
+trees/Trie | Trie | Words stored letter by letter, sharing their prefixes.
+trees/BTreeInsert | B-tree insert | Full nodes split, and the middle key moves up.
+
+# Heaps and hashing
+hashing/MinHeap | Min-heap | Sift up on insert, sift down on removing the smallest.
+hashing/HashChaining | Hash table (chaining) | Each bucket holds a linked list of the keys that land there.
+hashing/LinearProbing | Hash table (probing) | A taken slot sends the key to the next free one.
+
+# Graphs
+graphs/AdjacencyMatrix | Adjacency matrix | An edge from i to j is a 1 in row i, column j.
+graphs/BFS | Breadth-first search | A queue visits neighbours before their neighbours.
+graphs/DFS | Depth-first search | Recursion goes as deep as it can, then backs up.
+graphs/DFSStack | DFS with a stack | The same search with an explicit stack instead of recursion.
+graphs/ShortestPath | Shortest path (BFS) | Distances from the start, one edge at a time.
+graphs/Dijkstra | Dijkstra | Shortest paths when edges have weights.
+graphs/TopologicalSort | Topological sort | An order where every task comes after the ones it needs.
+
+## Practice
+
+# Find the bug
+bugs/BuggyList | Broken reverse | A list reverse that loses most of the list.
+bugs/OffByOne | Off by one | A loop that goes one step too far.
+bugs/MissingBaseCase | Missing base case | A recursion that never stops.
+bugs/IntegerDivision | Integer division | An average that comes out wrong.
+bugs/NullNode | Null node | A list walk that crashes on the last node.
+bugs/StringEquals | Comparing strings | Two equal strings that == says are different.
