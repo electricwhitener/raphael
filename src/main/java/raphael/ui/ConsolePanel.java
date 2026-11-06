@@ -66,6 +66,10 @@ public class ConsolePanel extends JPanel implements TraceListener {
         return input.getText();
     }
 
+    public void setInput(String text) {
+        input.setText(text);
+    }
+
     public void showInput(boolean show) {
         inputArea.setVisible(show);
     }

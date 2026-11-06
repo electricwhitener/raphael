@@ -1,6 +1,7 @@
 package raphael.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -30,6 +31,15 @@ class MainWindowTest {
             }
         }
         window.dispose();
+    }
+
+    // The files panel is for programs that work with files, not every program that imports IOException.
+    @Test
+    void theFilesPanelIsForProgramsThatUseFiles() {
+        assertTrue(MainWindow.usesFiles("try (PrintWriter out = new PrintWriter(\"a.txt\")) {}"));
+        assertTrue(MainWindow.usesFiles("List<String> lines = Files.readAllLines(Path.of(\"a.txt\"));"));
+        assertFalse(MainWindow.usesFiles("import java.io.IOException;\nclass A { void f() throws IOException {} }"));
+        assertFalse(MainWindow.usesFiles("class Path { int length; }"));
     }
 
     // Save As offers the public class's name, which Java expects the file to have.

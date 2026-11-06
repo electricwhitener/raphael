@@ -23,6 +23,11 @@ java/TryCatchFinally | try, catch, finally | The catch runs only on an error; fi
 java/CustomException | Your own exception | A checked exception class of your own, thrown and caught.
 java/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a cause, and finally.
 
+# Files
+files/WriteAndRead | Write and read a file | try-with-resources, PrintWriter and BufferedReader, and when the file really fills up.
+files/MissingFile | A missing file | FileNotFoundException is checked: catch it, make the file, try again.
+files/AppendLog | Append to a file | FileWriter in append mode, flush(), and Files.readAllLines.
+
 # Strings and collections
 strings/Palindrome | Palindrome check | Two indexes walk in from both ends of a string.
 strings/LetterCount | Counting letters | A char is a number: c - 'a' picks the counter for each letter.

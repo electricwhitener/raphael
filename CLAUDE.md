@@ -176,7 +176,15 @@ Version 1 was the course project. Its plan (PLAN.md) and viva aids (DEMO.md, doc
   - `io/ExampleCatalog` reads `examples/catalog.txt` (`## section`, `# group`, `path | title | blurb`); 100 examples in folders (java, strings, sorting, searching, recursion, dp, arrays, lists, stacks, trees, hashing, graphs, bugs). `addExamples()` builds grouped menus for the toolbar and File → Open example.
   - `HeapReader.charLiteral`: `'\0'` instead of a box.
   - `ExamplesTest` runs every example against `src/test/resources/expected-output.txt`; `RememberingTest` covers every example (but MissingBaseCase). 426 tests, about 2.5 min.
-- **Next:** ROADMAP stage 8 (files and saving).
+- **Stage 8 (files and saving): done, 2026-11-06.**
+  - Recordings: every model class is `Serializable` (`serialVersionUID`, `NullValue.readResolve`); `io/RunFile` (header RAPH + version, gzip, `ObjectInputFilter` allowing only raphael.model, java.lang and java.util; written to a temp file, then `SafeFiles.replace`); `io/RunFileException`; File → Save recording…, opening `.raphael` from Open, drop, recent, the command line and `Desktop.setOpenFileHandler`; `--file-associations scripts/raphael-file.properties` (.raphael only).
+  - `io/StepLog`: File → Export steps as CSV (`PrintWriter`, CSV quoting, BOM).
+  - `JdiTracer` now starts the JVM with `ProcessBuilder` in a `trace/RunFolder` (a new temp folder per run, deleted after) and accepts it on a `ListeningConnector` (dt_socket, 127.0.0.1). `Snapshot.getFiles()` holds the folder's text files at each step (shared map when unchanged). `Tracer.setInputFiles`.
+  - `ui/FilesPanel` (tabs, amber dot and tint, add file…) shows when `MainWindow.usesFiles(code)`; `ui/FileKind` describes what a dialog shows (both dialogs). Recent files (8, Preferences `recentFiles`) in File → Open recent and on the welcome page.
+  - Examples: a Files group (WriteAndRead, MissingFile, AppendLog), 103 in all. `--self-test` also saves and reopens a recording.
+  - UI pass: the welcome page lays itself out in `doLayout()`; focus rings; `showWelcomeControls()` turns off the commands that need a program; the recording chip; copy fixes.
+  - 442 tests.
+- **Next:** ROADMAP stage 9 (more views, all synchronised).
 
 ## Who you're working with
 - A sophomore, solo. They know C, basic Java and basic Python. They're new to Linux, the terminal and build tools.

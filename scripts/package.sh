@@ -38,6 +38,7 @@ ARGS=(--type "$TYPE" --name Raphael --app-version "$VERSION"
       --input target/app --main-jar "raphael-$VERSION.jar" --main-class raphael.App
       --runtime-image target/runtime --icon "$ICON" --dest target/installer)
 if [ "$TYPE" != app-image ]; then
+    ARGS+=(--file-associations scripts/raphael-file.properties)   # double-clicking a .raphael file opens it
     case "$OS" in
         # The upgrade code stays the same forever, so a newer Raphael installs over an older one.
         windows) ARGS+=(--win-menu --win-shortcut --win-dir-chooser --win-upgrade-uuid c52d4d34-2fc5-408b-a6bf-95ecdfc13970) ;;

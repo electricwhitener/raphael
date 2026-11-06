@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
+import raphael.io.RunFile;
 import raphael.model.EndReason;
 import raphael.model.Trace;
 import raphael.render.SceneBuilder;
@@ -32,8 +33,16 @@ public final class SelfTest {
                 return fail("the example didn't record: " + trace.getEndMessage());
             }
             int pictures = new SceneBuilder(source).build(trace).size();
+            // A recording saved and opened again (serialization works in this copy's Java).
+            java.nio.file.Path saved = java.nio.file.Files.createTempFile("self-test", RunFile.EXTENSION);
+            RunFile.write(saved, new RunFile.Saved(source, "", trace));
+            int reopened = RunFile.read(saved).trace().size();
+            java.nio.file.Files.delete(saved);
+            if (reopened != trace.size()) {
+                return fail("a saved recording came back with " + reopened + " steps, not " + trace.size());
+            }
             System.out.println("self-test ok: Java " + System.getProperty("java.version") + ", "
-                    + trace.size() + " steps recorded, " + pictures + " pictures");
+                    + trace.size() + " steps recorded, " + pictures + " pictures, saved and reopened");
             return 0;
         } catch (Exception | LinkageError e) {
             return fail(e.toString());

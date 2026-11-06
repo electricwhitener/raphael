@@ -333,3 +333,13 @@ average: 1.0
 == says no
 matched with equals()
 
+## files/WriteAndRead
+best: Chen with 91
+
+## files/MissingFile
+attempt 1: no settings.txt, making one
+attempt 2: read 42
+
+## files/AppendLog
+3 lines, last: day 3: ran 6 km
+

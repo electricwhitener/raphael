@@ -41,6 +41,41 @@ class TracerTest {
         return lines;
     }
 
+    // The program runs in a folder of its own: a file it writes is recorded step by step, a file
+    // the user added is there for it to read, and the folder is gone after the run.
+    @Test
+    void theProgramsFilesAreRecordedInItsOwnFolder(@org.junit.jupiter.api.io.TempDir Path somewhere) throws Exception {
+        Path input = somewhere.resolve("names.txt");
+        java.nio.file.Files.writeString(input, "Ada\nAlan\n");
+        tracer.setInputFiles(List.of(input));
+        try {
+            Trace trace = run("""
+                    import java.io.*;
+                    import java.nio.file.*;
+                    public class Copy {
+                        public static void main(String[] args) throws IOException {
+                            System.out.println(Path.of("").toAbsolutePath());
+                            java.util.List<String> names = Files.readAllLines(Path.of("names.txt"));
+                            try (PrintWriter out = new PrintWriter("out.txt")) {
+                                out.println(names.size());
+                            }
+                            int done = 1;
+                        }
+                    }
+                    """, "");
+            assertEquals(EndReason.FINISHED, trace.getEndReason());
+            Path folder = Path.of(trace.getOutput().lines().findFirst().orElseThrow());
+            assertTrue(folder.getFileName().toString().startsWith("raphael-run-"), "runs in its own folder: " + folder);
+            assertFalse(java.nio.file.Files.exists(folder), "the folder is deleted after the run");
+            assertEquals(Map.of("names.txt", "Ada\nAlan\n"), trace.get(0).getFiles());
+            assertEquals("2\n", trace.get(trace.size() - 1).getFiles().get("out.txt").replace("\r\n", "\n"));
+            // Steps where nothing changed share one map.
+            assertSame(trace.get(0).getFiles(), trace.get(1).getFiles());
+        } finally {
+            tracer.setInputFiles(List.of());
+        }
+    }
+
     @Test
     void followsALoopLineByLine() throws Exception {
         Trace trace = run("""

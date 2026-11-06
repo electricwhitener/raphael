@@ -3,7 +3,9 @@ package raphael.model;
 // One object in the program's memory, identified by the id the debugger gives it.
 // OOP: abstraction. This is an abstract class, so you can't make a plain HeapObject, only an
 // ObjectNode or an ArrayNode. Encapsulation: private final fields, read through getters.
-public abstract class HeapObject {
+public abstract class HeapObject implements java.io.Serializable {
+
+    private static final long serialVersionUID = 1L; // the file format's version for this class; see RunFile
 
     private final long id;
     private final String typeName;

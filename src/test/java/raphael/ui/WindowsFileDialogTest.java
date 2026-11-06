@@ -15,7 +15,7 @@ class WindowsFileDialogTest {
 
     @Test
     void saveSuggestsANameAndAddsDotJava() {
-        String script = WindowsFileDialog.script(true, "C:\\Users\\ada\\Desktop", "BSTInsert.java");
+        String script = WindowsFileDialog.script(true, FileKind.CODE, "C:\\Users\\ada\\Desktop", "BSTInsert.java");
         assertTrue(script.contains("SaveFileDialog"));
         assertTrue(script.contains("$d.FileName = 'BSTInsert.java'"));
         assertTrue(script.contains("$d.DefaultExt = 'java'"));
@@ -24,9 +24,9 @@ class WindowsFileDialogTest {
 
     @Test
     void openShowsJavaFilesAndCanStartAnywhere() {
-        String script = WindowsFileDialog.script(false, null, "ignored.java");
+        String script = WindowsFileDialog.script(false, FileKind.CODE_OR_RUN, null, "ignored.java");
         assertTrue(script.contains("OpenFileDialog"));
-        assertTrue(script.contains("*.java"));
+        assertTrue(script.contains("$d.Filter = 'Java code and Raphael recordings (*.java;*.raphael)|*.java;*.raphael|All files (*.*)|*.*'"));
         assertFalse(script.contains("InitialDirectory"), "no folder: Windows picks its usual one");
     }
 }

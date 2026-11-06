@@ -215,13 +215,13 @@ Built in this stage (all seven), plus Windows' own file dialog inside WSL (`Wind
 - **Compile-error hints:** for `';' expected`, `cannot find symbol`, `incompatible types`, `missing return statement` and `unreachable statement`.
 - **Examples:** `Exceptions` (a custom exception, finally, rethrow).
 
-### 8. Files and saving
+### 8. Files and saving (done, 2026-11-06)
 - **Save and open recorded runs** (`.raphael`):
   - serialization with a `serialVersionUID`
   - streams stacked as `ObjectOutputStream(GZIPOutputStream(BufferedOutputStream(FileOutputStream)))` (the Decorator pattern)
   - a magic header and a version number
   - bad files throw `RunFileException`
-- **File associations:** double-clicking `.java` or `.raphael` opens Raphael.
+- **File associations:** double-clicking `.raphael` opens Raphael (`.java` isn't claimed, so it stays with the user's IDE).
 - Recent files, and a CSV step log (`PrintWriter`).
 - **Files used by student programs:**
   - the program runs in a temp working folder, and a files tab lets the user add input files

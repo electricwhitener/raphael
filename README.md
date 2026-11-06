@@ -98,10 +98,13 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
 
 ## Using Raphael
-1. **Choose a program.** Raphael opens on a welcome page: start a **New program**, **Open** a `.java` file with your system's own file dialog, **Paste** one from the clipboard (Ctrl+V), drop one onto the window, or pick one of the 100 examples. **Examples** in the toolbar has them too. Ctrl+W closes the program and goes back to the welcome page.
+1. **Choose a program.** Raphael opens on a welcome page: start a **New program**, **Open** a `.java` file with your system's own file dialog, **Paste** one from the clipboard (Ctrl+V), drop one onto the window, or pick one of the 103 examples. **Examples** in the toolbar has them too. Ctrl+W closes the program and goes back to the welcome page.
 2. **Give it input, if it needs some.** A **stdin** box appears when the code mentions `System.in`. Type the input there before running.
 3. **Press Run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the picture counts the steps and the button becomes **Stop**; stopping keeps the steps recorded so far.
 4. **Move through the steps** with the keys below. Any manual move pauses playing. Click in the editor to type again.
+5. **Keep it.** File → **Save recording** saves the program and every step in a `.raphael` file, which opens and plays without running anything (double-click it once Raphael is installed). File → **Export steps as CSV** writes each step as a row for a spreadsheet: its line, its variables and what it printed.
+
+**Programs that use files.** Each run happens in a new folder of its own, so a program that writes `out.txt` writes it there. The **files** panel (shown when the code uses files) shows each file at every step, with what just changed in amber. To give a program a file to read, use **add input file…** in that panel: it's copied into the folder before each run.
 
 **If something goes wrong.**
 - Unsaved code is autosaved every 5 seconds. If Raphael doesn't close normally, it offers the code back the next time it starts.
@@ -116,13 +119,14 @@ Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `e
 The log never leaves your computer.
 
 ### Examples
-100 short programs, each with a few comments, grouped the way a course meets them. The welcome page lists them with a line on what each shows. `src/main/resources/examples/catalog.txt` is the list.
+103 short programs, each with a few comments, grouped the way a course meets them. The welcome page lists them with a line on what each shows. `src/main/resources/examples/catalog.txt` is the list.
 
 | Group | Examples |
 |---|---|
 | Classes and objects | Classes and objects, references, constructors, static and instance, pass by value |
 | OOP principles | Encapsulation, inheritance, polymorphism, abstract classes, interfaces, composition, overloading, generics, bank accounts (all of them together) |
 | Exceptions | try/catch/finally, your own checked exception, exceptions in a stack |
+| Files | Write and read a file (and when it really fills up), a missing file, appending |
 | Strings and collections | Palindrome, counting letters, `ArrayList`, `HashMap`, enums |
 | Sorting | Bubble, selection, insertion, Shell, merge, quick, heap, counting, radix and bucket sort; sorting objects with `Comparable` and a `Comparator` |
 | Searching | Linear search, binary search, two pointers |
@@ -279,6 +283,9 @@ Safety:
 | `AppLog` | The log file: java.util.logging, 3 files of 1 MB, one line per message | `setup()`, `folder()`, `LineFormatter.format()` |
 | `SafeFiles` | Saving that never leaves a half-written file; reading that refuses huge or binary files; plain reasons for file errors | `write()`, `readCode()`, `describe()` |
 | `DraftStore` | The autosaved draft | `save()`, `load()`, `clear()` |
+| `RunFile` | Saves and opens recordings (`.raphael`): serialization through stacked streams, a header, and a filter that reads only Raphael's own classes | `write()`, `read()` |
+| `RunFileException` | A recording that can't be opened, with the reason in plain words | — |
+| `StepLog` | The run as a CSV table, one row per step | `write()`, `row()` |
 | `ExampleCatalog` | The example programs and their groups, read from `examples/catalog.txt` | `groups()`, `all()`, `find()`, `source()` |
 | `UpdateCheck` | Asks GitHub, at most once a day, whether a newer Raphael exists | `newer()`, `isNewer()`, `currentVersion()` |
 | **model/** | | |
@@ -318,7 +325,7 @@ Safety:
 | `Diff` | What changed between two scenes: added, removed, moved, changed | `between(before, after)` |
 | `Style` | Every colour, size, font and timing; swaps all the colours for dark mode; loads the bundled font | constants, `useTheme(dark)`, `setCodeSize()`, `textWidth()`, `pickMono()` |
 | **ui/** | | |
-| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `addExamples()`, `showWelcome()`, `pasteProgram()`, `closeProgram()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
+| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `addExamples()`, `showWelcome()`, `pasteProgram()`, `closeProgram()`, `openRecording()`, `saveRecording()`, `exportSteps()`, `remember()`, `addInputFile()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
 | `TraceModel` | Holds the run and the current step; tells listeners when it changes | `load()`, `setStep()`, `next()`, `stepOver()`, `stepOut()`, `jumpToLine()`, `getRunSize()` |
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks and undo | `showErrors()`, `stepChanged()`, `undo()`, `isDirty()`, `widthForLongestLine()`, `pasteHere()`, `ColoredView.drawUnselectedText()` |
@@ -332,6 +339,8 @@ Safety:
 | `Icons` | The toolbar's icons, drawn with Java 2D; each `Glyph` (an enum) draws itself | `of(glyph, role)`, `Glyph.draw()` |
 | `Dialogs` | One look for every question and message, with buttons in each system's order (Builder pattern) | `question()`, `tell()`, `Question.ask()`, `order()` |
 | `EmptyState` | The guide in the picture area before the first run: three steps and example chips | constructor |
+| `FilesPanel` | The files in the program's folder at the current step, with changes in amber; input files to add | `stepChanged()`, `setInputs()` |
+| `FileKind` | What a file dialog shows: Java code, recordings, CSV or any file | `accepts()`, `windowsFilter()` |
 | `WelcomePage` | What shows when no program is open: start actions, recent files and the examples by group | `showRecent()`, `focusExamples()` |
 | `FileDrop` | Opens a `.java` file dropped onto the window; wraps the editor's own copy and paste | `canImport()`, `importData()` |
 | `WindowsFileDialog` | Inside WSL, shows Windows' own Open and Save dialog through PowerShell | `available()`, `choose()`, `script()` |
@@ -355,10 +364,12 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
 | Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
 | Composition | `MainWindow` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
-| Inheritance | the eleven `ErrorExplainer` subclasses extend it; `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException` and `CompileSetupException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
+| Inheritance | the eleven `ErrorExplainer` subclasses extend it; `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException`, `CompileSetupException` and `RunFileException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `ErrorExplainer.describe()`, `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |
 | Polymorphism (overloading) | `App.setupLook()` / `setupLook(dark)`; the two `ObjectNode` constructors; `Tracer.trace(program)` / `trace(program, input)`; `Scene.add(SceneNode)` / `add(SceneEdge)` / `add(Move)`; the two `SceneNode` and `SceneBuilder` constructors; `Shortcuts.key(spec)` / `key(spec, mac)` | Same name, different parameters. |
+| Serialization | `RunFile` writes a whole `Trace` (every model class is `Serializable`, with a `serialVersionUID`); `NullValue.readResolve()` keeps the singleton single; an `ObjectInputFilter` reads only Raphael's own classes | Objects become bytes in a file and come back, with shared objects still shared. |
+| File handling | `RunFile` (stacked streams), `StepLog` (`PrintWriter`), `RunFolder` (a temp folder, `Files.list`/`walk`, `AutoCloseable`), `SafeFiles` (write to a temp file, then move it into place) | Streams, readers and writers, closed by try-with-resources. |
 | Exception handling | Raphael shows the student's own exceptions: caught ones too, with the jump from `throw` to `catch` and an explanation (`JdiTracer.caught()`, `ErrorExplainer`); a family of checked exceptions under the abstract `RaphaelException`, each keeping its cause; `MainWindow.runFailed()` tells expected problems from bugs; `ErrorReporter` catches what nothing else did, on every thread; `SafeFiles.describe()` turns `NoSuchFileException` and `AccessDeniedException` into plain reasons; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
@@ -367,19 +378,21 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
 | Design pattern: Builder | `Dialogs.question(...).body(...).buttons(...).ask()` | Builds a dialog step by step, so its many optional parts don't need one method with a dozen parameters. |
-| Design pattern: Decorator | `FileDrop` wraps the editor's `TransferHandler` | Adds dropping files, and passes copy and paste on to the handler it wraps. |
+| Design pattern: Decorator | `FileDrop` wraps the editor's `TransferHandler`; `RunFile` stacks `ObjectOutputStream` → `GZIPOutputStream` → `BufferedOutputStream` | Each wrapper adds one job and passes the rest on to what it wraps. |
 | Design pattern: Factory | `StructureRenderer.forStructure()` | One method decides which renderer class to create, so no one else has to. |
 | Packages | `compile`, `trace`, `model`, `detect`, `explain`, `render`, `ui`, `io` | One package per job. |
 
 ## Tests
 
-`mvn test` runs 426 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
-- `ExamplesTest`: each of the 100 examples compiles, runs to its expected end and prints exactly what `src/test/resources/expected-output.txt` says; every example file is in the catalog once, with a title and a description.
+`mvn test` runs 441 JUnit 5 tests, on Windows, macOS and Linux in CI. JaCoCo measures coverage while they run (`target/site/jacoco/index.html`): 78.5% of lines and 70.5% of branches.
+- `ExamplesTest`: each of the 103 examples compiles, runs to its expected end and prints exactly what `src/test/resources/expected-output.txt` says; every example file is in the catalog once, with a title and a description.
 - `EdgeCaseTest`: 32 tricky programs in `src/test/resources/edge/`, each saying at its top what must happen (threads, `System.exit`, unicode, cycles, running out of memory or input, a recursion with no base case, Windows line endings…). Every step of each is also laid out and drawn.
 - `SoakTest` (not part of a normal `mvn test`): every example run 100 times, and every run must take the same steps. It runs every night in CI, or with `mvn test -Dgroups=soak -DexcludedGroups=`.
 - `SourceCompilerTest`: good code compiles; a missing `;` is reported on the right line; the class with `main` is found; a missing `main` is reported; a `package` line, `public final` and other public types, several public classes, "class" in a comment or string, and invisible web characters all work; line numbers stay right.
-- `TracerTest`: a caught exception recorded with its throw and catch lines and the methods it left, and Java's own exceptions ignored; a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
+- `TracerTest`: the program runs in its own folder, which is gone afterwards, with the input files in it and every file it writes recorded step by step; a caught exception recorded with its throw and catch lines and the methods it left, and Java's own exceptions ignored; a loop's exact line path, `while(true)` stopping at 2,000 steps, an uncaught exception as the last step, `Scanner` input, a captured linked list, recursion with no base case (named in the message), pressing stop, Java's collections, an enum's name, a student's own collection class, no program left running after Raphael quits or is killed, and the step limit from settings.
 - `HeapObjectTest`: the text in the variables panel, with no ids: arrays, grids, references, and objects that weren't captured.
+- `RunFileTest`: a saved recording comes back the same, with shared objects still shared and null still the one `NullValue`; another kind of file, a file cut short, a newer format and a file holding any other class are refused with a clear message.
+- `StepLogTest`: CSV quoting, and one row per step with its variables.
 - `HeapReaderTest`: a `char` with no glyph, like an empty `char[]` cell, is written as Java writes it (`'\0'`).
 - `RememberingTest`: every example and edge-case program recorded twice, once remembering unchanged objects and once reading everything, give the same steps; a 500-node list reads each node about once.
 - `SceneListTest`: a step's picture is the same however the user got there: forwards, backwards, or built again after the cache let it go.

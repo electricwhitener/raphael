@@ -8,6 +8,8 @@ import java.util.List;
 // OOP: inheritance (extends HeapObject) and polymorphism (overrides describe).
 public class ArrayNode extends HeapObject {
 
+    private static final long serialVersionUID = 1L; // the file format's version for this class; see RunFile
+
     private final String elementType; // e.g. "int", or "int[]" for a 2D array
     private final List<Value> elements;
     private final int length;

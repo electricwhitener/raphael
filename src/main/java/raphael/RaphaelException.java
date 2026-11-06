@@ -11,7 +11,8 @@ package raphael;
 //   Exception
 //    └ RaphaelException (abstract)
 //       ├ CompileSetupException   compile/  can't get ready to compile
-//       └ TraceException          trace/    can't run or record the program
+//       ├ TraceException          trace/    can't run or record the program
+//       └ RunFileException        io/       a saved run that can't be read
 public abstract class RaphaelException extends Exception {
 
     protected RaphaelException(String message) {

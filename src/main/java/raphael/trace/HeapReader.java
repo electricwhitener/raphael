@@ -104,6 +104,12 @@ public class HeapReader {
 
     // thrown: an exception the program caught just before this step, or null.
     public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception, ThrownException thrown) {
+        return capture(thread, outputLength, exception, thrown, java.util.Map.of());
+    }
+
+    // files: the files in the program's folder at this step (see RunFolder).
+    public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception, ThrownException thrown,
+                            java.util.Map<String, String> files) {
         this.thread = thread;
         Deque<ObjectReference> toVisit = new ArrayDeque<>();
         List<FrameSnapshot> frames = readFrames(thread, toVisit);
@@ -116,7 +122,7 @@ public class HeapReader {
                 heap.put(object.uniqueID(), readObject(object, toVisit));
             }
         }
-        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception, thrown);
+        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception, thrown, files);
     }
 
     private List<FrameSnapshot> readFrames(ThreadReference thread, Deque<ObjectReference> toVisit) {

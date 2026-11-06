@@ -20,6 +20,10 @@ public interface Tracer {
     default void setLimits(RunLimits limits) {
     }
 
+    // Files to put in the program's folder before each run, for it to read. By default there are none.
+    default void setInputFiles(java.util.List<java.nio.file.Path> files) {
+    }
+
     // How many steps the run in progress has recorded so far (0 if none is running).
     default int stepsSoFar() {
         return 0;

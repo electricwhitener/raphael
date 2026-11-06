@@ -22,8 +22,6 @@ import java.util.List;
 // becomes an IOException, so the caller can fall back to Java's own dialog.
 public final class WindowsFileDialog {
 
-    private static final String JAVA_FILTER = "Java files (*.java)|*.java|All files (*.*)|*.*";
-
     private WindowsFileDialog() {
     }
 
@@ -33,8 +31,9 @@ public final class WindowsFileDialog {
     }
 
     // Shows the dialog over owner. The file chosen (as a Linux path), or null if cancelled.
-    public static File choose(Component owner, boolean forSaving, File folder, String suggestedName) throws IOException {
-        String script = script(forSaving, windowsPath(folder), suggestedName);
+    public static File choose(Component owner, boolean forSaving, FileKind kind, File folder, String suggestedName)
+            throws IOException {
+        String script = script(forSaving, kind, windowsPath(folder), suggestedName);
         String[] answer = new String[1];
         IOException[] failure = new IOException[1];
         SecondaryLoop waiting = Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
@@ -64,7 +63,7 @@ public final class WindowsFileDialog {
 
     // The PowerShell that shows the dialog and prints the chosen file. A form that stays on top
     // owns the dialog, so it opens in front of Raphael's window.
-    static String script(boolean forSaving, String folder, String suggestedName) {
+    static String script(boolean forSaving, FileKind kind, String folder, String suggestedName) {
         StringBuilder ps = new StringBuilder()
                 .append("$ProgressPreference = 'SilentlyContinue'\n")
                 .append("[Console]::OutputEncoding = [Text.Encoding]::UTF8\n")
@@ -74,7 +73,6 @@ public final class WindowsFileDialog {
         if (forSaving) {
             ps.append("$d = New-Object Windows.Forms.SaveFileDialog\n")
                     .append("$d.Title = 'Save As'\n")
-                    .append("$d.DefaultExt = 'java'\n")
                     .append("$d.AddExtension = $true\n")
                     .append("$d.OverwritePrompt = $true\n")
                     .append("$d.FileName = ").append(quote(suggestedName)).append('\n');
@@ -82,7 +80,10 @@ public final class WindowsFileDialog {
             ps.append("$d = New-Object Windows.Forms.OpenFileDialog\n")
                     .append("$d.Title = 'Open'\n");
         }
-        ps.append("$d.Filter = ").append(quote(JAVA_FILTER)).append('\n');
+        if (forSaving && kind.mainEnding() != null) {
+            ps.append("$d.DefaultExt = ").append(quote(kind.mainEnding())).append('\n');
+        }
+        ps.append("$d.Filter = ").append(quote(kind.windowsFilter())).append('\n');
         if (folder != null) {
             ps.append("$d.InitialDirectory = ").append(quote(folder)).append('\n');
         }

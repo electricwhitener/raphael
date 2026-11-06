@@ -40,6 +40,11 @@ public class App {
             ErrorReporter.setOwner(window);
             window.setVisible(true);
             window.offerDraft();
+            // A file to open: given by the system when a .raphael file is double-clicked, or
+            // typed after the command (Raphael scores.java).
+            if (args.length > 0 && !args[0].startsWith("-")) {
+                window.openFromSystem(new java.io.File(args[0]));
+            }
         });
     }
 

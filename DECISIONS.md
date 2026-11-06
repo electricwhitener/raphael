@@ -708,3 +708,35 @@ The list lives in a text file, `examples/catalog.txt`, with one line per example
 Every example was run and its output checked by hand. Its picture was drawn at two points in the run and looked at. That found a few things to change. Graphs built from an `edges` array spent most of the picture on that array, so they now call `addEdge()`. Coin change used `Integer.MAX_VALUE` as "not possible yet", which made every cell so wide the table was tiny. Fibonacci and Overloading had nothing to draw, so Fibonacci counts its calls in an array (which also shows the wasted work) and Overloading stores which method ran. It also found a bug in Raphael: an empty `char[]` cell held `'\0'`, which has no glyph, so it was drawn as a box. It's now written `'\0'`, as in Java code.
 
 Graphs are still drawn as their adjacency list or matrix, and heaps as arrays. Drawing them as graphs and trees is stage 10.
+
+## Stage 8: Files and saving
+
+- How is a recording saved?
+
+With Java's own serialization. Every model class is `Serializable`, so `ObjectOutputStream` writes the whole run. Objects that several steps share are written once and come back shared, so a 163-step run is 3 KB. The bytes go through stacked streams: objects, then gzip, then a small header ("RAPH" and a version), then a buffer, then the file. The header lets a wrong file, a damaged file and a newer format each get their own plain message, through a new `RunFileException`. A file is written under a temporary name and moved into place, so a crash never leaves half of one.
+
+My own file format would have survived changes to the classes better, but it would have been far more code, and serialization is the Java concept the teacher asked about. When the classes change, the version number goes up and an old file says so.
+
+- Isn't reading serialized files from other people dangerous?
+
+It is: Java would build whatever classes the file names, and some of the JDK's classes do harm while being built. So reading uses an `ObjectInputFilter` that allows only Raphael's model classes and the `java.lang` and `java.util` types they use, with limits on size and depth. A test makes a file holding another class and checks that it's refused.
+
+- Where does the student's program run now?
+
+In a new folder for each run, deleted afterwards. Before, it ran wherever Raphael was started, so a program writing a file wrote into Raphael's install folder or the home folder. JDI's ready-made launcher can't choose a folder, so Raphael starts the JVM itself with `ProcessBuilder` and the program connects back to a port Raphael listens on, on this computer only. That also took away the quoting of folder names with spaces, because each part of the command is its own argument now. Recording takes the same time as before.
+
+- How are the program's files shown?
+
+At each step Raphael reads the small text files in that folder (up to 20 files of 20 KB). The files panel shows them with tabs, an amber dot on a file that just changed, and its new text tinted amber. It appears only when the code uses files, like the stdin box for `System.in`. The first example shows the lesson about buffers: a `PrintWriter`'s file stays empty until it's closed. The user can add input files, which are copied into the folder before each run.
+
+- Why does double-clicking only open .raphael files?
+
+Claiming `.java` would take those files away from the user's IDE on Windows. A `.java` file still opens from Raphael, by dropping it on the window, or with "Open with".
+
+- What else?
+
+A CSV export of the steps (one row per step, a column per variable), which is the hand trace from class done by Raphael. The welcome page and the File menu show the last eight files opened or saved. The open dialog shows `.java` and `.raphael` together, through a small `FileKind` record that both the Windows dialog and Java's own use. `--self-test` now also saves and reopens a recording, so every installer is checked for it in CI.
+
+- What changed in the UI pass?
+
+The designer found that the welcome page fell apart at the smallest window size. It asked its parent for its own size, which a layout manager must never be asked to do, so it now places itself in `doLayout()`. Tabbing through the page showed no focus at all, so the buttons now use the toolbar's style, which draws FlatLaf's focus ring, and the lists draw a 2 px ring of their own. On the welcome page, everything that needs a program is switched off (Save, Undo, Find, the Run menu, the speed box), and so are its keys: before, Ctrl+S opened a Save dialog for an empty program. The status bar no longer lowercases the example's description, which had turned FileWriter into "filewriter". A recording opened from a file keeps a "saved recording · 163 steps" chip in the status bar until another run replaces it. The files panel opens only for code that names one of Java's file classes, not for every program that imports `IOException`, and its links look like links.

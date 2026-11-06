@@ -64,7 +64,10 @@ import raphael.io.AppFolders;
 import raphael.io.AppLog;
 import raphael.io.DraftStore;
 import raphael.io.ExampleCatalog;
+import raphael.io.RunFile;
+import raphael.io.RunFileException;
 import raphael.io.SafeFiles;
+import raphael.io.StepLog;
 import raphael.io.UpdateCheck;
 import raphael.model.EndReason;
 import raphael.model.Snapshot;
@@ -132,6 +135,9 @@ public class MainWindow extends JFrame {
     private final CallStackPanel callStack = new CallStackPanel();
     private final LocalsPanel locals = new LocalsPanel();
     private final ConsolePanel console = new ConsolePanel();
+    private final FilesPanel files = new FilesPanel(this::addInputFile, this::clearInputFiles);
+    private final List<File> inputFiles = new java.util.ArrayList<>(); // copied into the program's folder for each run
+    private RunFile.Saved lastRun; // the run on show, with the code and input it ran with, for Save recording
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final Legend legend = new Legend();
@@ -152,6 +158,15 @@ public class MainWindow extends JFrame {
     private Color saidColor = Style.INK;
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
+    private final JMenu recentMenu = new JMenu("Open recent");
+    private JMenuItem saveRecordingItem;
+    private JButton saveButton;
+    // The commands that need a program open; they're off on the welcome page, keys included.
+    private final List<JMenuItem> needsProgram = new java.util.ArrayList<>();
+    // "saved recording · 163 steps" in the status bar, while a recording read from a file is on show.
+    private final JLabel recordingChip = EmptyState.keyChip("");
+    private Trace fromFile;
+    private JMenuItem exportStepsItem;
     // The middle of the window: the welcome page when no program is open, otherwise the editor,
     // the picture and the panels below them.
     private final JPanel workArea = new JPanel(new CardLayout());
@@ -190,6 +205,7 @@ public class MainWindow extends JFrame {
         model.addListener(callStack);
         model.addListener(locals);
         model.addListener(console);
+        model.addListener(files);
 
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -225,6 +241,7 @@ public class MainWindow extends JFrame {
         pictureArea.add(guide, "empty");
         model.addListener(m -> showPictureOrGuide());
         model.addListener(m -> showCaughtOrSaid());
+        model.addListener(m -> showLegendIfRoom()); // the recording chip goes once another run replaces it
         // Drop a .java file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
         visual.setTransferHandler(new FileDrop(null, this::openDropped));
@@ -238,6 +255,8 @@ public class MainWindow extends JFrame {
         addBottomPanel(bottom, callStack, 0.25);
         addBottomPanel(bottom, locals, 0.45); // values can be long, so variables get the most room
         addBottomPanel(bottom, console, 0.30);
+        addBottomPanel(bottom, files, 0.30);
+        files.setVisible(false);
         bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
         bottom.setMinimumSize(new Dimension(0, COLLAPSED_ROW_H));
         middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
@@ -258,6 +277,7 @@ public class MainWindow extends JFrame {
                 }));
         welcome.setBorder(Section.hairline(1, 0, 0, 0));
         welcome.setTransferHandler(new FileDrop(null, this::openDropped));
+        welcome.showRecent(recentFiles());
         workArea.add(welcome, "welcome");
         workArea.add(middle, "work");
         add(workArea, BorderLayout.CENTER);
@@ -274,6 +294,9 @@ public class MainWindow extends JFrame {
         updateNotice.setRequestFocusEnabled(false);
         updateNotice.setVisible(false);
         updateNotice.addActionListener(e -> openReleasePage(App.SETTINGS.get("newerPage", UpdateCheck.RELEASES_PAGE)));
+        recordingChip.setToolTipText("These steps were recorded earlier. Press Run to record this code again.");
+        recordingChip.setVisible(false);
+        statusRight.add(recordingChip);
         statusRight.add(updateNotice);
         statusRight.add(legend);
         statusBar.add(statusRight, BorderLayout.EAST);
@@ -295,6 +318,7 @@ public class MainWindow extends JFrame {
         code.setOnCodeChanged(() -> {
             updateTitle();
             console.showInput(code.getCode().contains("System.in"));
+            showFilesIfUsed();
             if (model.getTrace() == null) { // an old run or compile error no longer applies
                 visual.clearMessage();
                 console.showMessage("");
@@ -346,6 +370,13 @@ public class MainWindow extends JFrame {
                     response.cancelQuit();
                 }
             });
+        }
+        if (desktop.isSupported(Desktop.Action.APP_OPEN_FILE)) { // a Mac passes double-clicked files here, not to main
+            desktop.setOpenFileHandler(event -> SwingUtilities.invokeLater(() -> {
+                for (File file : event.getFiles()) {
+                    openFromSystem(file);
+                }
+            }));
         }
         if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
             desktop.setPreferencesHandler(event -> showSettings());
@@ -564,6 +595,7 @@ public class MainWindow extends JFrame {
         JButton open = ControlsBar.button(Icons.Glyph.OPEN, "Open", "Open a .java file  (Ctrl+O)");
         open.addActionListener(e -> open());
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
+        saveButton = save;
         save.addActionListener(e -> save());
         JButton examples = new JButton("Examples", Icons.of(Icons.Glyph.CHEVRON_DOWN, Icons.Role.TOOL));
         examplesButton = examples;
@@ -693,10 +725,35 @@ public class MainWindow extends JFrame {
         JMenu examples = menu("Open example", KeyEvent.VK_E);
         addExamples(examples);
         file.add(examples);
+        file.add(recentMenu);
         file.add(item("Close", "control W", this::closeProgram));
+        needsProgram.add(file.getItem(file.getItemCount() - 1));
         file.addSeparator();
         file.add(item("Save", "control S", this::save));
         file.add(item("Save As…", "shift control S", this::saveAs));
+        file.addSeparator();
+        saveRecordingItem = item("Save recording…", null, this::saveRecording);
+        saveRecordingItem.setToolTipText("Save the program and every recorded step in a .raphael file, to play again without running");
+        file.add(saveRecordingItem);
+        exportStepsItem = item("Export steps as CSV…", null, this::exportSteps);
+        exportStepsItem.setToolTipText("Each step as a row of a table: its line, its variables, what it printed");
+        file.add(exportStepsItem);
+        file.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                saveRecordingItem.setEnabled(!welcomeShown && lastRun != null && model.getTrace() == lastRun.trace());
+                exportStepsItem.setEnabled(!welcomeShown && model.getTrace() != null);
+                fillRecent();
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
         if (!Shortcuts.isMac()) {
             file.addSeparator();
             file.add(item(Shortcuts.label("Settings…  (Ctrl+,)"), null, this::showSettings));
@@ -742,6 +799,19 @@ public class MainWindow extends JFrame {
         }
         for (JMenu menu : new JMenu[] {file, edit, run, view, help}) {
             bar.add(menu);
+        }
+        for (int i = 0; i < file.getItemCount(); i++) {
+            JMenuItem item = file.getItem(i);
+            if (item != null && (item.getText().equals("Save") || item.getText().equals("Save As…"))) {
+                needsProgram.add(item);
+            }
+        }
+        for (JMenu menu : new JMenu[] {edit, run}) {
+            for (int i = 0; i < menu.getItemCount(); i++) {
+                if (menu.getItem(i) != null) { // null: a separator
+                    needsProgram.add(menu.getItem(i));
+                }
+            }
         }
         return bar;
     }
@@ -960,12 +1030,12 @@ public class MainWindow extends JFrame {
             protected RunResult doInBackground() throws Exception {
                 CompileResult program = new SourceCompiler().compile(source);
                 if (!program.success()) {
-                    return new RunResult(program, null, null);
+                    return new RunResult(program, null, null, source, input);
                 }
                 Trace trace = tracer.trace(program, input);
                 recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
-                return new RunResult(program, trace, new SceneBuilder(source).build(trace));
+                return new RunResult(program, trace, new SceneBuilder(source).build(trace), source, input);
             }
 
             @Override
@@ -1065,6 +1135,7 @@ public class MainWindow extends JFrame {
         }
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
+        lastRun = new RunFile.Saved(result.source(), result.input(), trace);
         model.load(trace, result.scenes(), result.scenes().getRunSize());
         visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         controls.play();
@@ -1110,7 +1181,8 @@ public class MainWindow extends JFrame {
 
     // The key to the picture, unless there's an error to show or the window is too narrow for both.
     private void showLegendIfRoom() {
-        legend.setVisible(legendWanted && getWidth() >= 1100);
+        legend.setVisible(legendWanted && !welcomeShown && getWidth() >= 1100);
+        recordingChip.setVisible(fromFile != null && model.getTrace() == fromFile && getWidth() >= 1100);
     }
 
     // Where to put the divider so the longest line isn't cut off, keeping room for the picture.
@@ -1296,7 +1368,7 @@ public class MainWindow extends JFrame {
         top.setDividerLocation(dividerForCode());
         currentFile = null;
         setDocument(example.name() + ".java (example)");
-        say(example.title() + ": " + example.blurb().toLowerCase(Locale.ROOT).replaceAll("\\.$", "")
+        say(example.title() + ": " + example.blurb().replaceAll("\\.$", "")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
@@ -1365,6 +1437,7 @@ public class MainWindow extends JFrame {
         ((CardLayout) workArea.getLayout()).show(workArea, "welcome");
         welcomeShown = true;
         runButton.setEnabled(false); // there's nothing to run
+        showWelcomeControls(true);
         setDocument("Welcome");
         say("start a new program, open a file, or pick an example", Style.INK_SOFT);
         welcome.focusExamples();
@@ -1374,9 +1447,20 @@ public class MainWindow extends JFrame {
         if (welcomeShown) {
             welcomeShown = false;
             runButton.setEnabled(true);
+            showWelcomeControls(false);
             ((CardLayout) workArea.getLayout()).show(workArea, "work");
             fitBottomRow();
         }
+    }
+
+    // The welcome page is a mode: everything that needs a program is off, and so is the picture's key.
+    private void showWelcomeControls(boolean welcome) {
+        for (JMenuItem item : needsProgram) {
+            item.setEnabled(!welcome);
+        }
+        saveButton.setEnabled(!welcome);
+        controls.setSpeedEnabled(!welcome);
+        showLegendIfRoom();
     }
 
     // File → Close: back to the welcome page, after asking about unsaved code.
@@ -1408,16 +1492,26 @@ public class MainWindow extends JFrame {
         if (!okToReplaceCode()) { // ask before the file dialog, not after picking a file
             return;
         }
-        File file = chooseFile(false);
+        File file = chooseFile(false, FileKind.CODE_OR_RUN, null);
         if (file != null) {
             openFile(file);
         }
     }
 
+    // A file the system asked Raphael to open: double-clicked, or named on the command line.
+    public void openFromSystem(File file) {
+        if (!file.isFile()) {
+            Dialogs.tell(this, "Couldn't open " + file.getName(), "There's no file at " + file.getPath() + ".");
+            return;
+        }
+        openDropped(file);
+    }
+
     // A file dropped onto the window.
     private void openDropped(File file) {
-        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".java")) {
-            Dialogs.tell(this, "Raphael opens .java files", file.getName() + " isn't one. Drop a file whose name ends in .java.");
+        if (!FileKind.CODE_OR_RUN.accepts(file.getName())) {
+            Dialogs.tell(this, "Raphael opens .java and .raphael files", file.getName()
+                    + " isn't one. Drop Java code (a name ending in .java) or a saved recording (.raphael).");
             return;
         }
         if (okToReplaceCode()) {
@@ -1426,6 +1520,10 @@ public class MainWindow extends JFrame {
     }
 
     private void openFile(File file) {
+        if (FileKind.RUN.accepts(file.getName())) {
+            openRecording(file);
+            return;
+        }
         try {
             String text = SafeFiles.readCode(file.toPath());
             showWork();
@@ -1433,11 +1531,167 @@ public class MainWindow extends JFrame {
             top.setDividerLocation(dividerForCode());
             currentFile = file;
             setDocument(file.getName());
+            remember(file);
             say("opened " + file.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
             LOG.log(Level.INFO, "Couldn't open " + file, e);
             Dialogs.tell(this, "Couldn't open " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
         }
+    }
+
+    // A recording saved earlier: its code goes in the editor and its steps play, with nothing run.
+    private void openRecording(File file) {
+        RunFile.Saved saved;
+        try {
+            saved = RunFile.read(file.toPath());
+        } catch (RunFileException e) {
+            LOG.log(Level.INFO, "Couldn't open the recording " + file, e);
+            Dialogs.tell(this, "Couldn't open " + file.getName(), e.getMessage());
+            return;
+        } catch (IOException e) {
+            LOG.log(Level.INFO, "Couldn't open the recording " + file, e);
+            Dialogs.tell(this, "Couldn't open " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
+            return;
+        }
+        showWork();
+        code.setCode(saved.source());
+        console.setInput(saved.input());
+        top.setDividerLocation(dividerForCode());
+        currentFile = null; // Ctrl+S saves the code as a .java file, never over the recording
+        setDocument(file.getName());
+        remember(file);
+        SceneList scenes = new SceneBuilder(saved.source()).build(saved.trace());
+        lastRun = saved;
+        fromFile = saved.trace();
+        recordingChip.setText("saved recording · " + saved.trace().size() + " steps");
+        model.load(saved.trace(), scenes, scenes.getRunSize());
+        visual.requestFocusInWindow();
+        say("[recording] " + saved.trace().size() + " steps, played back without running · space plays", Style.INK);
+    }
+
+    // File → Save recording: the program, its input and every step, in a .raphael file.
+    private void saveRecording() {
+        if (lastRun == null || model.getTrace() != lastRun.trace()) {
+            say("run the program first, then save its recording", Style.INK_SOFT);
+            return;
+        }
+        String name = (currentFile != null ? currentFile.getName() : suggestedName(lastRun.source())).replaceAll("\\.java$", "");
+        File file = chooseFile(true, FileKind.RUN, name + RunFile.EXTENSION);
+        if (file == null) {
+            return;
+        }
+        try {
+            RunFile.write(file.toPath(), lastRun);
+            remember(file);
+            say("[saved] " + file.getName() + " · " + lastRun.trace().size() + " steps", Style.INK_SOFT);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Couldn't save the recording " + file, e);
+            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
+        }
+    }
+
+    // File → Export steps as CSV: the run as a table for a spreadsheet.
+    private void exportSteps() {
+        Trace trace = model.getTrace();
+        if (trace == null) {
+            return;
+        }
+        String name = (currentFile != null ? currentFile.getName() : suggestedName(code.getCode())).replaceAll("\\.java$", "");
+        File file = chooseFile(true, FileKind.CSV, name + "-steps.csv");
+        if (file == null) {
+            return;
+        }
+        try {
+            StepLog.write(file.toPath(), trace);
+            say("[saved] " + file.getName() + " · " + trace.size() + " rows", Style.INK_SOFT);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Couldn't write " + file, e);
+            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
+        }
+    }
+
+    // Recent files: the last few opened or saved, newest first, kept in Preferences.
+    private static final int RECENT_MAX = 8;
+
+    private List<File> recentFiles() {
+        List<File> recent = new java.util.ArrayList<>();
+        for (String path : App.SETTINGS.get("recentFiles", "").split("\n")) {
+            if (!path.isBlank() && new File(path).isFile()) { // a file moved or deleted since drops out
+                recent.add(new File(path));
+            }
+        }
+        return recent;
+    }
+
+    private void remember(File file) {
+        List<File> recent = recentFiles();
+        recent.removeIf(f -> f.getAbsolutePath().equals(file.getAbsolutePath()));
+        recent.add(0, file.getAbsoluteFile());
+        if (recent.size() > RECENT_MAX) {
+            recent = recent.subList(0, RECENT_MAX);
+        }
+        App.SETTINGS.put("recentFiles", String.join("\n", recent.stream().map(File::getPath).toList()));
+        welcome.showRecent(recent);
+    }
+
+    // File → Open recent, filled each time the File menu opens.
+    private void fillRecent() {
+        recentMenu.removeAll();
+        List<File> recent = recentFiles();
+        for (File file : recent) {
+            JMenuItem item = item(file.getName(), null, () -> {
+                if (okToReplaceCode()) {
+                    openFile(file);
+                }
+            });
+            item.setToolTipText(file.getPath());
+            recentMenu.add(item);
+        }
+        recentMenu.setEnabled(!recent.isEmpty());
+    }
+
+    // The Files panel shows when the program could use files, or the user has given it some.
+    private void showFilesIfUsed() {
+        String text = code.getCode();
+        boolean used = !inputFiles.isEmpty() || usesFiles(text);
+        if (files.isVisible() != used) {
+            files.setVisible(used);
+            files.getParent().revalidate();
+        }
+    }
+
+    // Whether code works with files: it names one of Java's file classes. Not just "java.io", which
+    // an import of IOException alone would match, or "Path", which a graph program may call a class.
+    static boolean usesFiles(String code) {
+        return code.matches("(?s).*\\b(FileReader|FileWriter|FileInputStream|FileOutputStream|PrintWriter|Files|Paths|File)\\b.*");
+    }
+
+    private void addInputFile() {
+        File file = chooseFile(false, FileKind.ANY, null);
+        if (file == null) {
+            return;
+        }
+        if (file.length() > 10_000_000) {
+            Dialogs.tell(this, file.getName() + " is too big", "Input files can be up to 10 MB.");
+            return;
+        }
+        inputFiles.removeIf(f -> f.getName().equals(file.getName())); // one file per name in the folder
+        inputFiles.add(file);
+        useInputFiles();
+    }
+
+    private void clearInputFiles() {
+        inputFiles.clear();
+        useInputFiles();
+    }
+
+    private void useInputFiles() {
+        List<java.nio.file.Path> paths = inputFiles.stream().map(File::toPath).toList();
+        tracer.setInputFiles(paths);
+        files.setInputs(paths);
+        showFilesIfUsed();
+        say(inputFiles.isEmpty() ? "no input files" : "input files: " + String.join(", ", inputFiles.stream().map(File::getName).toList())
+                + Shortcuts.label(" · copied in before each run (ctrl+enter)"), Style.INK_SOFT);
     }
 
     // Saves to the current file, or asks where if there isn't one yet. True if it was saved.
@@ -1446,7 +1700,7 @@ public class MainWindow extends JFrame {
     }
 
     private boolean saveAs() {
-        File file = chooseFile(true);
+        File file = chooseFile(true, FileKind.CODE, currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
         return file != null && saveTo(file);
     }
 
@@ -1456,6 +1710,7 @@ public class MainWindow extends JFrame {
             currentFile = file;
             code.markSaved();
             setDocument(file.getName());
+            remember(file);
             say("[saved] " + file.getName(), Style.INK_SOFT);
             return true;
         } catch (IOException e) {
@@ -1470,11 +1725,11 @@ public class MainWindow extends JFrame {
     // The computer's own Open or Save dialog: Explorer's on Windows, Finder's on macOS, GTK's on
     // Linux, and Windows' own inside WSL (see WindowsFileDialog). Swing's JFileChooser looks and
     // works like none of them. Null if cancelled.
-    private File chooseFile(boolean forSaving) {
+    // kind: the files to show; suggested: the name a save starts with.
+    private File chooseFile(boolean forSaving, FileKind kind, String suggested) {
         if (WindowsFileDialog.available()) { // inside WSL: Windows' own dialog, as a browser would show
             try {
-                File chosen = WindowsFileDialog.choose(this, forSaving, new File(lastFolder()),
-                        currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
+                File chosen = WindowsFileDialog.choose(this, forSaving, kind, new File(lastFolder()), suggested);
                 if (chosen != null && chosen.getParent() != null) {
                     App.SETTINGS.put("lastFolder", chosen.getParent());
                 }
@@ -1486,11 +1741,11 @@ public class MainWindow extends JFrame {
         FileDialog dialog = new FileDialog(this, forSaving ? "Save As" : "Open", forSaving ? FileDialog.SAVE : FileDialog.LOAD);
         dialog.setDirectory(lastFolder());
         if (forSaving) {
-            dialog.setFile(currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
+            dialog.setFile(suggested);
         } else {
-            dialog.setFilenameFilter((folder, name) -> name.toLowerCase(Locale.ROOT).endsWith(".java"));
+            dialog.setFilenameFilter((folder, name) -> kind.accepts(name));
             if (Shortcuts.isWindows()) {
-                dialog.setFile("*.java"); // Windows ignores the filter above; this pattern filters instead
+                dialog.setFile(kind.patterns()); // Windows ignores the filter above; this pattern filters instead
             }
         }
         dialog.setVisible(true); // waits until the user picks or cancels
@@ -1499,10 +1754,10 @@ public class MainWindow extends JFrame {
             return null;
         }
         App.SETTINGS.put("lastFolder", dialog.getDirectory());
-        if (forSaving && name.indexOf('.') < 0) {
-            name += ".java";
+        if (forSaving && kind.mainEnding() != null && !kind.accepts(name)) {
+            name += "." + kind.mainEnding();
             File file = new File(dialog.getDirectory(), name);
-            // The dialog only asked about replacing the name that was typed, without ".java".
+            // The dialog only asked about replacing the name that was typed, without the ending.
             if (file.exists() && !"Replace".equals(Dialogs.question(this, "Replace " + file.getName() + "?")
                     .body("A file with that name is already in this folder. Replacing it overwrites what's in it.")
                     .buttons("Cancel", null, "Replace").ask())) {
@@ -1569,6 +1824,6 @@ public class MainWindow extends JFrame {
     }
 
     // What one press of run produced: the compile result, and the trace and pictures if it ran.
-    private record RunResult(CompileResult program, Trace trace, SceneList scenes) {
+    private record RunResult(CompileResult program, Trace trace, SceneList scenes, String source, String input) {
     }
 }
