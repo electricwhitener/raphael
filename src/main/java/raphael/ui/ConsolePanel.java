@@ -76,6 +76,7 @@ public class ConsolePanel extends JPanel implements TraceListener {
 
     public void showMessage(String message) {
         output.setText(message);
+        output.setCaretPosition(0); // the first error, not the end of the list
     }
 
     @Override

@@ -165,7 +165,7 @@ The status bar has a key to these: a swatch for each mark, from "Next" to "Reads
   - The cells the next line will **write** get a blue tint and a solid outline, and the ones it will **read** a paler tint and a dashed one.
 - **Grey marks the line that just ran.** The picture shows the state after that line.
 - **Amber means "one step just changed this".** A changed value flashes and keeps a soft glow. Changed variables and newly printed output are tinted amber too. A jump with the slider or Home and End doesn't flash.
-- **Red means an error.** A red banner says what happened: a compile error, a crash or missing input. The line turns red. An index past the end of an array shows as a red ghost cell, if the run really crashes there.
+- **Red means an error.** A red card says what happened and what it means: a compile error, a crash or missing input. A caught exception gets an outlined card instead, because the program handled it. The line turns red. An index past the end of an array shows as a red ghost cell, if the run really crashes there.
 - **A caught exception** shows on the first line of its `catch`: an outlined card in the picture says what was thrown and where, a red bracket in the line numbers runs from the `throw` to the `catch`, and the call stack lists the methods it left.
 - **Faded means not in use.** An index just outside an array (-1, or the length, often why a loop stops) gets a faded ghost cell. A B-tree key past `n` is faded. An object still being constructed is a faded `new` cell.
 - **A dot in a slot is a reference**, and its arrow shows what it points at. A slash means `null`.
@@ -313,7 +313,7 @@ Safety:
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks and undo | `showErrors()`, `stepChanged()`, `undo()`, `isDirty()`, `widthForLongestLine()`, `pasteHere()`, `ColoredView.drawUnselectedText()` |
 | `EditorKeys` | What a code editor does for you: keeps the indentation, moves lines with Tab, comments with Ctrl+/, finds text | `install()`, `newLine()`, `indent()`, `toggleComment()`, `find()` |
 | `JavaTokens` | Splits code into the pieces that get a colour: comments, strings, numbers, keywords, types, methods | `of(code)` |
-| `VisualPanel` | Shows the animated picture: centred and scaled to fit, plus zoom | `stepChanged()`, `paintComponent()`, `fitToRun()`, `zoomBy()`, `setMessage()`, `banner()` |
+| `VisualPanel` | Shows the animated picture: centred and scaled to fit, plus zoom | `stepChanged()`, `paintComponent()`, `fitToRun()`, `zoomBy()`, `setMessage()`, `cardFor()`, `note()` |
 | `ControlsBar` | Step buttons, skip call and finish call, slider, play and speed; a step made by hand pauses playing | `stepChanged()`, `togglePlay()`, `play()` |
 | `CallStackPanel`, `LocalsPanel`, `ConsolePanel` | Running methods; variables (changed ones tinted); output (new output tinted) and a stdin box that appears when needed | `stepChanged()`, `showInput()` |
 | `Section` | Terminal-style section headers and thin borders | `header()`, `wrap()`, `hairline()` |

@@ -65,6 +65,8 @@ import raphael.io.DraftStore;
 import raphael.io.SafeFiles;
 import raphael.io.UpdateCheck;
 import raphael.model.EndReason;
+import raphael.model.Snapshot;
+import raphael.model.ThrownException;
 import raphael.model.Trace;
 import raphael.render.SceneList;
 import raphael.render.SceneBuilder;
@@ -142,6 +144,8 @@ public class MainWindow extends JFrame {
     private EmptyState emptyState;
     private JSplitPane middle; // the work area above, the call stack, variables and console below
     private boolean legendWanted = true; // false while the status bar shows an error
+    private String said = "";             // the status bar's last message, shown again after a caught step
+    private Color saidColor = Style.INK;
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
     private final Tracer tracer = new JdiTracer();
@@ -211,6 +215,7 @@ public class MainWindow extends JFrame {
         guide.setBorder(BorderFactory.createEmptyBorder());
         pictureArea.add(guide, "empty");
         model.addListener(m -> showPictureOrGuide());
+        model.addListener(m -> showCaughtOrSaid());
         // Drop a .java file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
         visual.setTransferHandler(new FileDrop(null, this::openDropped));
@@ -272,7 +277,7 @@ public class MainWindow extends JFrame {
             updateTitle();
             console.showInput(code.getCode().contains("System.in"));
             if (model.getTrace() == null) { // an old run or compile error no longer applies
-                visual.setMessage(null, null);
+                visual.clearMessage();
                 console.showMessage("");
                 showPictureOrGuide();
                 if (!running) {
@@ -346,6 +351,7 @@ public class MainWindow extends JFrame {
     // Switches between light and dark, and remembers the choice for next time.
     private void toggleTheme() {
         boolean wasError = status.getForeground().equals(Style.ERROR);
+        boolean saidError = Style.ERROR.equals(saidColor);
         App.setupLook(!Style.isDark());
         App.SETTINGS.putBoolean("dark", Style.isDark());
         FlatLaf.updateUI(); // tells every Swing component to pick up the new look
@@ -353,6 +359,7 @@ public class MainWindow extends JFrame {
         code.restoreMarks();
         applyTheme();
         status.setForeground(wasError ? Style.ERROR : Style.INK);
+        saidColor = saidError ? Style.ERROR : Style.INK;
     }
 
     // The colours Swing doesn't choose by itself. Most of the window is walked in one go.
@@ -916,7 +923,7 @@ public class MainWindow extends JFrame {
         progress.start();
         code.setEditable(false);
         model.clear();
-        visual.setMessage(null, null);
+        visual.clearMessage();
         say("compiling…", Style.INK_SOFT);
 
         // An anonymous subclass of SwingWorker: doInBackground() runs on a worker thread,
@@ -990,11 +997,12 @@ public class MainWindow extends JFrame {
     private void runFailed(Throwable cause) {
         if (cause instanceof RaphaelException) {
             LOG.log(Level.WARNING, "A run couldn't start", cause);
-            visual.setMessage("couldn't run:", cause.getMessage());
+            visual.setMessage("couldn't run", cause.getMessage(), null, null);
             say("[error] " + cause.getMessage(), Style.ERROR);
         } else {
             ErrorReporter.report(cause);
-            visual.setMessage("something went wrong inside raphael:", cause.toString());
+            visual.setMessage("something went wrong inside raphael", cause.toString(), null,
+                    "The details are in its log (Help → Open log folder).");
             say("[error] something went wrong inside raphael · the details are in its log", Style.ERROR);
         }
     }
@@ -1011,13 +1019,20 @@ public class MainWindow extends JFrame {
                 if (hint != null) {
                     text.append("  hint: ").append(hint).append("\n");
                 }
+                text.append("\n");
             }
             console.showMessage(text.toString());
             CompileResult.CompileError first = errors.get(0);
             String where = (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
             String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the console)" : "";
-            String hint = CompileHints.hint(first.message());
-            visual.setMessage("didn't compile:", where + more + (hint == null ? "" : "\n\n" + hint));
+            String next = null;
+            if (errors.size() > 1) {
+                CompileResult.CompileError second = errors.get(1);
+                next = "next: " + (second.line() > 0 ? "line " + second.line() + " · " : "")
+                        + second.message().lines().findFirst().orElse("") + " (see the console)";
+            }
+            visual.setMessage("didn't compile · " + errors.size() + (errors.size() == 1 ? " error" : " errors"),
+                    where.lines().findFirst().orElse(""), next, CompileHints.hint(first.message()));
             say("[error] " + where.lines().findFirst().orElse("") + more, Style.ERROR);
             return;
         }
@@ -1030,7 +1045,8 @@ public class MainWindow extends JFrame {
         if (trace.getEndReason() == EndReason.FINISHED) {
             say("[ok] " + steps, Style.INK);
         } else if (trace.getEndMessage().startsWith("NoSuchElementException") && code.getCode().contains("System.in")) {
-            visual.setMessage("needs input:", "this program reads input. type it into the stdin box below, then press run.");
+            visual.setMessage("needs input", "This program reads input, and it ran out.", null,
+                    "Type its input into the stdin box below, then press run.");
             say("[needs input] type it into the stdin box, then run again", Style.ERROR);
         } else {
             say("[" + trace.getEndReason().name().toLowerCase(Locale.ROOT).replace('_', ' ') + "] " + trace.getEndMessage()
@@ -1039,10 +1055,30 @@ public class MainWindow extends JFrame {
     }
 
     private void say(String message, Color color) {
+        said = message;
+        saidColor = color;
         legendWanted = !Style.ERROR.equals(color); // during an error, the message outranks the key
         showLegendIfRoom();
+        showStatus(message, color);
+    }
+
+    // On the step where a caught exception lands in its catch, the status bar says so; on the
+    // other steps it goes back to what was last said (the run's summary, usually).
+    private void showCaughtOrSaid() {
+        Snapshot snapshot = model.getSnapshot();
+        ThrownException thrown = snapshot == null ? null : snapshot.getThrown();
+        if (thrown == null) {
+            showStatus(said, saidColor);
+        } else {
+            showStatus("[caught] " + thrown.type() + (thrown.throwLine() > 0 ? " · thrown at line " + thrown.throwLine() + "," : " ·")
+                    + " caught at line " + thrown.catchLine(), Style.INK);
+        }
+    }
+
+    private void showStatus(String message, Color color) {
         status.setText(message);
         status.setForeground(color);
+        status.getAccessibleContext().setAccessibleDescription(message);
     }
 
     // The key to the picture, unless there's an error to show or the window is too narrow for both.

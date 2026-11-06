@@ -270,12 +270,15 @@ public class CodePanel extends JPanel implements TraceListener {
         if (previous > 0 && previous != current) {
             stepMarks.add(mark(previous, () -> Style.PREVIOUS_LINE));
         }
+        ThrownException thrown = now == null ? null : now.getThrown();
         if (current > 0) {
             stepMarks.add(mark(current, crashed ? () -> Style.ERROR_LINE : () -> Style.CURRENT_LINE));
+            if (thrown != null && thrown.throwLine() > 0) {
+                scrollToLine(thrown.throwLine()); // then the catch: both stay in view if they fit
+            }
             scrollToLine(current);
         }
         lineNumbers.show(current, previous, crashed, model.hasSteps());
-        ThrownException thrown = now == null ? null : now.getThrown();
         lineNumbers.showThrow(thrown == null ? -1 : thrown.throwLine(), thrown == null ? -1 : thrown.catchLine());
     }
 
@@ -433,7 +436,7 @@ public class CodePanel extends JPanel implements TraceListener {
     // one at the line that just ran. Clicking a number jumps to the next time that line runs.
     private static class LineNumbers extends JComponent {
 
-        private static final int BRACKET = 8; // room at the left for a caught exception's jump
+        private static final int BRACKET = 12; // room at the left for a caught exception's jump
 
         private final JTextArea editor;
         private int current = -1;
@@ -493,6 +496,20 @@ public class CodePanel extends JPanel implements TraceListener {
             repaint();
         }
 
+        // The bracket's edge triangle stays at the edge while the code scrolls, so a scroll repaints
+        // the whole gutter, not just the part that came into view.
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            if (getParent() instanceof javax.swing.JViewport) {
+                ((javax.swing.JViewport) getParent()).addChangeListener(e -> {
+                    if (throwLine > 0) {
+                        repaint();
+                    }
+                });
+            }
+        }
+
         @Override
         public Dimension getPreferredSize() {
             int digits = Math.max(2, String.valueOf(editor.getLineCount()).length());
@@ -542,23 +559,49 @@ public class CodePanel extends JPanel implements TraceListener {
         }
 
         // A caught exception's jump, in the gutter's left edge: a dot at the line that threw it,
-        // a red line along the edge, and an arrowhead at the line of its catch.
+        // a red stem along the edge, and an arrowhead at the line of its catch. When the throw
+        // line is scrolled out of view, the stem stops at the edge, with a small triangle pointing
+        // towards it and its line number.
         private void throwBracket(Graphics2D g) throws BadLocationException {
+            Rectangle visible = getVisibleRect();
             double from = middleOf(throwLine);
             double to = middleOf(catchLine);
+            double top = visible.y + 6;
+            double bottom = visible.y + visible.height - 6;
+            boolean above = from < top;
+            boolean below = from > bottom;
+            double start = above ? top + 12 : below ? bottom - 12 : from;
             g.setColor(Style.ERROR);
-            g.setStroke(new java.awt.BasicStroke(1.5f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+            g.setStroke(new java.awt.BasicStroke(2f, java.awt.BasicStroke.CAP_BUTT, java.awt.BasicStroke.JOIN_MITER));
             Path2D line = new Path2D.Double();
-            line.moveTo(BRACKET - 1, from);
-            line.lineTo(3, from);
-            line.lineTo(3, to);
-            line.lineTo(BRACKET - 2, to);
+            if (above || below) {
+                line.moveTo(4, start);
+            } else {
+                line.moveTo(8, start);
+                line.lineTo(4, start);
+            }
+            line.lineTo(4, to);
+            line.lineTo(8, to);
             g.draw(line);
-            g.fill(new java.awt.geom.Ellipse2D.Double(BRACKET - 3, from - 2, 4, 4));
+            if (above || below) {
+                // A triangle at the edge, pointing to the throw line, and its number.
+                double tip = above ? top : bottom;
+                double base = above ? top + 6 : bottom - 6;
+                Path2D pointer = new Path2D.Double();
+                pointer.moveTo(4, tip);
+                pointer.lineTo(0, base);
+                pointer.lineTo(8, base);
+                pointer.closePath();
+                g.fill(pointer);
+                g.setFont(Style.CAPTION_FONT);
+                g.drawString(String.valueOf(throwLine), 10, (float) (above ? top + 9 : bottom - 1));
+            } else {
+                g.fill(new java.awt.geom.Ellipse2D.Double(6, from - 2.5, 5, 5));
+            }
             Path2D head = new Path2D.Double();
-            head.moveTo(BRACKET, to);
-            head.lineTo(BRACKET - 4, to - 3);
-            head.lineTo(BRACKET - 4, to + 3);
+            head.moveTo(BRACKET + 2, to);
+            head.lineTo(8, to - 4);
+            head.lineTo(8, to + 4);
             head.closePath();
             g.fill(head);
         }
