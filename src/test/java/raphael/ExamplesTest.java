@@ -64,7 +64,7 @@ class ExamplesTest {
             String path = null;
             StringBuilder text = new StringBuilder();
             for (String line : new String(ExamplesTest.class.getResourceAsStream("/expected-output.txt").readAllBytes(),
-                    StandardCharsets.UTF_8).split("\n", -1)) {
+                    StandardCharsets.UTF_8).replace("\r\n", "\n").split("\n", -1)) { // Windows' line endings, after git
                 if (line.startsWith("## ")) {
                     if (path != null) {
                         expected.put(path, text.toString().trim());
