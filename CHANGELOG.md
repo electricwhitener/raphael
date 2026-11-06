@@ -4,6 +4,12 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**Files and saving**
+- Save a recording (File → Save recording): the program and every step in a `.raphael` file that opens and plays without running anything. Installing Raphael makes double-clicking one open it.
+- Export the steps as a CSV table for a spreadsheet: each step's line, variables and output.
+- File → Open recent, and recent files on the welcome page.
+- Programs that use files run in a folder of their own. A new files panel shows each file at every step, with changes in amber, and can add input files for the program to read. Three new examples: writing and reading a file, a missing file, appending.
+
 **A welcome page and 100 examples**
 - Raphael opens on a welcome page, like an IDE's: start a new program, open a file, paste one, or pick an example. File → Close (Ctrl+W) goes back to it.
 - 100 short, commented examples in 15 groups: classes and objects, the OOP principles, exceptions, strings and collections, ten sorting algorithms, searching, recursion and backtracking, dynamic programming, arrays, every common linked-list operation, stacks and queues, trees and their traversals, heaps and hashing, graphs (BFS, DFS, shortest paths, Dijkstra, topological sort), and programs with a bug to find.

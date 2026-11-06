@@ -121,7 +121,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
     }
 
     // The keys, in a small rounded box like a key cap. Also used by the keyboard shortcuts list.
-    static JComponent keyChip(String keys) {
+    static JLabel keyChip(String keys) {
         JLabel chip = new JLabel(keys) {
             @Override
             protected void paintComponent(Graphics graphics) {

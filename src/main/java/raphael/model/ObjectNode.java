@@ -8,6 +8,8 @@ import java.util.Map;
 // OOP: inheritance (extends HeapObject), polymorphism (overrides describe), and an overloaded constructor.
 public class ObjectNode extends HeapObject {
 
+    private static final long serialVersionUID = 1L; // the file format's version for this class; see RunFile
+
     private final Map<String, Value> fields;      // field name → value, in declared order
     private final Map<String, String> fieldTypes; // field name → declared type, e.g. "Main$Node"
     private final String parentName; // the student's class this one extends, or null

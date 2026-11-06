@@ -16,8 +16,7 @@ import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.connect.Connector;
 import com.sun.jdi.connect.IllegalConnectorArgumentsException;
-import com.sun.jdi.connect.LaunchingConnector;
-import com.sun.jdi.connect.VMStartException;
+import com.sun.jdi.connect.ListeningConnector;
 import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
@@ -35,6 +34,7 @@ import com.sun.jdi.request.ModificationWatchpointRequest;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +68,8 @@ public class JdiTracer implements Tracer {
 
     private volatile Run current; // the run in progress, or null; volatile because the window's thread reads it
     private volatile RunLimits limits = RunLimits.DEFAULTS;
+    private volatile List<Path> inputFiles = List.of();
+    private static final int START_TIMEOUT_MS = 20_000; // a program that hasn't connected by then never will
     boolean remember = true; // tests turn this off to check that remembering objects changes nothing
     int lastObjectsRead;     // how many objects the last run read from the program, for tests
 
@@ -83,18 +85,27 @@ public class JdiTracer implements Tracer {
     @Override
     public Trace trace(CompileResult program, String input) throws TraceException {
         RunLimits runLimits = limits; // one set of limits for the whole run, even if settings change meanwhile
-        VirtualMachine vm = launch(program, runLimits);
-        Process process = vm.process();
-        current = new Run(vm, runLimits, remember);
-        try {
-            return current.record(input);
-        } finally {
-            lastObjectsRead = current.reader.objectsRead();
-            current = null;
-            if (process.isAlive()) { // whatever happened above, the program never runs on
-                process.destroyForcibly();
+        try (RunFolder folder = new RunFolder(inputFiles)) {
+            Launched launched = launch(program, runLimits, folder.path());
+            current = new Run(launched.vm(), launched.process(), folder, runLimits, remember);
+            try {
+                return current.record(input);
+            } finally {
+                lastObjectsRead = current.reader.objectsRead();
+                current = null;
+                if (launched.process().isAlive()) { // whatever happened above, the program never runs on
+                    launched.process().destroyForcibly();
+                    launched.process().onExit().join(); // let go of its folder before the folder is deleted
+                }
             }
+        } catch (IOException e) {
+            throw new TraceException("Could not make a folder for the program to run in: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void setInputFiles(List<Path> files) {
+        inputFiles = List.copyOf(files);
     }
 
     @Override
@@ -126,28 +137,64 @@ public class JdiTracer implements Tracer {
         return false;
     }
 
-    // Starts the program in a new JVM, paused before it does anything.
-    private VirtualMachine launch(CompileResult program, RunLimits runLimits) throws TraceException {
-        LaunchingConnector connector = Bootstrap.virtualMachineManager().defaultConnector();
-        Map<String, Connector.Argument> arguments = connector.defaultArguments();
-        arguments.get("main").setValue(program.mainClass());
-        // The quotes keep a folder name with spaces in one piece; UTF-8 keeps printed text intact;
-        // -Xmx caps the memory the program may use; the agent ends it if Raphael is killed.
-        String options = "-cp \"" + program.classDir() + "\""
-                + " -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
-                + " -Xmx" + runLimits.memoryMb() + "m";
-        try {
-            options += " -javaagent:\"" + ParentWatch.jar() + "\"";
-        } catch (IOException e) {
-            // Without the agent the program still runs; only the "Raphael was killed" safety net is missing.
-            LOG.log(Level.WARNING, "Couldn't write the ParentWatch agent jar", e);
+    // A program started for one run: the debugger's connection to it, and its process.
+    private record Launched(VirtualMachine vm, Process process) {
+    }
+
+    // Starts the program in a new JVM, paused before it does anything, in its own folder, so the
+    // files it writes land there. JDI's ready-made launcher can't choose the folder, so Raphael
+    // starts the JVM itself (ProcessBuilder) and tells it to connect back to a port Raphael is
+    // listening on, on this computer only (JDI's listening connector).
+    private Launched launch(CompileResult program, RunLimits runLimits, Path folder) throws TraceException {
+        ListeningConnector connector = null;
+        for (ListeningConnector listening : Bootstrap.virtualMachineManager().listeningConnectors()) {
+            if (listening.transport().name().equals("dt_socket")) {
+                connector = listening;
+            }
         }
-        arguments.get("options").setValue(options);
+        if (connector == null) {
+            throw new TraceException("Could not start the program: this Java has no debugger connection (dt_socket).", null);
+        }
+        Map<String, Connector.Argument> arguments = connector.defaultArguments();
+        arguments.get("localAddress").setValue("127.0.0.1"); // only programs on this computer can connect
+        arguments.get("port").setValue("0");                // any free port
+        arguments.get("timeout").setValue(String.valueOf(START_TIMEOUT_MS));
         try {
-            return connector.launch(arguments);
-        } catch (IOException | IllegalConnectorArgumentsException | VMStartException e) {
+            String address = connector.startListening(arguments);
+            try {
+                // UTF-8 keeps printed text intact; -Xmx caps the memory the program may use; the
+                // agent ends it if Raphael is killed.
+                List<String> command = new ArrayList<>(List.of(javaCommand(),
+                        "-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,address=" + address,
+                        "-cp", program.classDir().toString(),
+                        "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
+                        "-Xmx" + runLimits.memoryMb() + "m"));
+                try {
+                    command.add("-javaagent:" + ParentWatch.jar());
+                } catch (IOException e) {
+                    // Without the agent the program still runs; only the "Raphael was killed" safety net is missing.
+                    LOG.log(Level.WARNING, "Couldn't write the ParentWatch agent jar", e);
+                }
+                command.add(program.mainClass());
+                Process process = new ProcessBuilder(command).directory(folder.toFile()).start();
+                try {
+                    return new Launched(connector.accept(arguments), process);
+                } catch (IOException | IllegalConnectorArgumentsException e) {
+                    process.destroyForcibly();
+                    throw e;
+                }
+            } finally {
+                connector.stopListening(arguments);
+            }
+        } catch (IOException | IllegalConnectorArgumentsException e) {
             throw new TraceException("Could not start the program: " + e.getMessage(), e);
         }
+    }
+
+    // The java command of the Java that Raphael itself runs on.
+    private static String javaCommand() {
+        boolean windows = System.getProperty("os.name", "").startsWith("Windows");
+        return Path.of(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java").toString();
     }
 
     // One run of one program: everything that changes while it runs.
@@ -155,6 +202,8 @@ public class JdiTracer implements Tracer {
     private static class Run {
 
         private final VirtualMachine vm;
+        private final Process process;
+        private final RunFolder folder;
         private final RunLimits limits;
         private final EventRequestManager requests;
         private final StringBuffer output = new StringBuffer();
@@ -168,8 +217,10 @@ public class JdiTracer implements Tracer {
         private volatile boolean stopRequested;
         private volatile int steps;
 
-        Run(VirtualMachine vm, RunLimits limits, boolean remember) {
+        Run(VirtualMachine vm, Process process, RunFolder folder, RunLimits limits, boolean remember) {
             this.vm = vm;
+            this.process = process;
+            this.folder = folder;
             this.limits = limits;
             if (!remember) {
                 reader.stopRemembering();
@@ -178,7 +229,6 @@ public class JdiTracer implements Tracer {
         }
 
         Trace record(String input) throws TraceException {
-            Process process = vm.process();
             OutputDrainer stdout = new OutputDrainer(process.getInputStream(), output, "stdout");
             OutputDrainer stderr = new OutputDrainer(process.getErrorStream(), output, "stderr");
             stdout.start();
@@ -311,7 +361,7 @@ public class JdiTracer implements Tracer {
             } else if (!thread.equals(firstThread)) {
                 reader.stopRemembering(); // a second thread runs the student's code
             }
-            snapshots.add(reader.capture(thread, output::length, null, justCaught));
+            snapshots.add(reader.capture(thread, output::length, null, justCaught, folder.files()));
             justCaught = null;
             steps = snapshots.size();
             if (snapshots.size() >= limits.maxSteps()) {
@@ -396,7 +446,7 @@ public class JdiTracer implements Tracer {
             if (message != null) {
                 text += ": " + message;
             }
-            Snapshot last = reader.capture(event.thread(), output::length, text);
+            Snapshot last = reader.capture(event.thread(), output::length, text, null, folder.files());
             snapshots.add(last);
             end(EndReason.EXCEPTION, text + " (line " + last.getLine() + ")");
         }

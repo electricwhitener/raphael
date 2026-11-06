@@ -6,7 +6,14 @@ public final class NullValue implements Value {
 
     public static final NullValue INSTANCE = new NullValue();
 
+    private static final long serialVersionUID = 1L;
+
     private NullValue() {
+    }
+
+    // Reading a saved run gives back the one shared NullValue, not a second copy.
+    private Object readResolve() {
+        return INSTANCE;
     }
 
     @Override

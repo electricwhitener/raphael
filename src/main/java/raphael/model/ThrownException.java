@@ -7,7 +7,8 @@ import java.util.List;
 // in the middle, from the one that threw outwards). It's kept on the first step of the catch.
 // (An exception nothing catches ends the run instead; see Snapshot.getException().)
 // OOP: a record, a small unchangeable data class; List.copyOf keeps it unchangeable.
-public record ThrownException(String type, String message, int throwLine, int catchLine, List<String> leftMethods) {
+public record ThrownException(String type, String message, int throwLine, int catchLine, List<String> leftMethods)
+        implements java.io.Serializable {
 
     public ThrownException {
         leftMethods = List.copyOf(leftMethods);

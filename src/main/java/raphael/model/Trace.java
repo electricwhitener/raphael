@@ -1,12 +1,16 @@
 package raphael.model;
 
+import java.io.Serializable;
 import java.util.List;
 
 // The whole run: one Snapshot per step, everything the program printed, and why it ended.
 // Going back a step just means showing snapshot i - 1.
 // OOP: encapsulation. The list is private and read-only, so nobody can change a recorded run.
 // Memento pattern: the Trace is the album that stores the saved states (Snapshots).
-public class Trace {
+// Serializable: a whole run can be written to a file and read back (io/RunFile).
+public class Trace implements Serializable {
+
+    private static final long serialVersionUID = 1L; // the file format's version for this class; see RunFile
 
     private final List<Snapshot> snapshots;
     private final String output;

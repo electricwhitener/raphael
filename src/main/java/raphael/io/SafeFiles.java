@@ -29,13 +29,19 @@ public final class SafeFiles {
         Path temp = Files.createTempFile(folder, "." + file.getFileName() + "-", ".tmp");
         try {
             Files.writeString(temp, text, StandardCharsets.UTF_8);
-            try {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); // some network drives
-            }
+            replace(temp, file);
         } finally {
             Files.deleteIfExists(temp); // only still there if something above failed
+        }
+    }
+
+    // Puts a finished temporary file in place of file, in one step where the disk allows it, so
+    // the old file is never left half-replaced.
+    public static void replace(Path temp, Path file) throws IOException {
+        try {
+            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); // some network drives
         }
     }
 

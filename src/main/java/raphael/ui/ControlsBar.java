@@ -181,4 +181,9 @@ public class ControlsBar extends JPanel implements TraceListener {
         button.setIcon(Icons.of(glyph, Icons.Role.TOOL));
         button.getAccessibleContext().setAccessibleName(name);
     }
+
+    // Off on the welcome page, where there's nothing to play.
+    public void setSpeedEnabled(boolean enabled) {
+        speed.setEnabled(enabled);
+    }
 }

@@ -1,12 +1,15 @@
 package raphael.model;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 // One method call that is running: its class, its name, the line it's on, and its local variables.
 // OOP: encapsulation. Private final fields with getters, and a map that can't be changed from outside.
-public class FrameSnapshot {
+public class FrameSnapshot implements Serializable {
+
+    private static final long serialVersionUID = 1L; // the file format's version for this class; see RunFile
 
     private final String className;
     private final String methodName;
