@@ -20,6 +20,7 @@ public class TraceModel {
     private int step;
     private double speed = 1;   // 1 = normal, 2 = twice as fast
     private List<raphael.explain.Moment> moments = List.of(); // the run's key moments, in step order
+    private raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts(); // what the run's code says
     private final List<TraceListener> listeners = new ArrayList<>();
 
     public void addListener(TraceListener listener) {
@@ -42,6 +43,13 @@ public class TraceModel {
 
     // With the run's key moments (see explain/MomentFinder).
     public void load(Trace trace, List<Scene> scenes, Dimension runSize, List<raphael.explain.Moment> moments) {
+        load(trace, scenes, runSize, moments, new raphael.analysis.CodeFacts());
+    }
+
+    // With what the code says too (for the views that draw classes, like the objects view).
+    public void load(Trace trace, List<Scene> scenes, Dimension runSize, List<raphael.explain.Moment> moments,
+                     raphael.analysis.CodeFacts facts) {
+        this.facts = facts;
         this.moments = List.copyOf(moments);
         this.trace = trace;
         this.scenes = scenes;
@@ -64,6 +72,10 @@ public class TraceModel {
         for (TraceListener listener : listeners) {
             listener.traceChanged(this);
         }
+    }
+
+    public raphael.analysis.CodeFacts getFacts() {
+        return facts;
     }
 
     // The run's key moments, in step order.

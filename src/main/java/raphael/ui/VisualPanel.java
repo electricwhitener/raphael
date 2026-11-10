@@ -49,7 +49,10 @@ public class VisualPanel extends JPanel implements TraceListener {
     // The calls view of the same run (the call stack as boxes), shown instead of the picture when
     // chosen; see showCalls().
     private raphael.render.CallsScenes calls;
-    private boolean showingCalls;
+    private raphael.render.ObjectsScenes objects;
+    // Which view of the run is on show: the picture of the data, the calls, or the objects.
+    public enum View { PICTURE, CALLS, OBJECTS }
+    private View view = View.PICTURE;
     private int shownStep = -1;
     private double fit = 1;  // the scale that fits this run's biggest picture into the panel
     private double zoom = 1; // the user's zoom, on top of that
@@ -88,6 +91,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     @Override
     public void traceChanged(TraceModel model) {
         calls = model.getTrace() == null ? null : new raphael.render.CallsScenes(model.getTrace(), model.getMoments());
+        objects = model.getTrace() == null ? null : new raphael.render.ObjectsScenes(model.getTrace(), model.getFacts());
         clearMessage();
         animator.show(sceneNow()); // a new run starts without animating from the old one
         shownStep = model.getStep();
@@ -108,27 +112,42 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     // The scene for the step on show: the picture of the data, or the calls view.
     private Scene sceneNow() {
-        return showingCalls && calls != null && model.hasSteps() ? calls.sceneAt(model.getStep()) : model.getScene();
+        if (!model.hasSteps()) {
+            return model.getScene();
+        }
+        if (view == View.CALLS && calls != null) {
+            return calls.sceneAt(model.getStep());
+        }
+        if (view == View.OBJECTS && objects != null) {
+            return objects.sceneAt(model.getStep());
+        }
+        return model.getScene();
     }
 
     private Dimension runSize() {
-        return showingCalls && calls != null ? calls.getRunSize() : model.getRunSize();
+        if (view == View.CALLS && calls != null) {
+            return calls.getRunSize();
+        }
+        if (view == View.OBJECTS && objects != null) {
+            return objects.getRunSize();
+        }
+        return model.getRunSize();
     }
 
-    // Shows the calls view (true) or the picture (false), for this run and the next ones.
-    public void showCalls(boolean on) {
-        if (on == showingCalls) {
+    // Shows one view of the run, for this run and the next ones.
+    public void showView(View chosen) {
+        if (chosen == view) {
             return;
         }
-        showingCalls = on;
+        view = chosen;
         animator.show(sceneNow());
         fitToRun();
         revalidate();
         repaint();
     }
 
-    public boolean isShowingCalls() {
-        return showingCalls;
+    public View getView() {
+        return view;
     }
 
     // Chooses the one scale for this run: as big as fits the room around the panel, within limits.

@@ -188,13 +188,15 @@ public class Workbench extends JPanel {
         // the calls (the call stack as boxes).
         viewTabs.addTab("Picture", placeholder());
         viewTabs.addTab("Calls", placeholder());
+        viewTabs.addTab("Objects", placeholder());
         viewTabs.setToolTipTextAt(0, "the program's arrays, lists, trees and objects");
         viewTabs.setToolTipTextAt(1, "the methods running now, as a stack: the one on top runs, the ones below wait for it");
+        viewTabs.setToolTipTextAt(2, "the program's classes (a UML diagram) and its objects, private fields marked -");
         viewTabs.putClientProperty("JTabbedPane.tabType", "underlined");
         viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
         viewTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
         viewTabs.setFocusable(false);
-        viewTabs.addChangeListener(e -> visual.showCalls(viewTabs.getSelectedIndex() == 1));
+        viewTabs.addChangeListener(e -> visual.showView(VisualPanel.View.values()[Math.max(0, viewTabs.getSelectedIndex())]));
         JPanel pictureSide = new JPanel(new BorderLayout());
         pictureSide.add(viewTabs, BorderLayout.NORTH);
         pictureSide.add(pictureArea, BorderLayout.CENTER);
@@ -263,6 +265,23 @@ public class Workbench extends JPanel {
         code.setOnCaretMoved(() -> host.caretMoved(this));
         console.setOnLineClicked(this::goToError);
         showPictureOrGuide();
+    }
+
+    // The view a run opens on: calls for recursion, objects for a program about classes
+    // (inheritance, interfaces, setters), otherwise the picture of its data.
+    private static VisualPanel.View bestView(raphael.analysis.CodeFacts facts) {
+        if (facts.hasRecursion()) {
+            return VisualPanel.View.CALLS;
+        }
+        if (!facts.superclasses().isEmpty() || !facts.setters().isEmpty()) {
+            return VisualPanel.View.OBJECTS;
+        }
+        for (java.util.List<String> implemented : facts.interfaces().values()) {
+            if (!implemented.isEmpty()) {
+                return VisualPanel.View.OBJECTS;
+            }
+        }
+        return VisualPanel.View.PICTURE;
     }
 
     // An empty tab: the tabs are only headings, and what they choose is shown below them.
@@ -642,8 +661,8 @@ public class Workbench extends JPanel {
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
         lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
-        model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments());
-        viewTabs.setSelectedIndex(result.program().facts().hasRecursion() ? 1 : 0); // recursion is best seen as calls
+        model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments(), result.program().facts());
+        viewTabs.setSelectedIndex(bestView(result.program().facts()).ordinal());
         if (isShowing()) {
             visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         }
@@ -705,22 +724,23 @@ public class Workbench extends JPanel {
         lastRun = saved;
         fromFile = saved.trace();
         recordingText = "saved recording · " + saved.trace().size() + " steps";
-        model.load(saved.trace(), scenes, scenes.getRunSize(), momentsOf(saved));
+        raphael.analysis.CodeFacts facts = factsOf(saved);
+        model.load(saved.trace(), scenes, scenes.getRunSize(), new raphael.explain.MomentFinder().find(saved.trace(), facts), facts);
         if (isShowing()) {
             visual.requestFocusInWindow();
         }
         say("[recording] " + saved.trace().size() + " steps, played back without running · space plays", Style.INK);
     }
 
-    // A recording's key moments: its code is compiled again for the facts (nothing is run).
-    private static List<raphael.explain.Moment> momentsOf(RunFile.Saved saved) {
+    // What a recording's code says: it's compiled again for the facts (nothing is run).
+    private static raphael.analysis.CodeFacts factsOf(RunFile.Saved saved) {
         try {
             CompileResult program = saved.files() != null ? new SourceCompiler().compileFolder(saved.files(), null)
                     : new SourceCompiler().compile(saved.source());
-            return new raphael.explain.MomentFinder().find(saved.trace(), program.facts());
+            return program.facts();
         } catch (raphael.compile.CompileSetupException | RuntimeException e) {
-            LOG.log(Level.INFO, "No key moments for this recording", e);
-            return List.of();
+            LOG.log(Level.INFO, "No facts for this recording", e);
+            return new raphael.analysis.CodeFacts();
         }
     }
 
