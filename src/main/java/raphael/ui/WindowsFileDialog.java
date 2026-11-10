@@ -33,7 +33,16 @@ public final class WindowsFileDialog {
     // Shows the dialog over owner. The file chosen (as a Linux path), or null if cancelled.
     public static File choose(Component owner, boolean forSaving, FileKind kind, File folder, String suggestedName)
             throws IOException {
-        String script = script(forSaving, kind, windowsPath(folder), suggestedName);
+        return ask(owner, script(forSaving, kind, windowsPath(folder), suggestedName));
+    }
+
+    // Windows' dialog for choosing a folder, starting in folder. The folder chosen (as a Linux path), or null.
+    public static File chooseFolder(Component owner, File folder) throws IOException {
+        return ask(owner, folderScript(windowsPath(folder)));
+    }
+
+    // Runs a dialog script while the window waits, and turns its answer into a Linux path.
+    private static File ask(Component owner, String script) throws IOException {
         String[] answer = new String[1];
         IOException[] failure = new IOException[1];
         SecondaryLoop waiting = Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
@@ -88,6 +97,30 @@ public final class WindowsFileDialog {
             ps.append("$d.InitialDirectory = ").append(quote(folder)).append('\n');
         }
         ps.append("if ($d.ShowDialog($owner) -eq [Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.FileName) }\n");
+        return ps.toString();
+    }
+
+    // Explorer's Open dialog, used to choose a folder: you go into the folder and press Open. (The
+    // dialog made for folders is the old tree of folders, unlike everything else on Windows.) The
+    // "file" it returns is a made-up name inside the folder, so the folder is its parent.
+    static String folderScript(String folder) {
+        StringBuilder ps = new StringBuilder()
+                .append("$ProgressPreference = 'SilentlyContinue'\n")
+                .append("[Console]::OutputEncoding = [Text.Encoding]::UTF8\n")
+                .append("Add-Type -AssemblyName System.Windows.Forms\n")
+                .append("[Windows.Forms.Application]::EnableVisualStyles()\n")
+                .append("$owner = New-Object Windows.Forms.Form -Property @{ TopMost = $true }\n")
+                .append("$d = New-Object Windows.Forms.OpenFileDialog\n")
+                .append("$d.Title = 'Open Folder: go into the folder, then press Open'\n")
+                .append("$d.ValidateNames = $false\n")
+                .append("$d.CheckFileExists = $false\n")
+                .append("$d.CheckPathExists = $true\n")
+                .append("$d.FileName = 'Open this folder'\n")
+                .append("$d.Filter = 'Folders|no.files'\n");
+        if (folder != null) {
+            ps.append("$d.InitialDirectory = ").append(quote(folder)).append('\n');
+        }
+        ps.append("if ($d.ShowDialog($owner) -eq [Windows.Forms.DialogResult]::OK) { [Console]::Out.Write([IO.Path]::GetDirectoryName($d.FileName)) }\n");
         return ps.toString();
     }
 

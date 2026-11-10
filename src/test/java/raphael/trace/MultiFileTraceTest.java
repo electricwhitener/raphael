@@ -60,7 +60,7 @@ class MultiFileTraceTest {
                             }
                         }
                         """)));
-        assertEquals("0\n", trace.getOutput());
+        assertEquals("0\n", trace.getOutput().replace("\r\n", "\n")); // Windows ends lines with \r\n
         Set<String> files = new LinkedHashSet<>();
         ThrownException caught = null;
         for (Snapshot step : trace.getSnapshots()) {
@@ -89,7 +89,7 @@ class MultiFileTraceTest {
                     }
                 }
                 """)));
-        assertEquals("2\n", trace.getOutput());
+        assertEquals("2\n", trace.getOutput().replace("\r\n", "\n"));
         assertTrue(trace.size() >= 3, "a step for each line: " + trace.size());
         assertEquals("raphael/demo/Hello.java", trace.get(0).getFrames().get(0).getFile());
     }

@@ -27,6 +27,11 @@ class WorkbenchTest {
         }
 
         @Override
+        public File chooseFolder() {
+            return null;
+        }
+
+        @Override
         public void remember(File file) {
         }
 
@@ -83,8 +88,8 @@ class WorkbenchTest {
             for (Workbench program : programs) {
                 assertTrue(program.getModel().hasSteps(), program.statusText());
             }
-            assertEquals("6\n", programs[0].getModel().getTrace().getOutput());
-            assertEquals("21\n", programs[1].getModel().getTrace().getOutput());
+            assertEquals("6\n", programs[0].getModel().getTrace().getOutput().replace("\r\n", "\n"));
+            assertEquals("21\n", programs[1].getModel().getTrace().getOutput().replace("\r\n", "\n"));
             assertTrue(programs[0].hasRecording(), "the run can be saved as a recording");
             assertTrue(programs[0].statusText().startsWith("[ok]"), programs[0].statusText());
         });

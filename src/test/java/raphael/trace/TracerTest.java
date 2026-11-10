@@ -61,7 +61,7 @@ class TracerTest {
         for (int i = 0; i < 4; i++) {
             Thread thread = new Thread(() -> {
                 try {
-                    outputs.add(new JdiTracer().trace(program).getOutput());
+                    outputs.add(new JdiTracer().trace(program).getOutput().replace("\r\n", "\n")); // Windows ends lines with \r\n
                 } catch (Throwable e) {
                     failures.add(e);
                 }

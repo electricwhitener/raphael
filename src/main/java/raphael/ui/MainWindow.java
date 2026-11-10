@@ -651,6 +651,7 @@ public class MainWindow extends JFrame {
         JMenu file = menu("File", KeyEvent.VK_F);
         file.add(item("New", "control N", this::newProgram));
         file.add(item("Open…", "control O", this::open));
+        file.add(item("Open Folder…", "shift control O", this::openFolder));
         JMenu examples = menu("Open example", KeyEvent.VK_E);
         addExamples(examples);
         file.add(examples);
@@ -1522,6 +1523,10 @@ public class MainWindow extends JFrame {
 
     // A file dropped onto the window.
     private void openDropped(File file) {
+        if (file.isDirectory()) {
+            openFolder(file);
+            return;
+        }
         if (!FileKind.CODE_OR_RUN.accepts(file.getName())) {
             Dialogs.tell(this, "Raphael opens .java and .raphael files", file.getName()
                     + " isn't one. Drop Java code (a name ending in .java) or a saved recording (.raphael).");
@@ -1531,6 +1536,10 @@ public class MainWindow extends JFrame {
     }
 
     private void openFile(File file) {
+        if (file.isDirectory()) {
+            openFolder(file);
+            return;
+        }
         for (int i = 0; i < tabs.getTabCount(); i++) { // already open: its tab comes to the front
             Component tab = tabs.getComponentAt(i);
             if (tab instanceof Workbench && file.getAbsoluteFile().equals(((Workbench) tab).getCurrentFile() == null ? null
@@ -1572,13 +1581,120 @@ public class MainWindow extends JFrame {
         remember(file);
     }
 
+    // File → Open Folder: a folder of .java files as one program, its files in tabs.
+    private void openFolder() {
+        File folder = chooseFolder();
+        if (folder != null) {
+            openFolder(folder);
+        }
+    }
+
+    private static final int FOLDER_MAX_FILES = 200;
+    private static final java.util.Set<String> SKIPPED_FOLDERS = java.util.Set.of("target", "out", "bin", "build", "node_modules");
+
+    private void openFolder(File folder) {
+        for (Workbench program : programs()) { // already open: its tab comes to the front
+            if (folder.getAbsoluteFile().equals(program.getFolder() == null ? null : program.getFolder().getAbsoluteFile())) {
+                tabs.setSelectedComponent(program);
+                return;
+            }
+        }
+        List<raphael.model.SourceFile> files = new java.util.ArrayList<>();
+        String first = null;
+        java.nio.file.Path root = folder.toPath();
+        try (java.util.stream.Stream<java.nio.file.Path> all = java.nio.file.Files.walk(root, 8)) {
+            List<java.nio.file.Path> sources = all
+                    .filter(path -> path.getFileName().toString().endsWith(".java") && java.nio.file.Files.isRegularFile(path))
+                    .filter(path -> inOwnFolders(root.relativize(path)))
+                    .sorted().limit(FOLDER_MAX_FILES).toList();
+            for (java.nio.file.Path path : sources) {
+                String text = SafeFiles.readCode(path);
+                String relative = root.relativize(path).toString().replace(File.separatorChar, '/');
+                files.add(new raphael.model.SourceFile(relative, text));
+                boolean hasMain = text.contains("static void main");
+                if (hasMain && (first == null || relative.endsWith("Main.java"))) {
+                    first = relative;
+                }
+            }
+        } catch (IOException | java.io.UncheckedIOException e) {
+            LOG.log(Level.INFO, "Couldn't open the folder " + folder, e);
+            Dialogs.tell(this, "Couldn't open " + folder.getName(), "Because " + SafeFiles.describe(
+                    e instanceof java.io.UncheckedIOException ? ((java.io.UncheckedIOException) e).getCause() : (IOException) e) + ".");
+            return;
+        }
+        if (files.isEmpty()) {
+            Dialogs.tell(this, "No Java files in " + folder.getName(), "Raphael opens a folder of .java files as one program. "
+                    + "This folder has none (folders named target, out, bin and build are skipped).");
+            return;
+        }
+        newTab(true).showFiles(files, first, folder, folder.getName());
+        remember(folder);
+        say("opened " + folder.getName() + ": " + files.size() + (files.size() == 1 ? " file" : " files")
+                + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
+    }
+
+    // Whether a file is in the program's own folders, not a hidden one (.git) or a build's output.
+    private static boolean inOwnFolders(java.nio.file.Path relative) {
+        for (int i = 0; i < relative.getNameCount() - 1; i++) {
+            String name = relative.getName(i).toString();
+            if (name.startsWith(".") || SKIPPED_FOLDERS.contains(name)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The computer's dialog for choosing a folder: Windows' own inside WSL, Finder's on a Mac
+    // (FileDialog in its folder mode), and Java's chooser elsewhere, since GTK's and Windows' FileDialog
+    // can't choose folders. Null if cancelled.
+    private File chooseFolder() {
+        File start = new File(lastFolder());
+        File chosen = null;
+        if (WindowsFileDialog.available()) {
+            try {
+                chosen = WindowsFileDialog.chooseFolder(this, start);
+                return rememberFolder(chosen);
+            } catch (IOException e) {
+                LOG.log(Level.INFO, "Windows' folder dialog didn't open; using Java's instead", e);
+            }
+        }
+        if (Shortcuts.isMac()) {
+            System.setProperty("apple.awt.fileDialogForDirectories", "true");
+            try {
+                FileDialog dialog = new FileDialog(this, "Open Folder", FileDialog.LOAD);
+                dialog.setDirectory(start.getPath());
+                dialog.setVisible(true);
+                chosen = dialog.getFile() == null ? null : new File(dialog.getDirectory(), dialog.getFile());
+            } finally {
+                System.setProperty("apple.awt.fileDialogForDirectories", "false");
+            }
+            return rememberFolder(chosen);
+        }
+        javax.swing.JFileChooser chooser = new javax.swing.JFileChooser(start);
+        chooser.setDialogTitle("Open Folder");
+        chooser.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        if (chooser.showDialog(this, "Open") == javax.swing.JFileChooser.APPROVE_OPTION) {
+            chosen = chooser.getSelectedFile();
+        }
+        return rememberFolder(chosen);
+    }
+
+    // The next dialog starts next to the folder chosen.
+    private static File rememberFolder(File chosen) {
+        if (chosen != null && chosen.getParent() != null) {
+            App.SETTINGS.put("lastFolder", chosen.getParent());
+        }
+        return chosen;
+    }
+
     // Recent files: the last few opened or saved, newest first, kept in Preferences.
     private static final int RECENT_MAX = 8;
 
     private List<File> recentFiles() {
         List<File> recent = new java.util.ArrayList<>();
         for (String path : App.SETTINGS.get("recentFiles", "").split("\n")) {
-            if (!path.isBlank() && new File(path).isFile()) { // a file moved or deleted since drops out
+            if (!path.isBlank() && new File(path).exists()) { // a file moved or deleted since drops out
                 recent.add(new File(path));
             }
         }
@@ -1747,6 +1863,11 @@ public class MainWindow extends JFrame {
         @Override
         public File chooseFile(boolean forSaving, FileKind kind, String suggested) {
             return MainWindow.this.chooseFile(forSaving, kind, suggested);
+        }
+
+        @Override
+        public File chooseFolder() {
+            return MainWindow.this.chooseFolder();
         }
 
         @Override

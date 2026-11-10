@@ -56,7 +56,8 @@ public class SceneBuilder {
     }
 
     private final StructureDetector detector = new StructureDetector();
-    private final IndexUsage indexes;
+    private final IndexUsage indexes; // the whole program: which variables index which arrays
+    private final Map<String, IndexUsage> byFile = new java.util.HashMap<>(); // each file's lines, by path
     private boolean crashAhead = true; // false at steps that the recorded run shows don't crash
 
     public SceneBuilder() {
@@ -66,6 +67,25 @@ public class SceneBuilder {
     // source is the program's text: it tells which variables are indexes into which arrays.
     public SceneBuilder(String source) {
         this.indexes = new IndexUsage(source);
+    }
+
+    // A program of several files: path → text. A step's line is read from the file it's in.
+    public SceneBuilder(List<raphael.model.SourceFile> files) {
+        StringBuilder all = new StringBuilder();
+        for (raphael.model.SourceFile file : files) {
+            byFile.put(file.path(), new IndexUsage(file.text()));
+            all.append(file.text()).append('\n');
+        }
+        this.indexes = new IndexUsage(all.toString());
+    }
+
+    // The lines of the file this step's line is in.
+    private IndexUsage linesOf(Snapshot snapshot) {
+        if (byFile.isEmpty() || snapshot.getFrames().isEmpty()) {
+            return indexes;
+        }
+        IndexUsage file = byFile.get(snapshot.getFrames().get(0).getFile());
+        return file != null ? file : indexes;
     }
 
     // Learns everything about the run that the pictures need, in two passes over the steps, and
@@ -195,11 +215,11 @@ public class SceneBuilder {
     private Map<Long, List<RenderContext.Marker>> markersAt(Snapshot snapshot, Snapshot previous) {
         Map<String, Value> visible = visibleVariables(snapshot);
         Set<String> inUse = new HashSet<>();
-        for (IndexUsage.Access access : indexes.accessesOnLine(snapshot.getLine())) {
+        for (IndexUsage.Access access : linesOf(snapshot).accessesOnLine(snapshot.getLine())) {
             inUse.add(access.array());
         }
         if (previous != null) {
-            for (IndexUsage.Access access : indexes.accessesOnLine(previous.getLine())) {
+            for (IndexUsage.Access access : linesOf(previous).accessesOnLine(previous.getLine())) {
                 inUse.add(access.array());
             }
         }
@@ -244,7 +264,7 @@ public class SceneBuilder {
     private void addFocus(Scene scene, Snapshot snapshot) {
         Map<String, Value> visible = visibleVariables(snapshot);
         int count = 0;
-        for (IndexUsage.Access access : indexes.accessesOnLine(snapshot.getLine())) {
+        for (IndexUsage.Access access : linesOf(snapshot).accessesOnLine(snapshot.getLine())) {
             Cell cell = resolve(snapshot, visible, access);
             if (cell == null) {
                 continue;
@@ -269,7 +289,7 @@ public class SceneBuilder {
 
     // If the line that just ran copied one cell into another, remember it so the value can fly across.
     private void addMoves(Scene scene, Snapshot before) {
-        String code = indexes.lineText(before.getLine());
+        String code = linesOf(before).lineText(before.getLine());
         if (!COPY.matcher(code).matches()) {
             return;
         }

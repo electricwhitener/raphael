@@ -55,7 +55,9 @@ public class CallStackPanel extends JPanel implements TraceListener {
             return;
         }
         for (FrameSnapshot frame : snapshot.getFrames()) {
-            frames.addElement(String.format("%-14s :%d", frame.getMethodName() + "()", frame.getLine()));
+            // In a program of several files, the line's file too: "area()  Circle.java:13".
+            String file = frame.getFile() == null ? "" : frame.getFile().substring(frame.getFile().lastIndexOf('/') + 1);
+            frames.addElement(String.format("%-14s %s:%d", frame.getMethodName() + "()", file, frame.getLine()));
         }
         // The methods a caught exception just left, each stopped in the middle: greyed, above the
         // method that caught it, where they were on the stack.

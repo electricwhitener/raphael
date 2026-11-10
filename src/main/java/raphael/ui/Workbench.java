@@ -34,6 +34,7 @@ import raphael.io.SafeFiles;
 import raphael.io.StepLog;
 import raphael.model.EndReason;
 import raphael.model.Snapshot;
+import raphael.model.SourceFile;
 import raphael.model.ThrownException;
 import raphael.model.Trace;
 import raphael.render.SceneBuilder;
@@ -59,6 +60,9 @@ public class Workbench extends JPanel {
 
         // The computer's Open or Save dialog. Null if cancelled.
         File chooseFile(boolean forSaving, FileKind kind, String suggested);
+
+        // The computer's dialog for choosing a folder. Null if cancelled.
+        File chooseFolder();
 
         // A file was opened or saved: add it to the recent files.
         void remember(File file);
@@ -105,6 +109,10 @@ public class Workbench extends JPanel {
     private Trace fromFile;        // the recording read from a file, while it's on show
     private String recordingText = "";
     private File currentFile;
+    private File folder;           // a program of several files: the folder they're in; otherwise null
+    // A program of several files has a tab for each one above its code.
+    private final javax.swing.JTabbedPane fileTabs = new javax.swing.JTabbedPane();
+    private boolean fillingTabs;   // true while the file tabs are being made, so their events are ignored
     private String documentName = "new program";
     private boolean running;
     private Timer progress;
@@ -140,7 +148,30 @@ public class Workbench extends JPanel {
         visual.setTransferHandler(new FileDrop(null, host::openDropped));
         code.getEditor().setTransferHandler(new FileDrop(code.getEditor().getTransferHandler(), host::openDropped));
 
-        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, code, pictureArea);
+        JPanel codeSide = new JPanel(new BorderLayout());
+        codeSide.add(fileTabs, BorderLayout.NORTH);
+        codeSide.add(code, BorderLayout.CENTER);
+        fileTabs.setVisible(false);
+        fileTabs.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
+        fileTabs.putClientProperty("JTabbedPane.tabType", "underlined");
+        fileTabs.putClientProperty("JTabbedPane.tabHeight", 28);
+        fileTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
+        fileTabs.setFocusable(false);
+        fileTabs.addChangeListener(e -> {
+            int index = fileTabs.getSelectedIndex();
+            if (!fillingTabs && index >= 0) {
+                code.showFile(code.getPaths().get(index));
+            }
+        });
+        code.setOnFileShown(path -> {
+            int index = code.getPaths().indexOf(path);
+            if (index >= 0 && index < fileTabs.getTabCount() && fileTabs.getSelectedIndex() != index) {
+                fillingTabs = true;
+                fileTabs.setSelectedIndex(index); // the program ran into another file
+                fillingTabs = false;
+            }
+        });
+        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codeSide, pictureArea);
         top.setResizeWeight(0.4);
         top.setBorder(BorderFactory.createEmptyBorder());
         JPanel bottom = new JPanel(new GridBagLayout());
@@ -173,7 +204,8 @@ public class Workbench extends JPanel {
 
         // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
-            console.showInput(code.getCode().contains("System.in"));
+            console.showInput(allCode().contains("System.in"));
+            titleFileTabs();
             showFilesIfUsed();
             if (model.getTrace() == null) { // an old run or compile error no longer applies
                 visual.clearMessage();
@@ -224,6 +256,23 @@ public class Workbench extends JPanel {
         return currentFile;
     }
 
+    // The folder of a program of several files, or null.
+    public File getFolder() {
+        return folder;
+    }
+
+    // Every file's text in one string, for the checks that look at the whole program.
+    private String allCode() {
+        if (folder == null && fileTabs.getTabCount() == 0) {
+            return code.getCode();
+        }
+        StringBuilder all = new StringBuilder();
+        for (SourceFile file : code.getFiles()) {
+            all.append(file.text()).append('\n');
+        }
+        return all.toString();
+    }
+
     public String getDocumentName() {
         return documentName;
     }
@@ -235,7 +284,8 @@ public class Workbench extends JPanel {
     // A program nobody has typed in, run or saved: a new program as it came, or an example just
     // opened. Opening something else replaces it rather than adding a tab.
     public boolean isUntouched() {
-        return !code.isDirty() && currentFile == null && model.getTrace() == null && !running && !visual.hasMessage();
+        return !code.isDirty() && currentFile == null && folder == null && model.getTrace() == null && !running
+                && !visual.hasMessage();
     }
 
     // Whether the status bar should show the picture's key (not while it shows an error).
@@ -256,11 +306,58 @@ public class Workbench extends JPanel {
     // Puts code in the editor: a new program, an example, a pasted one, an opened file, a restored
     // draft. file is where it's saved (null if nowhere yet); name is what the title shows.
     public void showCode(String text, File file, String name) {
+        fileTabs.setVisible(false);
+        fileTabs.removeAll();
+        folder = null;
         code.setCode(text);
         top.setDividerLocation(dividerForCode());
         currentFile = file;
         documentName = name;
         host.stateChanged(this);
+    }
+
+    // A program of several files: each file gets a tab, and first (or the first file) is shown.
+    // folder is where they're saved (null for a recording's files, which aren't in any folder yet).
+    public void showFiles(List<SourceFile> files, String first, File folder, String name) {
+        this.folder = folder;
+        currentFile = null;
+        documentName = name;
+        fillingTabs = true;
+        fileTabs.removeAll();
+        for (SourceFile file : files) {
+            JPanel nothing = new JPanel(); // the tab is only a heading; the code is shown below the tabs
+            nothing.setPreferredSize(new Dimension(0, 0));
+            fileTabs.addTab(file.path(), nothing);
+        }
+        fileTabs.setVisible(true);
+        fillingTabs = false;
+        code.setFiles(files, first);
+        titleFileTabs();
+        top.setDividerLocation(dividerForCode());
+        host.stateChanged(this);
+    }
+
+    // Each file tab: the file's name with a dot while it has unsaved changes; the path in the tooltip.
+    private void titleFileTabs() {
+        List<String> paths = code.getPaths();
+        for (int i = 0; i < fileTabs.getTabCount() && i < paths.size(); i++) {
+            String path = paths.get(i);
+            String name = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
+            fileTabs.setTitleAt(i, (code.isDirty(path) ? "● " : "") + name);
+            fileTabs.setToolTipTextAt(i, path);
+        }
+    }
+
+    // The class of the file in front ("shapes.Circle" for shapes/Circle.java in package shapes),
+    // which runs if it has a main.
+    private String classInFront() {
+        String path = code.getShownPath();
+        if (path == null) {
+            return null;
+        }
+        String name = path.substring(path.lastIndexOf('/') + 1).replaceAll("\\.java$", "");
+        java.util.regex.Matcher pkg = java.util.regex.Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;").matcher(code.getCode());
+        return pkg.find() ? pkg.group(1) + "." + name : name;
     }
 
     // The keyboard goes to the editor, ready to type or paste.
@@ -323,7 +420,12 @@ public class Workbench extends JPanel {
             return;
         }
         String source = code.getCode();
+        List<SourceFile> files = fileTabs.getTabCount() > 0 ? code.getFiles() : null; // a program of several files
+        String preferred = classInFront();
         String input = console.getInput();
+        if (folder != null) {
+            tracer.setInputFiles(folderInputs()); // the folder's text files are there for the program to read
+        }
         if (top.getDividerLocation() < dividerForCode()) {
             top.setDividerLocation(dividerForCode()); // the code may have grown since it was loaded
         }
@@ -349,14 +451,16 @@ public class Workbench extends JPanel {
         new SwingWorker<RunResult, String>() {
             @Override
             protected RunResult doInBackground() throws Exception {
-                CompileResult program = new SourceCompiler().compile(source);
+                CompileResult program = files != null ? new SourceCompiler().compileFolder(files, preferred)
+                        : new SourceCompiler().compile(source);
                 if (!program.success()) {
-                    return new RunResult(program, null, null, source, input);
+                    return new RunResult(program, null, null, source, input, files);
                 }
                 Trace trace = tracer.trace(program, input);
                 recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
-                return new RunResult(program, trace, new SceneBuilder(source).build(trace), source, input);
+                SceneBuilder builder = files != null ? new SceneBuilder(files) : new SceneBuilder(source);
+                return new RunResult(program, trace, builder.build(trace), source, input, files);
             }
 
             @Override
@@ -448,7 +552,7 @@ public class Workbench extends JPanel {
         }
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
-        lastRun = new RunFile.Saved(result.source(), result.input(), trace);
+        lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
         model.load(trace, result.scenes(), result.scenes().getRunSize());
         if (isShowing()) {
             visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
@@ -457,7 +561,7 @@ public class Workbench extends JPanel {
         String steps = "recorded " + trace.size() + " steps · space pauses";
         if (trace.getEndReason() == EndReason.FINISHED) {
             say("[ok] " + steps, Style.INK);
-        } else if (trace.getEndMessage().startsWith("NoSuchElementException") && result.source().contains("System.in")) {
+        } else if (trace.getEndMessage().startsWith("NoSuchElementException") && allCode().contains("System.in")) {
             visual.setMessage("needs input", "This program reads input, and it ran out.", null,
                     "Type its input into the stdin box below, then press run.");
             say("[needs input] type it into the stdin box, then run again", Style.ERROR);
@@ -472,7 +576,8 @@ public class Workbench extends JPanel {
         code.showErrors(errors);
         StringBuilder text = new StringBuilder();
         for (CompileResult.CompileError error : errors) {
-            text.append(error.line() > 0 ? "line " + error.line() + ": " : "").append(error.message()).append("\n");
+            text.append(error.file() != null ? error.file() + ", " : "")
+                    .append(error.line() > 0 ? "line " + error.line() + ": " : "").append(error.message()).append("\n");
             String hint = CompileHints.hint(error.message());
             if (hint != null) {
                 text.append("  hint: ").append(hint).append("\n");
@@ -481,7 +586,8 @@ public class Workbench extends JPanel {
         }
         console.showMessage(text.toString());
         CompileResult.CompileError first = errors.get(0);
-        String where = (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
+        String where = (first.file() != null ? first.file().substring(first.file().lastIndexOf('/') + 1) + ", " : "")
+                + (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
         String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the console)" : "";
         String next = null;
         if (errors.size() > 1) {
@@ -496,9 +602,15 @@ public class Workbench extends JPanel {
 
     // A recording saved earlier: its code goes in the editor and its steps play, with nothing run.
     public void showRecording(File file, RunFile.Saved saved) {
-        showCode(saved.source(), null, file.getName()); // Ctrl+S saves the code as a .java file, never over the recording
+        // Ctrl+S saves the code as .java files, never over the recording.
+        if (saved.files() != null) {
+            showFiles(saved.files(), null, null, file.getName());
+        } else {
+            showCode(saved.source(), null, file.getName());
+        }
         console.setInput(saved.input());
-        SceneList scenes = new SceneBuilder(saved.source()).build(saved.trace());
+        SceneList scenes = (saved.files() != null ? new SceneBuilder(saved.files()) : new SceneBuilder(saved.source()))
+                .build(saved.trace());
         lastRun = saved;
         fromFile = saved.trace();
         recordingText = "saved recording · " + saved.trace().size() + " steps";
@@ -529,10 +641,68 @@ public class Workbench extends JPanel {
 
     // Saves to the current file, or asks where if there isn't one yet. True if it was saved.
     public boolean save() {
+        if (fileTabs.getTabCount() > 0) {
+            return saveFiles();
+        }
         return currentFile != null ? saveTo(currentFile) : saveAs();
     }
 
+    // A program of several files: every changed file is written back to the folder. A recording's
+    // files, which have no folder yet, ask for one first.
+    private boolean saveFiles() {
+        if (folder == null) {
+            File chosen = host.chooseFolder();
+            if (chosen == null) {
+                return false;
+            }
+            folder = chosen;
+            documentName = chosen.getName();
+        }
+        for (SourceFile file : code.getFiles()) {
+            if (!code.isDirty(file.path()) && new File(folder, file.path()).isFile()) {
+                continue;
+            }
+            File target = new File(folder, file.path());
+            try {
+                java.nio.file.Files.createDirectories(target.toPath().getParent());
+                SafeFiles.write(target.toPath(), file.text());
+                code.markSaved(file.path());
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Couldn't save " + target, e);
+                Dialogs.tell(this, "Couldn't save " + file.path(), "Because " + SafeFiles.describe(e)
+                        + ". Your code is still here; try again, or save it somewhere else.");
+                titleFileTabs();
+                host.stateChanged(this);
+                return false;
+            }
+        }
+        titleFileTabs();
+        host.remember(folder);
+        say("[saved] " + folder.getName(), Style.INK_SOFT);
+        return true;
+    }
+
+    // The folder's own text files (not its code), which the program may read; up to 10 MB each.
+    private List<java.nio.file.Path> folderInputs() {
+        List<java.nio.file.Path> inputs = new ArrayList<>();
+        File[] here = folder.listFiles();
+        if (here != null) {
+            for (File file : here) {
+                if (file.isFile() && !file.isHidden() && !file.getName().endsWith(".java") && file.length() <= 10_000_000) {
+                    inputs.add(file.toPath());
+                }
+            }
+        }
+        for (File added : inputFiles) {
+            inputs.add(added.toPath());
+        }
+        return inputs;
+    }
+
     public boolean saveAs() {
+        if (fileTabs.getTabCount() > 0) {
+            return saveFiles(); // a folder program is saved where it is
+        }
         File file = host.chooseFile(true, FileKind.CODE, currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
         return file != null && saveTo(file);
     }
@@ -562,7 +732,8 @@ public class Workbench extends JPanel {
             say("run the program first, then save its recording", Style.INK_SOFT);
             return;
         }
-        String name = (currentFile != null ? currentFile.getName() : suggestedName(lastRun.source())).replaceAll("\\.java$", "");
+        String name = (folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
+                : suggestedName(lastRun.source() != null ? lastRun.source() : code.getCode())).replaceAll("\\.java$", "");
         File file = host.chooseFile(true, FileKind.RUN, name + RunFile.EXTENSION);
         if (file == null) {
             return;
@@ -583,7 +754,8 @@ public class Workbench extends JPanel {
         if (trace == null) {
             return;
         }
-        String name = (currentFile != null ? currentFile.getName() : suggestedName(code.getCode())).replaceAll("\\.java$", "");
+        String name = (folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
+                : suggestedName(code.getCode())).replaceAll("\\.java$", "");
         File file = host.chooseFile(true, FileKind.CSV, name + "-steps.csv");
         if (file == null) {
             return;
@@ -601,7 +773,7 @@ public class Workbench extends JPanel {
 
     // The Files panel shows when the program could use files, or the user has given it some.
     private void showFilesIfUsed() {
-        boolean used = !inputFiles.isEmpty() || usesFiles(code.getCode());
+        boolean used = !inputFiles.isEmpty() || usesFiles(allCode());
         if (files.isVisible() != used) {
             files.setVisible(used);
             files.getParent().revalidate();
@@ -666,6 +838,7 @@ public class Workbench extends JPanel {
     }
 
     // What one press of run produced: the compile result, and the trace and pictures if it ran.
-    private record RunResult(CompileResult program, Trace trace, SceneList scenes, String source, String input) {
+    private record RunResult(CompileResult program, Trace trace, SceneList scenes, String source, String input,
+                             List<SourceFile> files) {
     }
 }

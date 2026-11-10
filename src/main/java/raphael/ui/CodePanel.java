@@ -55,22 +55,24 @@ import raphael.render.Style;
 // Click a line number to jump to the next time that line runs. Editing the code clears the old
 // run, because its steps no longer match the code. Ctrl+Z and Ctrl+Y undo and redo edits.
 // The code is coloured as in an IDE: JavaTokens finds the pieces, ColoredView draws them.
+// A program of several files has one FileText per file (its text, undo history, unsaved flag and
+// error marks); the editor shows one at a time and, while stepping, follows the running line from
+// file to file. A program typed in on its own is one FileText with no path.
 // OOP: inheritance (extends JPanel); implements TraceListener (Observer pattern); nested classes
 // for the line numbers, the line highlight and the coloured text, which overrides how Swing draws
 // a line; an anonymous subclass of JTextArea.
 public class CodePanel extends JPanel implements TraceListener {
 
     private final TraceModel model;
-    private final Map<Integer, String> errors = new HashMap<>(); // line → message
+    private final Map<String, FileText> texts = new java.util.LinkedHashMap<>(); // path → its text, in tab order
+    private FileText shown; // the file in the editor
+    private java.util.function.Consumer<String> onFileShown = path -> { }; // does nothing until the program sets it
     private final List<Object> errorMarks = new ArrayList<>();
     private final List<Object> stepMarks = new ArrayList<>();
     private final LineNumbers lineNumbers;
     private final JScrollPane scroll;
     private final EditorKeys keys;
-    private final UndoManager undo = new UndoManager(); // the JDK's list of edits to step back through
-    private boolean dirty; // true if the text changed since it was loaded or saved
     private Runnable onCodeChanged = () -> { }; // does nothing until the window sets it
-    private List<JavaTokens.Token> tokens = List.of(); // the coloured pieces of the current text
     private IntConsumer onTextSizeWheel = change -> { }; // does nothing until the window sets it
 
     // An anonymous subclass of JTextArea that shows the error message as a tooltip.
@@ -83,7 +85,7 @@ public class CodePanel extends JPanel implements TraceListener {
 
         @Override
         public String getToolTipText(MouseEvent event) {
-            return errors.get(lineAt(event.getPoint()));
+            return shown.errors.get(lineAt(event.getPoint()));
         }
     };
 
@@ -99,29 +101,13 @@ public class CodePanel extends JPanel implements TraceListener {
         editor.setSelectionColor(Style.ACCENT_TINT);
         editor.setSelectedTextColor(Style.INK);
         ToolTipManager.sharedInstance().registerComponent(editor);
-        lineNumbers = new LineNumbers(editor, model::jumpToLine);
+        lineNumbers = new LineNumbers(editor, line -> model.jumpToLine(shown.path, line));
         scroll = new JScrollPane(editor);
         scroll.setRowHeaderView(lineNumbers);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         add(scroll);
 
-        editor.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                codeChanged();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                codeChanged();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                // style changes only; the text is the same
-            }
-        });
-        editor.getDocument().addUndoableEditListener(undo);
+        show(newText(null, ""));
         bindEditKey("control Z", this::undo);
         bindEditKey("control Y", this::redo);
         bindEditKey("shift control Z", this::redo); // the usual redo on a Mac, and in many editors
@@ -136,15 +122,146 @@ public class CodePanel extends JPanel implements TraceListener {
         });
     }
 
+    // The text of the file in the editor.
     public String getCode() {
         return editor.getText();
     }
 
+    // A program of one file, typed in or opened on its own.
     public void setCode(String code) {
-        editor.setText(code.replace("\r\n", "\n")); // a file saved on Windows ends its lines with \r\n
-        editor.setCaretPosition(0);
-        undo.discardAllEdits(); // undo shouldn't bring back the code that was here before
-        dirty = false;
+        texts.clear();
+        show(newText(null, code));
+        loaded();
+    }
+
+    // New code is in: old errors and the old run no longer apply, and the window hears of it.
+    private void loaded() {
+        clearErrors();
+        model.clear();
+        onCodeChanged.run();
+    }
+
+    // A program of several files; the one named by first (or the first file) is shown.
+    public void setFiles(List<raphael.model.SourceFile> files, String first) {
+        texts.clear();
+        FileText front = null;
+        for (raphael.model.SourceFile file : files) {
+            FileText text = newText(file.path(), file.text());
+            if (front == null || file.path().equals(first)) {
+                front = text;
+            }
+        }
+        show(front != null ? front : newText(null, ""));
+        loaded();
+    }
+
+    // Every file of the program, with its text as it is now, in tab order.
+    public List<raphael.model.SourceFile> getFiles() {
+        List<raphael.model.SourceFile> files = new ArrayList<>();
+        for (FileText text : texts.values()) {
+            files.add(new raphael.model.SourceFile(text.path, editorText(text)));
+        }
+        return files;
+    }
+
+    // The paths of the program's files, in tab order (one null for a program of one file).
+    public List<String> getPaths() {
+        return new ArrayList<>(texts.keySet());
+    }
+
+    // The path of the file in the editor (null for a program of one file).
+    public String getShownPath() {
+        return shown.path;
+    }
+
+    // Puts this file in the editor, if the program has it.
+    public void showFile(String path) {
+        FileText text = texts.get(path);
+        if (text != null && text != shown) {
+            show(text);
+        }
+    }
+
+    // Told the path of the file the editor shows, whenever it changes.
+    public void setOnFileShown(java.util.function.Consumer<String> onFileShown) {
+        this.onFileShown = onFileShown;
+    }
+
+    public boolean isDirty(String path) {
+        FileText text = texts.get(path);
+        return text != null && text.dirty;
+    }
+
+    public void markSaved(String path) {
+        FileText text = texts.get(path);
+        if (text != null) {
+            text.dirty = false;
+        }
+    }
+
+    // A new file's text, kept in this program's list of files. Each has its own document, so its
+    // own undo history; the listeners are attached once, here.
+    private FileText newText(String path, String code) {
+        FileText text = new FileText(path);
+        try {
+            text.document.insertString(0, code.replace("\r\n", "\n"), null); // a file saved on Windows ends its lines with \r\n
+        } catch (BadLocationException e) {
+            throw new IllegalStateException(e); // inserting at 0 always works
+        }
+        text.tokens = JavaTokens.of(code.replace("\r\n", "\n"));
+        text.document.addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                codeChanged(text);
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                codeChanged(text);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                // style changes only; the text is the same
+            }
+        });
+        text.document.addUndoableEditListener(text.undo); // added after the first text: undo can't remove it
+        texts.put(path, text);
+        return text;
+    }
+
+    private static String editorText(FileText text) {
+        try {
+            return text.document.getText(0, text.document.getLength());
+        } catch (BadLocationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // Puts a file's text in the editor, with its own error marks; the step marks follow.
+    private void show(FileText text) {
+        if (shown != null) {
+            shown.caret = editor.getCaretPosition();
+        }
+        for (Object mark : errorMarks) {
+            editor.getHighlighter().removeHighlight(mark);
+        }
+        errorMarks.clear();
+        for (Object mark : stepMarks) {
+            editor.getHighlighter().removeHighlight(mark);
+        }
+        stepMarks.clear();
+        shown = text;
+        editor.setDocument(text.document);
+        editor.setTabSize(4); // kept on the document, so set for each one
+        editor.setCaretPosition(Math.min(text.caret, text.document.getLength()));
+        for (int line : text.errors.keySet()) {
+            errorMarks.add(mark(line, () -> Style.ERROR_LINE));
+        }
+        lineNumbers.revalidate();
+        lineNumbers.repaint();
+        stepChanged(model);
+        onFileShown.accept(text.path);
     }
 
     public void setOnCodeChanged(Runnable onCodeChanged) {
@@ -183,7 +300,7 @@ public class CodePanel extends JPanel implements TraceListener {
     // Changing the look gives the text area a new highlighter, so the line marks are put back.
     public void restoreMarks() {
         errorMarks.clear();
-        for (int line : errors.keySet()) {
+        for (int line : shown.errors.keySet()) {
             errorMarks.add(mark(line, () -> Style.ERROR_LINE));
         }
         stepChanged(model);
@@ -196,17 +313,25 @@ public class CodePanel extends JPanel implements TraceListener {
         lineNumbers.revalidate();
     }
 
+    // Whether any of the program's files has changes that aren't saved.
     public boolean isDirty() {
-        return dirty;
+        for (FileText text : texts.values()) {
+            if (text.dirty) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void markSaved() {
-        dirty = false;
+        for (FileText text : texts.values()) {
+            text.dirty = false;
+        }
     }
 
     // For code that isn't in any file yet, such as a restored draft.
     public void markUnsaved() {
-        dirty = true;
+        shown.dirty = true;
     }
 
     // How wide this panel must be to show the longest line without cutting it off.
@@ -221,14 +346,14 @@ public class CodePanel extends JPanel implements TraceListener {
     }
 
     void undo() {
-        if (editor.isEditable() && undo.canUndo()) {
-            undo.undo();
+        if (editor.isEditable() && shown.undo.canUndo()) {
+            shown.undo.undo();
         }
     }
 
     void redo() {
-        if (editor.isEditable() && undo.canRedo()) {
-            undo.redo();
+        if (editor.isEditable() && shown.undo.canRedo()) {
+            shown.undo.redo();
         }
     }
 
@@ -242,17 +367,24 @@ public class CodePanel extends JPanel implements TraceListener {
     }
 
     // Marks each compile error's line in red; the message shows when you hover over it.
+    // An error with a file goes in that file; one without goes in the file on show. The first
+    // error's file comes into the editor.
     public void showErrors(List<CompileResult.CompileError> compileErrors) {
         clearErrors();
         for (CompileResult.CompileError error : compileErrors) {
             int line = (int) error.line();
+            FileText text = error.file() != null && texts.containsKey(error.file()) ? texts.get(error.file()) : shown;
             if (line > 0) {
-                errors.merge(line, error.message(), (a, b) -> a + "\n" + b);
-                errorMarks.add(mark(line, () -> Style.ERROR_LINE));
+                text.errors.merge(line, error.message(), (a, b) -> a + "\n" + b);
             }
         }
-        if (!compileErrors.isEmpty() && compileErrors.get(0).line() > 0) {
-            scrollToLine((int) compileErrors.get(0).line());
+        if (!compileErrors.isEmpty()) {
+            CompileResult.CompileError first = compileErrors.get(0);
+            FileText firstFile = first.file() != null && texts.containsKey(first.file()) ? texts.get(first.file()) : shown;
+            show(firstFile); // marks its errors
+            if (first.line() > 0) {
+                scrollToLine((int) first.line());
+            }
         }
     }
 
@@ -264,8 +396,13 @@ public class CodePanel extends JPanel implements TraceListener {
         stepMarks.clear();
         Snapshot now = model.getSnapshot();
         Snapshot before = model.getPreviousSnapshot();
-        int current = now == null ? -1 : now.getLine();
-        int previous = before == null ? -1 : before.getLine();
+        String runningIn = fileOf(now);
+        if (now != null && runningIn != null && texts.containsKey(runningIn) && texts.get(runningIn) != shown) {
+            show(texts.get(runningIn)); // follow the program into another file; show() marks it
+            return;
+        }
+        int current = now == null || !java.util.Objects.equals(runningIn, shown.path) ? -1 : now.getLine();
+        int previous = before == null || !java.util.Objects.equals(fileOf(before), shown.path) ? -1 : before.getLine();
         boolean crashed = now != null && now.getException() != null;
         if (previous > 0 && previous != current) {
             stepMarks.add(mark(previous, () -> Style.PREVIOUS_LINE));
@@ -279,7 +416,14 @@ public class CodePanel extends JPanel implements TraceListener {
             scrollToLine(current);
         }
         lineNumbers.show(current, previous, crashed, model.hasSteps());
-        lineNumbers.showThrow(thrown == null ? -1 : thrown.throwLine(), thrown == null ? -1 : thrown.catchLine());
+        boolean bracketHere = thrown != null && java.util.Objects.equals(thrown.throwFile(), shown.path)
+                && java.util.Objects.equals(thrown.catchFile(), shown.path);
+        lineNumbers.showThrow(bracketHere ? thrown.throwLine() : -1, bracketHere ? thrown.catchLine() : -1);
+    }
+
+    // The file the program is running in at this step (null for a program of one file).
+    private static String fileOf(Snapshot snapshot) {
+        return snapshot == null || snapshot.getFrames().isEmpty() ? null : snapshot.getFrames().get(0).getFile();
     }
 
     private void bindEditKey(String key, Runnable action) {
@@ -292,9 +436,14 @@ public class CodePanel extends JPanel implements TraceListener {
         });
     }
 
-    private void codeChanged() {
-        dirty = true;
-        tokens = JavaTokens.of(editor.getText());
+    private void codeChanged(FileText text) {
+        text.dirty = true;
+        text.tokens = JavaTokens.of(editorText(text));
+        lineNumbers.revalidate();
+        lineNumbers.repaint();
+        if (text != shown) {
+            return;
+        }
         editor.repaint(); // a /* can change the colour of every line after it
         clearErrors();
         model.clear();
@@ -306,7 +455,9 @@ public class CodePanel extends JPanel implements TraceListener {
             editor.getHighlighter().removeHighlight(mark);
         }
         errorMarks.clear();
-        errors.clear();
+        for (FileText text : texts.values()) {
+            text.errors.clear();
+        }
     }
 
     // Highlights a whole line (lines count from 1). Returns a tag for removing it later.
@@ -385,7 +536,7 @@ public class CodePanel extends JPanel implements TraceListener {
         @Override
         protected float drawUnselectedText(Graphics2D g, float x, float y, int start, int end) throws BadLocationException {
             int position = start;
-            for (JavaTokens.Token token : tokens) {
+            for (JavaTokens.Token token : shown.tokens) {
                 if (token.end() <= position) {
                     continue;
                 }
@@ -449,24 +600,7 @@ public class CodePanel extends JPanel implements TraceListener {
         LineNumbers(JTextArea editor, IntConsumer onClick) {
             this.editor = editor;
             setFont(editor.getFont());
-            setToolTipText("click a line number to jump to the next time it runs");
-            editor.getDocument().addDocumentListener(new DocumentListener() {
-                @Override
-                public void insertUpdate(DocumentEvent e) {
-                    revalidate();
-                    repaint();
-                }
-
-                @Override
-                public void removeUpdate(DocumentEvent e) {
-                    revalidate();
-                    repaint();
-                }
-
-                @Override
-                public void changedUpdate(DocumentEvent e) {
-                }
-            });
+            setToolTipText("click a line number to jump to the next time it runs"); // CodePanel repaints it as the text changes
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
@@ -619,6 +753,22 @@ public class CodePanel extends JPanel implements TraceListener {
             triangle.closePath();
             g.setColor(color);
             g.fill(triangle);
+        }
+    }
+
+    // One file of the program: its text, undo history, unsaved flag, compile errors, colours and
+    // where the cursor was. The editor shows one FileText at a time.
+    private static final class FileText {
+        final String path; // null for a program of one file
+        final javax.swing.text.PlainDocument document = new javax.swing.text.PlainDocument();
+        final UndoManager undo = new UndoManager(); // the JDK's list of edits to step back through
+        final Map<Integer, String> errors = new HashMap<>(); // line → message
+        List<JavaTokens.Token> tokens = List.of(); // the coloured pieces of the text
+        boolean dirty; // changed since it was loaded or saved
+        int caret;
+
+        FileText(String path) {
+            this.path = path;
         }
     }
 }

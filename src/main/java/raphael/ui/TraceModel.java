@@ -130,9 +130,15 @@ public class TraceModel {
     // Jumps to the next step that runs this line, wrapping round to the start.
     // Returns false if the line never runs.
     public boolean jumpToLine(int line) {
+        return jumpToLine(null, line);
+    }
+
+    // The same, for a line of one file of a program of several files (file null: a program of one file).
+    public boolean jumpToLine(String file, int line) {
         for (int k = 1; k <= size(); k++) {
             int candidate = (step + k) % size();
-            if (trace.get(candidate).getLine() == line) {
+            Snapshot at = trace.get(candidate);
+            if (at.getLine() == line && java.util.Objects.equals(file, at.getFrames().get(0).getFile())) {
                 setStep(candidate);
                 return true;
             }
