@@ -67,6 +67,7 @@ public class SceneBuilder {
     // source is the program's text: it tells which variables are indexes into which arrays.
     public SceneBuilder(String source) {
         this.indexes = new IndexUsage(source);
+        this.heapNames = heapArrays(source);
     }
 
     // A program of several files: path → text. A step's line is read from the file it's in.
@@ -77,6 +78,89 @@ public class SceneBuilder {
             all.append(file.text()).append('\n');
         }
         this.indexes = new IndexUsage(all.toString());
+        this.heapNames = heapArrays(all.toString());
+    }
+
+    // ---- heaps ----
+
+    // Heap index arithmetic: 2 * i + 1, 2 * i + 2, (i - 1) / 2.
+    private static final Pattern HEAP_INDEX = Pattern.compile(
+            "2\\s*\\*\\s*\\w+\\s*\\+\\s*[12]\\b|\\(\\s*\\w+\\s*-\\s*1\\s*\\)\\s*/\\s*2");
+    private static final Pattern ASSIGNED = Pattern.compile("\\b(\\w+)\\s*=\\s*([^;=]+);");
+    private static final Pattern INDEXED = Pattern.compile("\\b(\\w+)\\s*\\[\\s*([^\\[\\]]+)\\]");
+    private static final Set<String> HEAP_SIZE_NAMES = Set.of("size", "n", "heapsize", "count", "length", "len");
+
+    private final Set<String> heapNames; // arrays the code indexes the way a heap is indexed
+
+    // The arrays indexed with heap arithmetic: heap[(i - 1) / 2], or arr[left] after left = 2 * i + 1.
+    private static Set<String> heapArrays(String source) {
+        Set<String> heapVariables = new HashSet<>();
+        java.util.regex.Matcher m = ASSIGNED.matcher(source);
+        while (m.find()) {
+            if (HEAP_INDEX.matcher(m.group(2)).find()) {
+                heapVariables.add(m.group(1));
+            }
+        }
+        Set<String> arrays = new HashSet<>();
+        m = INDEXED.matcher(source);
+        while (m.find()) {
+            String index = m.group(2).trim();
+            if (HEAP_INDEX.matcher(index).find() || heapVariables.contains(index)) {
+                arrays.add(m.group(1));
+            }
+        }
+        return arrays;
+    }
+
+    // Which arrays are heaps, learned over the whole run, and how much of each is in the heap
+    // at every step: a variable named like a size, else what it was the step before.
+    private List<Map<Long, Integer>> learnHeaps(Trace trace, RenderContext context) {
+        List<Map<Long, Integer>> sizes = new ArrayList<>();
+        Map<Long, Integer> last = new HashMap<>();
+        for (int i = 0; i < trace.size(); i++) {
+            Snapshot snapshot = trace.get(i);
+            Map<String, Value> visible = visibleVariables(snapshot);
+            for (Map.Entry<String, Value> named : visible.entrySet()) {
+                ArrayNode array = arrayOf(snapshot, named.getValue());
+                if (array != null && heapNames.contains(named.getKey()) && !array.getElements().isEmpty()
+                        && array.getElements().get(0) instanceof PrimitiveValue) {
+                    context.markHeap(array.getId(), array.getLength());
+                }
+            }
+            for (HeapObject object : snapshot.getHeap().values()) {
+                if (object instanceof ArrayNode && object.getTypeName().endsWith("PriorityQueue")) {
+                    context.markHeap(object.getId(), ((ArrayNode) object).getElements().size()); // its array is a heap
+                }
+            }
+            for (HeapObject object : snapshot.getHeap().values()) {
+                if (object instanceof ArrayNode && context.isHeap(object.getId())) {
+                    context.markHeap(object.getId(), ((ArrayNode) object).getElements().size());
+                    Integer size = null;
+                    for (Map.Entry<String, Value> named : visible.entrySet()) {
+                        String name = named.getKey().substring(named.getKey().lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT);
+                        if (HEAP_SIZE_NAMES.contains(name) && named.getValue() instanceof PrimitiveValue) {
+                            try {
+                                int value = Integer.parseInt(named.getValue().display());
+                                if (value >= 0 && value <= ((ArrayNode) object).getLength()) {
+                                    size = value;
+                                    break;
+                                }
+                            } catch (NumberFormatException notAnInt) {
+                                // a size that isn't a whole number isn't this
+                            }
+                        }
+                    }
+                    if (object.getTypeName().endsWith("PriorityQueue")) {
+                        size = ((ArrayNode) object).getElements().size();
+                    }
+                    if (size != null) {
+                        last.put(object.getId(), size);
+                    }
+                }
+            }
+            sizes.add(new HashMap<>(last));
+        }
+        return sizes;
     }
 
     // The lines of the file this step's line is in.
@@ -92,6 +176,7 @@ public class SceneBuilder {
     // returns the pictures as a SceneList, which builds each one when it's asked for.
     public SceneList build(Trace trace) {
         RenderContext context = new RenderContext();
+        List<Map<Long, Integer>> heapSizes = learnHeaps(trace, context); // before the arrays' room is measured: a heap's tree needs room too
         List<Map<Long, List<RenderContext.Marker>>> markers = new ArrayList<>();
         for (int i = 0; i < trace.size(); i++) { // measure the whole run first
             Snapshot snapshot = trace.get(i);
@@ -111,7 +196,10 @@ public class SceneBuilder {
             arrays.removeIf(structure -> !isArray(structure));
             context.reserveArrays(layOut(arrays, new Scene(), context));
         }
-        return new SceneList(trace.size(), i -> buildStep(trace, i, context, markers.get(i)));
+        return new SceneList(trace.size(), i -> {
+            context.setHeapSizes(heapSizes.get(i));
+            return buildStep(trace, i, context, markers.get(i));
+        });
     }
 
     // The picture of step i. Everything it uses was learned for the whole run beforehand, so steps

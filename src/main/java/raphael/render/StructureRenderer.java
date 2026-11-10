@@ -51,13 +51,19 @@ public abstract class StructureRenderer {
 
     // One cell that holds a value: the value as text, or a pointer slot with an arrow if it's a reference.
     protected static void addCell(Scene scene, String key, Value value, double x, double y, double w, String caption) {
+        addCell(scene, key, value, x, y, w, caption, SceneNode.Look.STILL);
+    }
+
+    // The same, faded or not (a heap's cells past its size are faded).
+    protected static void addCell(Scene scene, String key, Value value, double x, double y, double w, String caption,
+                                  SceneNode.Look look) {
         if (value instanceof ReferenceValue) {
-            scene.add(new SceneNode(key, SceneNode.Kind.SLOT, x, y, w, Style.CELL_H, "", caption));
+            scene.add(new SceneNode(key, SceneNode.Kind.SLOT, x, y, w, Style.CELL_H, "", caption, look));
             scene.add(new SceneEdge(key + "→", key, key(((ReferenceValue) value).id()), SceneEdge.Kind.ARROW));
         } else if (value instanceof NullValue) {
-            scene.add(new SceneNode(key, SceneNode.Kind.NULL_SLOT, x, y, w, Style.CELL_H, "", caption));
+            scene.add(new SceneNode(key, SceneNode.Kind.NULL_SLOT, x, y, w, Style.CELL_H, "", caption, look));
         } else {
-            scene.add(new SceneNode(key, SceneNode.Kind.CELL, x, y, w, Style.CELL_H, value.display(), caption));
+            scene.add(new SceneNode(key, SceneNode.Kind.CELL, x, y, w, Style.CELL_H, value.display(), caption, look));
         }
     }
 

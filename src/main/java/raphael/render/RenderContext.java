@@ -102,6 +102,37 @@ public class RenderContext {
         return markerRows.getOrDefault(arrayId, 0);
     }
 
+    // ---- heaps: an array that is also drawn as the tree it stands for ----
+
+    private final Map<Long, Integer> heapDepth = new HashMap<>(); // heap array id → deepest level it ever has
+    private Map<Long, Integer> heapSizes = new HashMap<>();       // this step: heap array id → cells in the heap
+
+    public void markHeap(long arrayId, int length) {
+        int depth = 0;
+        while ((1 << (depth + 1)) - 1 < length) {
+            depth++;
+        }
+        heapDepth.merge(arrayId, depth, Math::max);
+    }
+
+    public boolean isHeap(long arrayId) {
+        return heapDepth.containsKey(arrayId);
+    }
+
+    // The deepest level the heap's tree reaches in the run (0 for just a root).
+    public int heapDepth(long arrayId) {
+        return heapDepth.getOrDefault(arrayId, 0);
+    }
+
+    public void setHeapSizes(Map<Long, Integer> sizes) {
+        this.heapSizes = sizes;
+    }
+
+    // How many of the array's cells are in the heap at this step (the rest are sorted, or unused).
+    public int heapSize(long arrayId, int length) {
+        return Math.min(length, heapSizes.getOrDefault(arrayId, length));
+    }
+
     public boolean needsRowMarkerRoom(long gridId) {
         return rowMarkerRoom.getOrDefault(gridId, false);
     }
