@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import raphael.compile.CompileResult;
 import raphael.compile.SourceCompiler;
@@ -486,9 +485,13 @@ class TracerTest {
         assertTrue(raphael.waitFor(10, TimeUnit.SECONDS));
         ProcessHandle program = ProcessHandle.of(pid).orElse(null);
         if (program != null) {
-            try {
-                program.onExit().get(4, TimeUnit.SECONDS);
-            } catch (TimeoutException e) {
+            // Polled: onExit() on a process that isn't our own child checks less and less often
+            // on macOS, and can report an ended program seconds late (the same reason ParentWatch polls).
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
+            while (program.isAlive() && System.nanoTime() < until) {
+                Thread.sleep(100);
+            }
+            if (program.isAlive()) {
                 program.destroyForcibly();
                 fail("the traced program was still running after Raphael ended (" + how + ")");
             }
