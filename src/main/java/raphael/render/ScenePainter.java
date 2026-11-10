@@ -312,9 +312,9 @@ public class ScenePainter {
             case VISITED_NODE -> {
                 Ellipse2D circle = new Ellipse2D.Double(node.x() + 0.5, node.y() + 0.5, node.w(), node.h());
                 setAlpha(g, alpha);
-                g.setColor(blend(Style.PRESSED, Style.CHANGE, look.flash()));
+                g.setColor(blend(Style.NODE_VISITED, Style.CHANGE, look.flash()));
                 g.fill(circle);
-                g.setColor(Style.OUTLINE);
+                g.setColor(Style.MUTED);
                 g.setStroke(HAIR);
                 g.draw(circle);
                 value(g, node, circle, alpha);
@@ -325,7 +325,7 @@ public class ScenePainter {
                 setAlpha(g, alpha);
                 g.setColor(blend(red ? Style.NODE_RED : Style.NODE_BLACK, Style.CHANGE, look.flash()));
                 g.fill(circle);
-                g.setColor(red ? Style.NODE_RED_EDGE : Style.OUTLINE);
+                g.setColor(red ? Style.NODE_RED_EDGE : Style.NODE_BLACK_EDGE);
                 g.setStroke(HAIR);
                 g.draw(circle);
                 value(g, node, circle, alpha, red ? Style.NODE_RED_INK : Style.NODE_BLACK_INK);

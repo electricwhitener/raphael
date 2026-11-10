@@ -40,7 +40,7 @@ public final class Style {
     public static final int CIRCLE = 40;          // tree node size
     public static final int TREE_X_GAP = 14;
     public static final int TREE_LEVEL_H = 66;
-    public static final int HEAP_LEVEL_H = 58;     // a heap array's tree, drawn under the array
+    public static final int HEAP_LEVEL_H = 72;     // room under each node for its index markers     // a heap array's tree, drawn under the array
     public static final int HEAP_GAP = 20;
     public static final int GRAPH_GAP = 40;        // between a graph's table and its drawing
     public static final int GRAPH_MIN_RADIUS = 70;         // between the array and its tree
@@ -67,7 +67,7 @@ public final class Style {
     public static final int STATUS_H = 28;   // the status bar
     // How far each view may shrink or grow its run to fit the room. The views of boxes and text
     // (calls, objects, files) stay near their real size and scroll instead of shrinking their text.
-    public static final double FIT_PICTURE_MIN = 0.6;
+    public static final double FIT_PICTURE_MIN = 0.75; // a big tree scrolls rather than shrinking its text away
     public static final double FIT_PICTURE_MAX = 1.5;
     public static final double FIT_CALLS_MIN = 0.72;  // a tree of calls: as much of it in sight as can still be read
     public static final double FIT_CALLS_MAX = 1.2;
@@ -108,6 +108,8 @@ public final class Style {
     public static Color NODE_RED_INK;
     public static Color NODE_BLACK;
     public static Color NODE_BLACK_INK;
+    public static Color NODE_BLACK_EDGE; // so a black node shows against the dark pane
+    public static Color NODE_VISITED;    // a graph's visited vertex: grey, the past
     public static Color FILL_ALT;      // pointer slots, title bars
     public static Color ACCENT;        // variables, the next line
     public static Color ACCENT_PRESSED; // the run button under the mouse
@@ -182,9 +184,11 @@ public final class Style {
         ON_ACCENT = pick(0xFFFFFF, 0x0D1117);
         FILL = pick(0xFFFFFF, 0x161B22);
         NODE_RED = pick(0xF9D3D8, 0x5C2630);
-        NODE_RED_EDGE = pick(0xC9707E, 0xC9707E);
+        NODE_RED_EDGE = pick(0xB4505F, 0xE0808E);
         NODE_RED_INK = pick(0x5C1621, 0xFFE1E5);
-        NODE_BLACK = pick(0x2D333B, 0x000000);
+        NODE_BLACK = pick(0x2D333B, 0x010409);
+        NODE_BLACK_EDGE = pick(0x2D333B, 0x6E7681);
+        NODE_VISITED = pick(0xC8D0D9, 0x3D444D);
         NODE_BLACK_INK = pick(0xFFFFFF, 0xE6EDF3);
         FILL_ALT = pick(0xF6F8FA, 0x21262D);
         ACCENT = pick(0x0969DA, 0x4493F8);

@@ -155,12 +155,22 @@ public class ArrayRenderer extends StructureRenderer {
             }
             scene.add(new SceneNode("forest:" + id + "[" + i + "]", SceneNode.Kind.CIRCLE, x + at[i], top + depth[i] * Style.HEAP_LEVEL_H,
                     size, size, String.valueOf(i), null));
+            int stacked = 0;
+            for (RenderContext.Marker marker : context.markersFor(array.getId())) { // ra, rb: under their node
+                if (marker.axis() == RenderContext.Axis.ROW && marker.inRange() && marker.index() == i) {
+                    double w = Style.textWidth(marker.name(), Style.MARKER_FONT) + 10;
+                    scene.add(new SceneNode("forestidx:" + array.getId() + ":" + marker.name(), SceneNode.Kind.MARKER,
+                            x + at[i] + size / 2 - w / 2, top + depth[i] * Style.HEAP_LEVEL_H + size + 2 + stacked * Style.MARKER_H,
+                            w, Style.MARKER_H, marker.name(), null));
+                    stacked++;
+                }
+            }
             if (parent[i] != i) {
                 scene.add(new SceneEdge("forest:" + id + "~" + i, "forest:" + id + "[" + parent[i] + "]", "forest:" + id + "[" + i + "]",
                         SceneEdge.Kind.TREE));
             }
         }
-        return new Dimension((int) Math.max(next[0], slot), (int) (deepest * Style.HEAP_LEVEL_H + size));
+        return new Dimension((int) Math.max(next[0], slot), (int) (deepest * Style.HEAP_LEVEL_H + size + 2 * Style.MARKER_H));
     }
 
     private static int place(int node, int level, java.util.List<java.util.List<Integer>> children, double[] at, int[] depth,
@@ -204,16 +214,24 @@ public class ArrayRenderer extends StructureRenderer {
                 scene.add(new SceneEdge("heap:" + id + "~" + i, "heap:" + id + "[" + ((i - 1) / 2) + "]", "heap:" + id + "[" + i + "]",
                         SceneEdge.Kind.TREE));
             }
-            int stacked = 0;
+            // Under its node, pointing up at it, the way a marker sits under an array cell; two on
+            // one node stand side by side, so they don't run into the node's children below.
+            java.util.List<RenderContext.Marker> here = new java.util.ArrayList<>();
+            double total = 0;
             for (RenderContext.Marker marker : context.markersFor(array.getId())) {
                 if (marker.axis() == RenderContext.Axis.ROW && marker.inRange() && marker.index() == i) {
-                    double w = Style.textWidth(marker.name(), Style.MARKER_FONT) + 10;
-                    scene.add(new SceneNode("heapidx:" + array.getId() + ":" + marker.name(), SceneNode.Kind.MARKER,
-                            cx + size / 2 + 3, cy - Style.MARKER_H / 2.0 + stacked * Style.MARKER_H, w, Style.MARKER_H, marker.name(), null));
-                    stacked++;
+                    here.add(marker);
+                    total += Style.textWidth(marker.name(), Style.MARKER_FONT) + 10;
                 }
             }
+            double mx = cx - total / 2;
+            for (RenderContext.Marker marker : here) {
+                double w = Style.textWidth(marker.name(), Style.MARKER_FONT) + 10;
+                scene.add(new SceneNode("heapidx:" + array.getId() + ":" + marker.name(), SceneNode.Kind.MARKER,
+                        mx, cy + size / 2 + 2, w, Style.MARKER_H, marker.name(), null));
+                mx += w;
+            }
         }
-        return new Dimension((int) (treeW + 40), (int) (depth * Style.HEAP_LEVEL_H + size));
+        return new Dimension((int) (treeW + 40), (int) (depth * Style.HEAP_LEVEL_H + size + Style.MARKER_H));
     }
 }

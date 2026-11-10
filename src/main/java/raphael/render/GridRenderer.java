@@ -130,8 +130,10 @@ public class GridRenderer extends StructureRenderer {
                     vx - size / 2, vy - size / 2, size, size, String.valueOf(v), null));
             if (state.dist() != null && v < state.dist().size()) {
                 String d = state.dist().get(v).display();
-                scene.add(new SceneNode(id + "[" + v + "]:d", SceneNode.Kind.TEXT, vx - size, vy + size / 2 + 1, 2 * size,
-                        Style.CAPTION_H, "d=" + (infinite(d) ? "∞" : d), null));
+                double outY = vy + Math.sin(angle) * (size / 2 + 4) - Style.CAPTION_H / 2.0; // on the outside, clear of the edges
+                double outX = vx + Math.cos(angle) * (size / 2 + 14) - size;
+                scene.add(new SceneNode(id + "[" + v + "]:d", SceneNode.Kind.TEXT, outX, outY + Math.sin(angle) * 8, 2 * size,
+                        Style.CAPTION_H, "d=" + (infinite(d) ? INFINITY : d), null));
             }
             int stacked = 0;
             for (RenderContext.Marker marker : context.markersFor(grid.getId())) {
@@ -170,6 +172,9 @@ public class GridRenderer extends StructureRenderer {
         }
         return new Dimension((int) (2 * radius + size + 60), (int) (2 * radius + size + Style.CAPTION_H + 4));
     }
+
+    // ∞ where the font has it, else "inf".
+    private static final String INFINITY = Style.CAPTION_FONT.canDisplay('\u221E') ? "\u221E" : "inf";
 
     // 999, Integer.MAX_VALUE and the like: "no edge" or "not reached yet".
     private static boolean infinite(String text) {

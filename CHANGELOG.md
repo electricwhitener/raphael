@@ -22,6 +22,14 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
   - **Objects**: the classes as a small UML diagram (parents above, a dashed line to an interface, private fields marked -) beside the objects alive now; the running method is outlined on its object and in its class.
   - **Files**: the input typed into the stdin box, word by word as the program reads it (so the line end nextInt() leaves behind shows), and every file in the program's folder, with the lines read so far faded and a missing file drawn as a ghost.
 - 28 new examples: Java basics, equality, an immutable class, constructor chaining, default methods, lambdas, several catches, throw and throws, propagation, try-with-resources, reading and copying files, a CSV, word counts, and seven recursions (131 in all). An example can bring its own input with a `// stdin:` line.
+
+**More structures**
+- A heap's array is also drawn as its tree, and in heap sort the sorted end leaves the tree.
+- Red-black trees in red and black (a soft rose, so it can't be mistaken for an error), AVL heights under each node, and parent links that no longer turn a tree into a box.
+- Hash tables as a column of buckets with their chains; array stacks standing upright.
+- Graphs drawn beside their adjacency list or matrix, with visited vertices, distances and weights.
+- Union-find parent arrays drawn as their forest; B+ tree leaves linked; doubly circular lists with tidy wrap-around arrows.
+- New examples: AVL insert, red-black insert (left-leaning and CLRS), a B+ tree, union-find.
 - Fix: an exception passing through a try-with-resources was reported as caught on the try line.
 - Fix: if Raphael is killed while a program is paused, the program now ends within a fifth of a second (it could take several seconds on a Mac).
 

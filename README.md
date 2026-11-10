@@ -325,6 +325,7 @@ Safety:
 | `MultiwayTreeStructure` | A tree whose children are in an array (a B-tree): keys, children, count | `getChildren(id)`, `getKeysArray(id)`, `getUsedKeys(id)` |
 | **render/** | | |
 | `SceneBuilder` | Learns the whole run (sizes, markers, list order), then builds any step's `Scene`: lays out structures in rows, adds markers, outlines, labels and moves | `build(trace)`, `rowOf()`, `markersAt()`, `addFocus()`, `addMoves()`, `addLabels()` |
+| `HashTableRenderer`, `HashTableStructure` | A hash table with chaining: the buckets in a column, each chain hanging to its right | `render()`, `chain(bucket)` |
 | `SceneSource` (render/) | The interface the Calls, Objects and Files views share: a scene for a step, and the room the run needs | `sceneAt(step)`, `getRunSize()` |
 | `CallsScenes`, `CallTree` | The Calls view: the call stack as boxes with a note (base case, what came back, what it waits for), or, for branching recursion, the tree of every call, rebuilt from the steps and their returns | `sceneAt()`, `isTree()`, `CallTree.branchingMethods()`, `runningAt()` |
 | `ObjectsScenes` | The Objects view: the classes as a UML diagram (parents above, extends and implements lines) beside the objects alive now; the running method outlined on its object and in its class | `sceneAt()`, `layOutClasses()`, `objectLines()` |
@@ -402,6 +403,7 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Records and enums | `Icons.Glyph` (an enum whose constants each override `draw()`), `SettingsDialog.Theme`, `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Visitor | `FactScanner` extends javac's `TreePathScanner` | javac walks its syntax tree and calls the `visitXxx` method for each kind of node; the scanner only says what to do with each kind. |
+| Design pattern: Registry | `StructureRenderer.forStructure()` | A map from each kind of structure to the renderer that draws it, instead of a chain of `instanceof` tests. |
 | Design pattern: Template Method | `Concept.moments()` | The same steps for every concept (does it apply? then find), with each subclass filling them in. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
 | Design pattern: Builder | `Dialogs.question(...).body(...).buttons(...).ask()` | Builds a dialog step by step, so its many optional parts don't need one method with a dozen parameters. |
