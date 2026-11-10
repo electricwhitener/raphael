@@ -2,7 +2,7 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
-## Unreleased
+## 1.1.0 (2026-11-10)
 
 **Works like an IDE**
 - Tabs: each program has its own tab and its own run, so you can switch while one is recording. Ctrl+Tab switches, Ctrl+W closes, Ctrl+Shift+T reopens, and a right-click on a tab closes the others or shows the file's folder.
