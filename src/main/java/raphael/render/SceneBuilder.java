@@ -85,6 +85,74 @@ public class SceneBuilder {
 
     private final Set<String> stackNames; // arrays the code indexes with top: a stack
 
+    // ---- graphs ----
+
+    private static final Set<String> GRAPH_NAMES = Set.of("adj", "graph", "g", "adjacency", "neighbours", "neighbors",
+            "matrix", "w", "weights", "cost", "edges", "adjlist", "adjmatrix");
+    private static final Set<String> VISITED_NAMES = Set.of("visited", "seen", "done", "marked", "discovered");
+    private static final Set<String> DIST_NAMES = Set.of("dist", "distance", "distances");
+
+    // The tables that are graphs (by their name and their shape), and at every step which vertices
+    // are visited and how far each one is.
+    private List<Map<Long, RenderContext.GraphState>> learnGraphs(Trace trace, RenderContext context) {
+        List<Map<Long, RenderContext.GraphState>> states = new ArrayList<>();
+        for (int i = 0; i < trace.size(); i++) {
+            Snapshot snapshot = trace.get(i);
+            Map<String, Value> visible = visibleVariables(snapshot);
+            Map<Long, RenderContext.GraphState> step = new HashMap<>();
+            for (Map.Entry<String, Value> named : visible.entrySet()) {
+                String name = named.getKey().substring(named.getKey().lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT);
+                ArrayNode grid = arrayOf(snapshot, named.getValue());
+                if (grid == null || !GRAPH_NAMES.contains(name)) {
+                    continue;
+                }
+                List<ArrayNode> rows = new ArrayList<>();
+                for (Value row : grid.getElements()) {
+                    ArrayNode array = arrayOf(snapshot, row);
+                    if (array == null) {
+                        rows = null;
+                        break;
+                    }
+                    rows.add(array);
+                }
+                if (rows == null || rows.isEmpty()) {
+                    continue;
+                }
+                int n = rows.size();
+                boolean square = true;
+                boolean vertexNumbers = true;
+                for (ArrayNode row : rows) {
+                    square &= row.getElements().size() == n;
+                    for (Value cell : row.getElements()) {
+                        Integer v = intOf(cell);
+                        vertexNumbers &= v != null && v >= 0 && v < n;
+                    }
+                }
+                boolean matrix = square && grid.getElementType().endsWith("[]");
+                if (!matrix && !vertexNumbers) {
+                    continue; // a table of something else
+                }
+                context.markGraph(grid.getId(), matrix, n);
+                List<Value> visited = null;
+                List<Value> dist = null;
+                for (Map.Entry<String, Value> other : visible.entrySet()) {
+                    String otherName = other.getKey().toLowerCase(java.util.Locale.ROOT);
+                    ArrayNode array = arrayOf(snapshot, other.getValue());
+                    if (array != null && array.getElements().size() == n) {
+                        if (VISITED_NAMES.contains(otherName) && visited == null) {
+                            visited = array.getElements();
+                        } else if (DIST_NAMES.contains(otherName) && dist == null) {
+                            dist = array.getElements();
+                        }
+                    }
+                }
+                step.put(grid.getId(), new RenderContext.GraphState(visited, dist));
+            }
+            states.add(step);
+        }
+        return states;
+    }
+
     private static Set<String> stackArrays(String source) {
         Set<String> arrays = new HashSet<>();
         java.util.regex.Matcher m = INDEXED.matcher(source);
@@ -194,7 +262,8 @@ public class SceneBuilder {
     // returns the pictures as a SceneList, which builds each one when it's asked for.
     public SceneList build(Trace trace) {
         RenderContext context = new RenderContext();
-        List<Map<Long, Integer>> heapSizes = learnHeaps(trace, context); // before the arrays' room is measured: a heap's tree needs room too
+        List<Map<Long, Integer>> heapSizes = learnHeaps(trace, context);
+        List<Map<Long, RenderContext.GraphState>> graphStates = learnGraphs(trace, context); // before the arrays' room is measured: a heap's tree needs room too
         List<Map<Long, List<RenderContext.Marker>>> markers = new ArrayList<>();
         for (int i = 0; i < trace.size(); i++) { // measure the whole run first
             Snapshot snapshot = trace.get(i);
@@ -216,6 +285,7 @@ public class SceneBuilder {
         }
         return new SceneList(trace.size(), i -> {
             context.setHeapSizes(heapSizes.get(i));
+            context.setGraphStates(graphStates.get(i));
             return buildStep(trace, i, context, markers.get(i));
         });
     }

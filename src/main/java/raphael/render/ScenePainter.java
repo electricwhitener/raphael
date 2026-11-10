@@ -239,7 +239,8 @@ public class ScenePainter {
         if (dx == 0 && dy == 0) {
             return new Point2D.Double(cx, cy);
         }
-        if (node.kind() == SceneNode.Kind.CIRCLE || node.kind() == SceneNode.Kind.RED_NODE || node.kind() == SceneNode.Kind.BLACK_NODE) {
+        if (node.kind() == SceneNode.Kind.CIRCLE || node.kind() == SceneNode.Kind.RED_NODE || node.kind() == SceneNode.Kind.BLACK_NODE
+                || node.kind() == SceneNode.Kind.VISITED_NODE) {
             double length = Math.hypot(dx, dy);
             return new Point2D.Double(cx + dx / length * node.w() / 2, cy + dy / length * node.h() / 2);
         }
@@ -290,6 +291,16 @@ public class ScenePainter {
                 Ellipse2D circle = new Ellipse2D.Double(node.x() + 0.5, node.y() + 0.5, node.w(), node.h());
                 setAlpha(g, alpha);
                 g.setColor(blend(Style.FILL, Style.CHANGE, look.flash()));
+                g.fill(circle);
+                g.setColor(Style.OUTLINE);
+                g.setStroke(HAIR);
+                g.draw(circle);
+                value(g, node, circle, alpha);
+            }
+            case VISITED_NODE -> {
+                Ellipse2D circle = new Ellipse2D.Double(node.x() + 0.5, node.y() + 0.5, node.w(), node.h());
+                setAlpha(g, alpha);
+                g.setColor(blend(Style.PRESSED, Style.CHANGE, look.flash()));
                 g.fill(circle);
                 g.setColor(Style.OUTLINE);
                 g.setStroke(HAIR);

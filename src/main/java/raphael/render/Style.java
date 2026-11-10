@@ -41,7 +41,9 @@ public final class Style {
     public static final int TREE_X_GAP = 14;
     public static final int TREE_LEVEL_H = 66;
     public static final int HEAP_LEVEL_H = 58;     // a heap array's tree, drawn under the array
-    public static final int HEAP_GAP = 20;         // between the array and its tree
+    public static final int HEAP_GAP = 20;
+    public static final int GRAPH_GAP = 40;        // between a graph's table and its drawing
+    public static final int GRAPH_MIN_RADIUS = 70;         // between the array and its tree
     public static final int CHILD_SLOT_H = 12;    // the row of child pointers under a B-tree node
     public static final int SUBTREE_GAP = 18;     // between neighbouring B-tree nodes
     public static final int LEVEL_GAP = 66;       // between a B-tree node and its children, with room for markers

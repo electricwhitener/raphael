@@ -102,6 +102,43 @@ public class RenderContext {
         return markerRows.getOrDefault(arrayId, 0);
     }
 
+    // ---- graphs: a table that is a graph's adjacency list or matrix ----
+
+    // At one step: which vertices are visited (an array named visited, seen or done) and each
+    // one's distance (an array named dist), or null where the program has no such array.
+    public record GraphState(List<raphael.model.Value> visited, List<raphael.model.Value> dist) {
+        public static final GraphState NONE = new GraphState(null, null);
+    }
+
+    private final Map<Long, Boolean> graphs = new HashMap<>();   // grid id → is an adjacency matrix (else a list)
+    private final Map<Long, Integer> graphSize = new HashMap<>(); // grid id → most vertices it has in the run
+    private Map<Long, GraphState> graphStates = new HashMap<>();
+
+    public void markGraph(long gridId, boolean matrix, int vertices) {
+        graphs.putIfAbsent(gridId, matrix);
+        graphSize.merge(gridId, vertices, Math::max);
+    }
+
+    public boolean isGraph(long gridId) {
+        return graphs.containsKey(gridId);
+    }
+
+    public boolean isMatrixGraph(long gridId) {
+        return graphs.getOrDefault(gridId, false);
+    }
+
+    public int graphVertices(long gridId) {
+        return graphSize.getOrDefault(gridId, 0);
+    }
+
+    public void setGraphStates(Map<Long, GraphState> states) {
+        this.graphStates = states;
+    }
+
+    public GraphState graphState(long gridId) {
+        return graphStates.getOrDefault(gridId, GraphState.NONE);
+    }
+
     // ---- stacks: an array indexed by top, drawn upright ----
 
     private final java.util.Set<Long> stacks = new java.util.HashSet<>();

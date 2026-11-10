@@ -273,7 +273,7 @@ public class Animator {
             if (changed) {
                 boolean hasValue = node.kind() == SceneNode.Kind.CELL || node.kind() == SceneNode.Kind.BOX
                         || node.kind() == SceneNode.Kind.CIRCLE || node.kind() == SceneNode.Kind.RED_NODE
-                        || node.kind() == SceneNode.Kind.BLACK_NODE;
+                        || node.kind() == SceneNode.Kind.BLACK_NODE || node.kind() == SceneNode.Kind.VISITED_NODE;
                 if (hasValue && !node.text().equals(target.text())) {
                     oldText = target.text();
                     roll = 0;

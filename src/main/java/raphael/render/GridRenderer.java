@@ -76,8 +76,109 @@ public class GridRenderer extends StructureRenderer {
         addMarkers(scene, grid.getId(), context.markersFor(grid.getId()), RenderContext.Axis.COLUMN,
                 left, cellW, bottom + 4, cellW / 2);
         int markerRoom = context.markerRows(grid.getId()) * Style.MARKER_H;
-        return new Dimension((int) (markerW + INDEX_W + width),
-                Style.LABEL_SPACE + Style.CAPTION_H + rows.size() * Style.CELL_H + 4 + markerRoom);
+        int tableW = (int) (markerW + INDEX_W + width);
+        int tableH = Style.LABEL_SPACE + Style.CAPTION_H + rows.size() * Style.CELL_H + 4 + markerRoom;
+        if (context.isGraph(grid.getId())) {
+            Dimension drawn = addGraph(scene, x + tableW + Style.GRAPH_GAP, y + Style.LABEL_SPACE);
+            return new Dimension(tableW + Style.GRAPH_GAP + drawn.width, Math.max(tableH, Style.LABEL_SPACE + drawn.height));
+        }
+        return new Dimension(tableW, tableH);
+    }
+
+    // The same table drawn as the graph it stands for, beside it: the vertices on a circle,
+    // vertex 0 at the top, an edge as a line when it goes both ways and an arrow when it doesn't,
+    // with its weight if the matrix holds weights. Visited vertices are grey, a vertex's distance
+    // is under it (∞ for one not reached yet), and index markers (u, v) stand beside their vertex.
+    private Dimension addGraph(Scene scene, double x, double y) {
+        ArrayNode grid = structure.getGrid();
+        List<ArrayNode> rows = structure.getRows();
+        int n = Math.max(rows.size(), context.graphVertices(grid.getId()));
+        double size = Style.CIRCLE;
+        double radius = Math.max(Style.GRAPH_MIN_RADIUS, n * (size + 14) / (2 * Math.PI));
+        double cx = x + radius + size / 2 + 30;
+        double cy = y + radius + size / 2;
+        String id = "graph:" + key(grid.getId());
+        RenderContext.GraphState state = context.graphState(grid.getId());
+        boolean matrix = context.isMatrixGraph(grid.getId());
+        // the edges: from row r to each neighbour (a list), or to each column with a weight (a matrix)
+        Map<String, String> edges = new java.util.LinkedHashMap<>(); // "a>b" → its weight, or ""
+        boolean weighted = false;
+        for (int r = 0; r < rows.size(); r++) {
+            ArrayNode row = rows.get(r);
+            if (row == null) {
+                continue;
+            }
+            for (int c = 0; c < row.getElements().size(); c++) {
+                String text = row.getElements().get(c).display();
+                if (matrix) {
+                    if (!text.equals("0") && !text.equals("false") && !infinite(text)) {
+                        edges.put(r + ">" + c, text);
+                        weighted |= !text.equals("1") && !text.equals("true");
+                    }
+                } else {
+                    edges.put(r + ">" + text, "");
+                }
+            }
+        }
+        for (int v = 0; v < n; v++) {
+            double angle = -Math.PI / 2 + 2 * Math.PI * v / n;
+            double vx = cx + radius * Math.cos(angle);
+            double vy = cy + radius * Math.sin(angle);
+            boolean visited = state.visited() != null && v < state.visited().size()
+                    && state.visited().get(v).display().equals("true");
+            scene.add(new SceneNode(id + "[" + v + "]", visited ? SceneNode.Kind.VISITED_NODE : SceneNode.Kind.CIRCLE,
+                    vx - size / 2, vy - size / 2, size, size, String.valueOf(v), null));
+            if (state.dist() != null && v < state.dist().size()) {
+                String d = state.dist().get(v).display();
+                scene.add(new SceneNode(id + "[" + v + "]:d", SceneNode.Kind.TEXT, vx - size, vy + size / 2 + 1, 2 * size,
+                        Style.CAPTION_H, "d=" + (infinite(d) ? "∞" : d), null));
+            }
+            int stacked = 0;
+            for (RenderContext.Marker marker : context.markersFor(grid.getId())) {
+                if (marker.axis() == RenderContext.Axis.ROW && marker.inRange() && marker.index() == v) {
+                    double w = Style.textWidth(marker.name(), Style.MARKER_FONT) + 10;
+                    boolean right = Math.cos(angle) >= -0.01; // on the outside of the circle
+                    scene.add(new SceneNode(id + ":idx:" + marker.name(), SceneNode.Kind.MARKER,
+                            right ? vx + size / 2 + 3 : vx - size / 2 - 3 - w, vy - Style.MARKER_H / 2.0 + stacked * Style.MARKER_H,
+                            w, Style.MARKER_H, marker.name(), null));
+                    stacked++;
+                }
+            }
+        }
+        for (Map.Entry<String, String> edge : edges.entrySet()) {
+            String[] ends = edge.getKey().split(">");
+            int a = Integer.parseInt(ends[0]);
+            int b = Integer.parseInt(ends[1]);
+            boolean both = edges.containsKey(b + ">" + a) && edges.get(b + ">" + a).equals(edge.getValue());
+            if (both && a > b) {
+                continue; // drawn once, as a line
+            }
+            scene.add(new SceneEdge(id + ":e" + a + "-" + b, id + "[" + a + "]", id + "[" + b + "]",
+                    both ? SceneEdge.Kind.TREE : SceneEdge.Kind.ARROW));
+            if (weighted) {
+                double ax = cx + radius * Math.cos(-Math.PI / 2 + 2 * Math.PI * a / n);
+                double ay = cy + radius * Math.sin(-Math.PI / 2 + 2 * Math.PI * a / n);
+                double bx = cx + radius * Math.cos(-Math.PI / 2 + 2 * Math.PI * b / n);
+                double by = cy + radius * Math.sin(-Math.PI / 2 + 2 * Math.PI * b / n);
+                double w = Style.textWidth(edge.getValue(), Style.CAPTION_FONT) + 8;
+                double length = Math.max(1, Math.hypot(bx - ax, by - ay));
+                double nx = -(by - ay) / length * 9; // beside the line, not on it
+                double ny = (bx - ax) / length * 9;
+                scene.add(new SceneNode(id + ":w" + a + "-" + b, SceneNode.Kind.TEXT, (ax + bx) / 2 + nx - w / 2,
+                        (ay + by) / 2 + ny - Style.CAPTION_H / 2.0, w, Style.CAPTION_H, edge.getValue(), null));
+            }
+        }
+        return new Dimension((int) (2 * radius + size + 60), (int) (2 * radius + size + Style.CAPTION_H + 4));
+    }
+
+    // 999, Integer.MAX_VALUE and the like: "no edge" or "not reached yet".
+    private static boolean infinite(String text) {
+        try {
+            long value = Long.parseLong(text);
+            return value >= 999 && String.valueOf(value).chars().allMatch(c -> c == '9') || value >= Integer.MAX_VALUE;
+        } catch (NumberFormatException notANumber) {
+            return text.equals("Infinity");
+        }
     }
 
     // Row markers, right-aligned just left of the row numbers. Markers on the same row line up leftwards.
