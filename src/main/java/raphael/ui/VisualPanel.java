@@ -46,6 +46,10 @@ public class VisualPanel extends JPanel implements TraceListener {
     private final TraceModel model;
     private final ScenePainter painter = new ScenePainter();
     private final Animator animator = new Animator(this::repaint);
+    // The calls view of the same run (the call stack as boxes), shown instead of the picture when
+    // chosen; see showCalls().
+    private raphael.render.CallsScenes calls;
+    private boolean showingCalls;
     private int shownStep = -1;
     private double fit = 1;  // the scale that fits this run's biggest picture into the panel
     private double zoom = 1; // the user's zoom, on top of that
@@ -83,8 +87,9 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     @Override
     public void traceChanged(TraceModel model) {
+        calls = model.getTrace() == null ? null : new raphael.render.CallsScenes(model.getTrace(), model.getMoments());
         clearMessage();
-        animator.show(model.getScene()); // a new run starts without animating from the old one
+        animator.show(sceneNow()); // a new run starts without animating from the old one
         shownStep = model.getStep();
         fitToRun();
     }
@@ -93,17 +98,42 @@ public class VisualPanel extends JPanel implements TraceListener {
     public void stepChanged(TraceModel model) {
         int moved = model.getStep() - shownStep;
         if (Math.abs(moved) > 1) {
-            animator.jumpTo(model.getScene(), model.getSpeed());
+            animator.jumpTo(sceneNow(), model.getSpeed());
         } else {
-            animator.animateTo(model.getScene(), model.getSpeed(), moved == 1);
+            animator.animateTo(sceneNow(), model.getSpeed(), moved == 1);
         }
         shownStep = model.getStep();
         updateSize();
     }
 
+    // The scene for the step on show: the picture of the data, or the calls view.
+    private Scene sceneNow() {
+        return showingCalls && calls != null && model.hasSteps() ? calls.sceneAt(model.getStep()) : model.getScene();
+    }
+
+    private Dimension runSize() {
+        return showingCalls && calls != null ? calls.getRunSize() : model.getRunSize();
+    }
+
+    // Shows the calls view (true) or the picture (false), for this run and the next ones.
+    public void showCalls(boolean on) {
+        if (on == showingCalls) {
+            return;
+        }
+        showingCalls = on;
+        animator.show(sceneNow());
+        fitToRun();
+        revalidate();
+        repaint();
+    }
+
+    public boolean isShowingCalls() {
+        return showingCalls;
+    }
+
     // Chooses the one scale for this run: as big as fits the room around the panel, within limits.
     private void fitToRun() {
-        Dimension run = model.getRunSize();
+        Dimension run = runSize();
         Container room = SwingUtilities.getAncestorOfClass(JScrollPane.class, this);
         fit = 1;
         reserve = 0;
@@ -125,7 +155,7 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     // Only lays the panel out again when the picture's size really changes (not every frame).
     private void updateSize() {
-        Dimension run = model.getRunSize();
+        Dimension run = runSize();
         Dimension scene = run.width > 0 ? run : new Dimension(400, 300);
         Dimension wanted = new Dimension((int) (scene.width * fit * zoom), (int) (scene.height * fit * zoom) + reserve);
         if (!wanted.equals(size)) {
@@ -158,7 +188,7 @@ public class VisualPanel extends JPanel implements TraceListener {
             if (scene.getNodes().isEmpty()) {
                 hint(g2, "no arrays or objects yet · plain variables are listed below");
             }
-            Dimension run = model.getRunSize();
+            Dimension run = runSize();
             double scale = fit * zoom;
             // Whole pixels, so thin lines stay as sharp as the scale allows.
             g2.translate(Math.max(0, Math.round((getWidth() - run.width * scale) / 2)),

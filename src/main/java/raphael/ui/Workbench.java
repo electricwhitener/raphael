@@ -119,6 +119,7 @@ public class Workbench extends JPanel {
     private File folder;           // a program of several files: the folder they're in; otherwise null
     // A program of several files has a tab for each one above its code.
     private final javax.swing.JTabbedPane fileTabs = new javax.swing.JTabbedPane();
+    private final javax.swing.JTabbedPane viewTabs = new javax.swing.JTabbedPane(); // Picture, Calls
     private boolean fillingTabs;   // true while the file tabs are being made, so their events are ignored
     private String documentName = "new program";
     private String tabTitle;       // what the tab says, if not the document's name (an example: its title)
@@ -183,7 +184,21 @@ public class Workbench extends JPanel {
                 fillingTabs = false;
             }
         });
-        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codeSide, pictureArea);
+        // Above the picture, tabs for the views of the same run: the picture of the data, and
+        // the calls (the call stack as boxes).
+        viewTabs.addTab("Picture", placeholder());
+        viewTabs.addTab("Calls", placeholder());
+        viewTabs.setToolTipTextAt(0, "the program's arrays, lists, trees and objects");
+        viewTabs.setToolTipTextAt(1, "the methods running now, as a stack: the one on top runs, the ones below wait for it");
+        viewTabs.putClientProperty("JTabbedPane.tabType", "underlined");
+        viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
+        viewTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
+        viewTabs.setFocusable(false);
+        viewTabs.addChangeListener(e -> visual.showCalls(viewTabs.getSelectedIndex() == 1));
+        JPanel pictureSide = new JPanel(new BorderLayout());
+        pictureSide.add(viewTabs, BorderLayout.NORTH);
+        pictureSide.add(pictureArea, BorderLayout.CENTER);
+        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codeSide, pictureSide);
         top.setResizeWeight(0.4);
         top.setBorder(BorderFactory.createEmptyBorder());
         JPanel bottom = new JPanel(new GridBagLayout());
@@ -248,6 +263,13 @@ public class Workbench extends JPanel {
         code.setOnCaretMoved(() -> host.caretMoved(this));
         console.setOnLineClicked(this::goToError);
         showPictureOrGuide();
+    }
+
+    // An empty tab: the tabs are only headings, and what they choose is shown below them.
+    private static JPanel placeholder() {
+        JPanel nothing = new JPanel();
+        nothing.setPreferredSize(new Dimension(0, 0));
+        return nothing;
     }
 
     // Adds a panel that takes this share of the row's width. With no preferred width of its own,
@@ -621,6 +643,7 @@ public class Workbench extends JPanel {
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
         lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
         model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments());
+        viewTabs.setSelectedIndex(result.program().facts().hasRecursion() ? 1 : 0); // recursion is best seen as calls
         if (isShowing()) {
             visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         }
