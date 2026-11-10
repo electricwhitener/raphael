@@ -140,6 +140,9 @@ public class FactScanner extends TreePathScanner<Void, Void> {
     @Override
     public Void visitMethod(MethodTree tree, Void nothing) {
         if (tree.getBody() == null || classes.isEmpty()) {
+            if (!classes.isEmpty()) {
+                facts.addAbstractMethod(classes.peek(), tree.getName().toString());
+            }
             return super.visitMethod(tree, nothing); // abstract or in an interface: no code to run
         }
         Element element = trees.getElement(getCurrentPath());

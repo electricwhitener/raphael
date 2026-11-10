@@ -11,7 +11,9 @@ public record SceneEdge(String key, String from, String to, Kind kind, Look look
         ARROW,      // a reference, e.g. next → node
         PREV_ARROW, // a doubly linked list's prev reference, drawn a little lower
         TREE,       // a parent–child line in a tree
-        POINTER     // from a variable label down to its object
+        POINTER,    // from a variable label down to its object
+        EXTENDS,    // UML: a child class up to its parent (a solid line, a hollow triangle)
+        IMPLEMENTS  // UML: a class up to an interface it implements (dashed, a hollow triangle)
     }
 
     // How an arrow looks at one moment. alpha: how visible. oldTo and swing: it is swinging from

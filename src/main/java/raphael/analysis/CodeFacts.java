@@ -66,6 +66,7 @@ public class CodeFacts {
     private final Map<String, List<String>> interfaces = new LinkedHashMap<>(); // class → what it implements
     private final Set<String> abstractClasses = new HashSet<>();
     private final Set<String> interfaceTypes = new HashSet<>();
+    private final Map<String, List<String>> abstractMethods = new LinkedHashMap<>(); // class → methods without a body
     private final List<Integer> throwLines = new ArrayList<>();
     private boolean usesFiles;
     private boolean readsInput;
@@ -114,6 +115,11 @@ public class CodeFacts {
 
     public boolean isInterface(String className) {
         return interfaceTypes.contains(className);
+    }
+
+    // The methods a class or interface declares without a body: "area" in interface Shape.
+    public List<String> abstractMethods(String className) {
+        return Collections.unmodifiableList(abstractMethods.getOrDefault(className, List.of()));
     }
 
     public List<Integer> throwLines() {
@@ -262,6 +268,10 @@ public class CodeFacts {
         if (isInterface) {
             interfaceTypes.add(name);
         }
+    }
+
+    void addAbstractMethod(String className, String method) {
+        abstractMethods.computeIfAbsent(className, c -> new ArrayList<>()).add(method);
     }
 
     void addThrow(int line) {

@@ -18,33 +18,45 @@ import raphael.model.Snapshot;
 import raphael.model.Trace;
 import raphael.model.Value;
 
-// The objects view, for object-oriented programs. On top, the program's classes as a small UML
-// class diagram: each with its fields and methods, "-" for private and "+" for the rest, and an
-// arrow from each child class to its parent. Below, the objects alive at this step, each with its
-// fields: private ones marked "-", and inherited ones saying which class they come from. The
-// object whose method is running is outlined in blue, with the method beside it.
+// The objects view, for object-oriented programs. On the left, the program's classes as a small UML
+// class diagram: each with its fields and methods, "-" for private and "+" for the rest, parents
+// above their children, a solid line up to a parent class and a dashed one up to an interface.
+// On the right, the objects alive at this step, in columns: private fields marked "-", inherited
+// ones saying which class they come from. The object whose method is running is outlined in blue,
+// with the method under it.
 // OOP: a class that builds Scene objects (drawn and animated like the picture's), from the run
 // and from what the code says (CodeFacts).
 public class ObjectsScenes {
 
-    private static final double CLASS_W = 190;
-    private static final double OBJECT_W = 230;
-    private static final double GAP = 24;
-    private static final double ROW_GAP = 56;
+    private static final int PER_ROW = 3;      // boxes in a row before the row wraps
+    private static final double MIN_W = 150;
+    private static final double MAX_W = 300;
+    private static final double PAD = 18;      // room either side of a box's longest line
+    private static final double GAP = 28;
+    private static final double LAYER_GAP = 36; // between a parent's row and its children's
+    private static final double SIDE_GAP = 64;  // between the classes and the objects beside them
+    private static final double TOP = 26;       // room for the two headings
+    private static final double MARGIN = 8;     // so no box touches the panel's edge
 
     private final Trace trace;
     private final CodeFacts facts;
+    private final List<List<String>> classRows = new ArrayList<>(); // parents' row first
     private final List<String> classes = new ArrayList<>();
     private final Map<Integer, Scene> built = new HashMap<>();
+    private final double classW;
+    private final double objectW;
+    private final double classesW;
+    private final double classesH;
+    private final double slotH;      // one object's room in its column, the same all run
+    private final int perColumn;
     private final Dimension size;
-    private final double classRowH;
 
     public ObjectsScenes(Trace trace, CodeFacts facts) {
         this.trace = trace;
         this.facts = facts;
         Set<String> names = new LinkedHashSet<>();
         for (CodeFacts.MethodFact method : facts.methods()) {
-            if (!method.name().equals("main")) {
+            if (!method.name().equals("main") && !method.name().equals(method.className())) {
                 names.add(method.className());
             }
         }
@@ -52,24 +64,48 @@ public class ObjectsScenes {
             names.add(field.className());
         }
         names.addAll(facts.superclasses().keySet());
-        names.removeIf(this::onlyMain);
-        classes.addAll(names);
-        double tallest = 0;
-        for (String name : classes) {
-            tallest = Math.max(tallest, classLines(name).size());
+        names.addAll(facts.superclasses().values());
+        for (List<String> implemented : facts.interfaces().values()) {
+            names.addAll(implemented);
         }
-        classRowH = Style.TITLE_H + Math.max(1, tallest) * Style.LINE_H + 4;
-        int widest = 0;
-        double tallestObject = 0;
-        for (Snapshot step : trace.getSnapshots()) {
-            List<ObjectNode> objects = objectsOf(step);
-            widest = Math.max(widest, objects.size());
-            for (ObjectNode object : objects) {
-                tallestObject = Math.max(tallestObject, object.getFields().size());
+        names.removeIf(name -> !facts.interfaces().containsKey(name) || onlyMain(name)); // only the program's own classes
+        classes.addAll(names);
+        layOutClasses();
+        double widest = MIN_W;
+        for (String name : classes) {
+            widest = Math.max(widest, Style.textWidth(title(name), Style.TITLE_FONT) + PAD);
+            for (String line : classLines(name)) {
+                widest = Math.max(widest, Style.textWidth(line, Style.FIELD_FONT) + PAD);
             }
         }
-        double width = Math.max(classes.size() * (CLASS_W + GAP), widest * (OBJECT_W + GAP));
-        double height = Style.LABEL_SPACE + classRowH + ROW_GAP + Style.TITLE_H + Math.max(1, tallestObject) * Style.LINE_H + 40;
+        classW = Math.min(MAX_W, widest);
+        double classesH = 0;
+        for (List<String> row : classRows) {
+            classesH += rowHeight(row) + LAYER_GAP;
+        }
+        this.classesH = Math.max(0, classesH - LAYER_GAP);
+        classesW = maxRow() * (classW + GAP) - GAP;
+        widest = MIN_W;
+        int most = 0;
+        int tallest = 0;
+        for (Snapshot step : trace.getSnapshots()) {
+            List<ObjectNode> objects = objectsOf(step);
+            most = Math.max(most, objects.size());
+            for (ObjectNode object : objects) {
+                widest = Math.max(widest, Style.textWidth("a " + Names.simple(object.getTypeName()), Style.TITLE_FONT) + PAD);
+                List<String> lines = objectLines(object, step);
+                tallest = Math.max(tallest, lines.size());
+                for (String line : lines) {
+                    widest = Math.max(widest, Style.textWidth(line, Style.FIELD_FONT) + PAD);
+                }
+            }
+        }
+        objectW = Math.min(MAX_W, widest);
+        slotH = boxHeight(tallest) + Style.LINE_H + 10; // and "running m()" under it
+        perColumn = Math.max(2, (int) ((this.classesH + 10) / slotH));
+        int columns = Math.max(1, (most + perColumn - 1) / perColumn);
+        double width = 2 * MARGIN + classesW + SIDE_GAP + columns * (objectW + GAP) - GAP;
+        double height = TOP + Math.max(this.classesH, Math.min(most, perColumn) * slotH) + 8;
         size = new Dimension((int) Math.max(400, width), (int) height);
     }
 
@@ -86,47 +122,139 @@ public class ObjectsScenes {
         return built.computeIfAbsent(step, this::build);
     }
 
+    // UML's layout: a parent above its children. A class's layer is one below its parent's (its
+    // superclass, else the first interface it implements), and a layer wider than PER_ROW wraps.
+    private void layOutClasses() {
+        Map<String, Integer> layers = new HashMap<>();
+        int deepest = 0;
+        for (String name : classes) {
+            int layer = 0;
+            for (String up = parentOf(name); up != null && layer < classes.size(); up = parentOf(up)) {
+                layer++;
+            }
+            layers.put(name, layer);
+            deepest = Math.max(deepest, layer);
+        }
+        for (int layer = 0; layer <= deepest; layer++) {
+            List<String> row = new ArrayList<>();
+            for (String name : classes) {
+                if (layers.get(name) == layer) {
+                    row.add(name);
+                    if (row.size() == PER_ROW) {
+                        classRows.add(row);
+                        row = new ArrayList<>();
+                    }
+                }
+            }
+            if (!row.isEmpty()) {
+                classRows.add(row);
+            }
+        }
+    }
+
+    // The class drawn above this one: its superclass, else the first interface it implements.
+    private String parentOf(String name) {
+        String parent = facts.superclasses().get(name);
+        if (parent != null && classes.contains(parent)) {
+            return parent;
+        }
+        for (String implemented : facts.interfaces().getOrDefault(name, List.of())) {
+            if (classes.contains(implemented)) {
+                return implemented;
+            }
+        }
+        return null;
+    }
+
+    private int maxRow() {
+        int most = 1;
+        for (List<String> row : classRows) {
+            most = Math.max(most, row.size());
+        }
+        return most;
+    }
+
+    private double rowHeight(List<String> row) {
+        double tallest = 0;
+        for (String name : row) {
+            tallest = Math.max(tallest, boxHeight(classLines(name).size()));
+        }
+        return tallest;
+    }
+
+    private static double boxHeight(int lines) {
+        return Style.TITLE_H + Math.max(1, lines) * Style.LINE_H + 4;
+    }
+
+    // Where a row of n class boxes starts, so the row is centred over the diagram.
+    private double rowStart(int n) {
+        return MARGIN + (classesW - (n * (classW + GAP) - GAP)) / 2;
+    }
+
+    private String title(String name) {
+        return (facts.isInterface(name) ? "«interface» " : facts.isAbstract(name) ? "«abstract» " : "") + name;
+    }
+
     private Scene build(int step) {
         Scene scene = new Scene();
-        double x = 0;
-        double top = Style.LABEL_SPACE;
-        for (String name : classes) {
-            List<String> lines = classLines(name);
-            double height = Style.TITLE_H + Math.max(1, lines.size()) * Style.LINE_H + 4;
-            String title = (facts.isInterface(name) ? "«interface» " : facts.isAbstract(name) ? "«abstract» " : "") + name;
-            scene.add(new SceneNode("class:" + name, SceneNode.Kind.OBJECT, x, top, CLASS_W, height, "", title));
-            for (int row = 0; row < lines.size(); row++) {
-                scene.add(new SceneNode("class:" + name + ".line:" + row, SceneNode.Kind.FIELD, x + 1,
-                        top + Style.TITLE_H + row * Style.LINE_H + 2, CLASS_W - 1, Style.LINE_H, lines.get(row), null));
+        // Two headings: the classes are the code's plans, the objects are what exists right now.
+        scene.add(new SceneNode("heading:classes", SceneNode.Kind.TEXT, MARGIN, 0, classesW, Style.LINE_H, "classes (the code)", null));
+        scene.add(new SceneNode("heading:objects", SceneNode.Kind.TEXT, MARGIN + classesW + SIDE_GAP, 0, objectW, Style.LINE_H, "objects (now)", null));
+        Snapshot now = trace.get(step);
+        FrameSnapshot frame = now.getFrames().isEmpty() ? null : now.getFrames().get(0);
+        String runningClass = frame == null ? null : Names.simple(frame.getClassName());
+        String runningMethod = frame == null ? null : frame.getMethodName();
+        double y = TOP;
+        for (List<String> row : classRows) {
+            double x = rowStart(row.size());
+            for (String name : row) {
+                List<String> lines = classLines(name);
+                scene.add(new SceneNode("class:" + name, SceneNode.Kind.OBJECT, x, y, classW, boxHeight(lines.size()), "", title(name)));
+                for (int line = 0; line < lines.size(); line++) {
+                    double top = y + Style.TITLE_H + line * Style.LINE_H + 2;
+                    scene.add(new SceneNode("class:" + name + ".line:" + line, SceneNode.Kind.FIELD, x + 1,
+                            top, classW - 1, Style.LINE_H, lines.get(line), null));
+                    if (name.equals(runningClass) && lines.get(line).startsWith("+ " + runningMethod + "()")) {
+                        // the code that's running now: which class's version of the method it is
+                        scene.add(new SceneNode("class:running", SceneNode.Kind.FOCUS_WRITE, x + 1, top, classW - 2, Style.LINE_H, "", null));
+                    }
+                }
+                x += classW + GAP;
             }
-            x += CLASS_W + GAP;
+            y += rowHeight(row) + LAYER_GAP;
         }
-        for (String name : classes) { // a child class points at its parent, as in UML
+        for (String name : classes) { // as in UML: a solid line up to the parent, a dashed one to an interface
             String parent = facts.superclasses().get(name);
             if (parent != null && classes.contains(parent)) {
-                scene.add(new SceneEdge("extends:" + name, "class:" + name, "class:" + parent, SceneEdge.Kind.ARROW));
+                scene.add(new SceneEdge("extends:" + name, "class:" + name, "class:" + parent, SceneEdge.Kind.EXTENDS));
+            }
+            for (String implemented : facts.interfaces().getOrDefault(name, List.of())) {
+                if (classes.contains(implemented)) {
+                    scene.add(new SceneEdge("implements:" + name + ":" + implemented, "class:" + name, "class:" + implemented,
+                            SceneEdge.Kind.IMPLEMENTS));
+                }
             }
         }
-        Snapshot now = trace.get(step);
         long running = runningOn(now);
-        double y = top + classRowH + ROW_GAP;
-        x = 0;
-        for (ObjectNode object : objectsOf(now)) {
+        List<ObjectNode> objects = objectsOf(now);
+        for (int i = 0; i < objects.size(); i++) { // in columns beside the classes, oldest first
+            ObjectNode object = objects.get(i);
+            double x = MARGIN + classesW + SIDE_GAP + (i / perColumn) * (objectW + GAP);
+            y = TOP + (i % perColumn) * slotH;
             String key = "obj:" + object.getId();
             List<String> lines = objectLines(object, now);
-            double height = Style.TITLE_H + Math.max(1, lines.size()) * Style.LINE_H + 4;
-            scene.add(new SceneNode(key, SceneNode.Kind.OBJECT, x, y, OBJECT_W, height, "",
+            double height = boxHeight(lines.size());
+            scene.add(new SceneNode(key, SceneNode.Kind.OBJECT, x, y, objectW, height, "",
                     "a " + Names.simple(object.getTypeName())));
-            for (int row = 0; row < lines.size(); row++) {
-                scene.add(new SceneNode(key + ".line:" + row, SceneNode.Kind.FIELD, x + 1, y + Style.TITLE_H + row * Style.LINE_H + 2,
-                        OBJECT_W - 1, Style.LINE_H, lines.get(row), null));
+            for (int line = 0; line < lines.size(); line++) {
+                scene.add(new SceneNode(key + ".line:" + line, SceneNode.Kind.FIELD, x + 1, y + Style.TITLE_H + line * Style.LINE_H + 2,
+                        objectW - 1, Style.LINE_H, lines.get(line), null));
             }
             if (object.getId() == running) {
-                scene.add(new SceneNode("obj:running", SceneNode.Kind.FOCUS_WRITE, x - 2, y - 2, OBJECT_W + 4, height + 4, "", null));
-                scene.add(new SceneNode("obj:method", SceneNode.Kind.TEXT, x, y + height + 6, OBJECT_W, Style.LINE_H,
+                scene.add(new SceneNode("obj:running", SceneNode.Kind.FOCUS_WRITE, x - 2, y - 2, objectW + 4, height + 4, "", null));
+                scene.add(new SceneNode("obj:method", SceneNode.Kind.TEXT, x, y + height + 3, objectW, Style.LINE_H,
                         "running " + now.getFrames().get(0).getMethodName() + "()", null));
             }
-            x += OBJECT_W + GAP;
         }
         return scene;
     }
@@ -145,14 +273,25 @@ public class ObjectsScenes {
                 methods.add("+ " + method.name() + "()");
             }
         }
+        for (String method : facts.abstractMethods(name)) {
+            methods.add("+ " + method + "()" + (facts.isInterface(name) ? "" : "  (abstract)"));
+        }
         lines.addAll(methods);
         return lines;
     }
 
     private boolean onlyMain(String name) {
-        for (CodeFacts.MethodFact method : facts.methods()) {
-            if (method.className().equals(name) && !method.name().equals("main")) {
+        if (facts.isInterface(name) || !facts.abstractMethods(name).isEmpty()) {
+            return false;
+        }
+        for (List<String> implemented : facts.interfaces().values()) {
+            if (implemented.contains(name)) {
                 return false;
+            }
+        }
+        for (CodeFacts.MethodFact method : facts.methods()) {
+            if (method.className().equals(name) && !method.name().equals("main") && !method.name().equals(name)) {
+                return false; // a method besides main and the constructors
             }
         }
         for (CodeFacts.FieldFact field : facts.fields()) {
@@ -160,7 +299,7 @@ public class ObjectsScenes {
                 return false;
             }
         }
-        return !facts.superclasses().containsKey(name);
+        return !facts.superclasses().containsKey(name) && !facts.superclasses().containsValue(name);
     }
 
     // The student's own objects at this step, oldest first.

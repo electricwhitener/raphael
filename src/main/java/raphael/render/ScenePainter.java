@@ -72,9 +72,12 @@ public class ScenePainter {
         Color color = edge.kind() == SceneEdge.Kind.POINTER ? Style.ACCENT : Style.INK_SOFT;
         setAlpha(g, alpha);
         g.setColor(color);
-        g.setStroke(LINE);
+        boolean uml = edge.kind() == SceneEdge.Kind.EXTENDS || edge.kind() == SceneEdge.Kind.IMPLEMENTS;
+        g.setStroke(edge.kind() == SceneEdge.Kind.IMPLEMENTS ? DASHED : LINE);
         g.draw(curve.path());
-        if (edge.kind() != SceneEdge.Kind.TREE) {
+        if (uml) {
+            hollowHead(g, curve);
+        } else if (edge.kind() != SceneEdge.Kind.TREE) {
             arrowHead(g, curve, reach);
         }
     }
@@ -147,6 +150,10 @@ public class ScenePainter {
             double x = Math.max(to.x() + 6, Math.min(from.centerX(), to.x() + to.w() - 6));
             return Curve.line(x, from.bottom(), x, to.y());
         }
+        if (kind == SceneEdge.Kind.EXTENDS || kind == SceneEdge.Kind.IMPLEMENTS) {
+            // UML: from the middle of the child's top edge up to the middle of the parent's bottom
+            return Curve.line(from.centerX(), from.y(), to.centerX(), to.bottom());
+        }
         if (kind == SceneEdge.Kind.TREE) {
             Point2D a = border(from, to.centerX(), to.centerY());
             Point2D b = border(to, from.centerX(), from.centerY());
@@ -204,6 +211,23 @@ public class ScenePainter {
         head.lineTo(curve.x3() - size * Math.cos(angle + 0.45), curve.y3() - size * Math.sin(angle + 0.45));
         head.closePath();
         g.fill(head);
+    }
+
+    // UML's inheritance head: a hollow triangle on the parent's edge.
+    private void hollowHead(Graphics2D g, Curve curve) {
+        double size = 11;
+        double angle = curve.endAngle();
+        Path2D head = new Path2D.Double();
+        head.moveTo(curve.x3(), curve.y3());
+        head.lineTo(curve.x3() - size * Math.cos(angle - 0.5), curve.y3() - size * Math.sin(angle - 0.5));
+        head.lineTo(curve.x3() - size * Math.cos(angle + 0.5), curve.y3() - size * Math.sin(angle + 0.5));
+        head.closePath();
+        Color line = g.getColor();
+        g.setColor(Style.BACKGROUND);
+        g.fill(head);
+        g.setColor(line);
+        g.setStroke(LINE);
+        g.draw(head);
     }
 
     // Where a line from (px, py) towards the centre of a shape crosses the shape's edge.

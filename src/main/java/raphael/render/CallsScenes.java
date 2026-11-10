@@ -35,10 +35,27 @@ public class CallsScenes {
     private final List<Moment> moments;
     private final Map<Integer, Scene> built = new HashMap<>();
     private final Dimension size;
+    // Branching recursion (fib, Hanoi) is drawn as a tree of calls instead of a stack.
+    private final CallTree tree;
+    private final List<CallTree.Call> shown = new ArrayList<>(); // the tree's calls, laid out once for the run
+    private final Map<CallTree.Call, double[]> places = new HashMap<>();
+    private final Map<CallTree.Call, Integer> hiddenInside = new HashMap<>();
+
+    private static final SceneNode.Look RETURNED = new SceneNode.Look(0.62, 0, 1, null, 1); // faded, but its value still easy to read
+    private static final int MAX_CALLS = 63;    // more than this, and the deepest calls fold into their parent
+    private static final double TREE_GAP_X = 12;
+    private static final double TREE_GAP_Y = 30;
 
     public CallsScenes(Trace trace, List<Moment> moments) {
         this.trace = trace;
         this.moments = moments;
+        CallTree calls = new CallTree(trace);
+        List<String> branching = calls.isComplete() ? calls.branchingMethods() : List.of();
+        tree = branching.isEmpty() ? null : calls;
+        if (tree != null) {
+            size = layOutTree(branching);
+            return;
+        }
         int deepest = 1;
         int widest = 0;
         for (Snapshot step : trace.getSnapshots()) {
@@ -60,7 +77,15 @@ public class CallsScenes {
         return built.computeIfAbsent(step, this::build);
     }
 
+    // Whether this run is drawn as a tree of calls (branching recursion) rather than a stack.
+    public boolean isTree() {
+        return tree != null;
+    }
+
     private Scene build(int step) {
+        if (tree != null) {
+            return buildTree(step);
+        }
         Scene scene = new Scene();
         Snapshot now = trace.get(step);
         List<FrameSnapshot> frames = now.getFrames(); // the running call first
@@ -110,6 +135,157 @@ public class CallsScenes {
             }
         }
         return null;
+    }
+
+    // ---- the tree of calls ----
+
+    // Places every call of the branching methods once, for the whole run, so a box never moves:
+    // each leaf gets the next slot along, and a parent sits centred over its children.
+    private Dimension layOutTree(List<String> branching) {
+        List<CallTree.Call> roots = new ArrayList<>();
+        collect(tree.getRoots(), branching, roots);
+        int depth = 1;
+        while (count(roots, depth + 1) <= MAX_CALLS && count(roots, depth + 1) > count(roots, depth)) {
+            depth++;
+        }
+        boolean folds = count(roots, depth) < count(roots, Integer.MAX_VALUE / 2);
+        double boxW = Style.textWidth(folds ? "waits  +99 inside" : "base case", Style.FIELD_FONT) + 16;
+        for (CallTree.Call root : roots) {
+            boxW = Math.max(boxW, widest(root, depth));
+        }
+        double[] next = {0};
+        double boxH = Style.TITLE_H + Style.LINE_H + 4;
+        for (CallTree.Call root : roots) {
+            place(root, 0, depth, boxW, boxH, next);
+        }
+        int deepest = 0;
+        for (double[] place : places.values()) {
+            deepest = (int) Math.max(deepest, place[1]);
+        }
+        return new Dimension((int) (next[0] - TREE_GAP_X),
+                (int) (Style.LABEL_SPACE + (deepest + 1) * (boxH + TREE_GAP_Y)));
+    }
+
+    // The calls of the branching methods, each under the nearest such call that made it.
+    private final Map<CallTree.Call, List<CallTree.Call>> kids = new HashMap<>();
+
+    private void collect(List<CallTree.Call> calls, List<String> branching, List<CallTree.Call> into) {
+        for (CallTree.Call call : calls) {
+            if (branching.contains(call.getMethod())) {
+                into.add(call);
+                List<CallTree.Call> mine = new ArrayList<>();
+                kids.put(call, mine);
+                collect(call.getChildren(), branching, mine);
+            } else {
+                collect(call.getChildren(), branching, into);
+            }
+        }
+    }
+
+    private int count(List<CallTree.Call> calls, int depth) {
+        int n = 0;
+        for (CallTree.Call call : calls) {
+            n += 1 + (depth > 1 ? count(kids.get(call), depth - 1) : 0);
+        }
+        return n;
+    }
+
+    private double widest(CallTree.Call call, int depth) {
+        double w = Style.textWidth(label(call), Style.TITLE_FONT) + 16;
+        if (call.getReturned() != null) {
+            w = Math.max(w, Style.textWidth("= " + text(call.getReturned(), call.getStartedIn()), Style.FIELD_FONT) + 16);
+        }
+        if (depth > 1) {
+            for (CallTree.Call child : kids.get(call)) {
+                w = Math.max(w, widest(child, depth - 1));
+            }
+        }
+        return w;
+    }
+
+    private void place(CallTree.Call call, int level, int depth, double boxW, double boxH, double[] next) {
+        shown.add(call);
+        List<CallTree.Call> children = level + 1 < depth ? kids.get(call) : List.of();
+        if (level + 1 >= depth && !kids.get(call).isEmpty()) {
+            hiddenInside.put(call, count(kids.get(call), Integer.MAX_VALUE / 2));
+        }
+        double x;
+        if (children.isEmpty()) {
+            x = next[0];
+            next[0] += boxW + TREE_GAP_X;
+        } else {
+            for (CallTree.Call child : children) {
+                place(child, level + 1, depth, boxW, boxH, next);
+            }
+            x = (places.get(children.get(0))[0] + places.get(children.get(children.size() - 1))[0]) / 2;
+        }
+        places.put(call, new double[] {x, level, boxW, boxH});
+    }
+
+    // At this step: the calls made so far. The running one is outlined in blue, the ones waiting
+    // for it say so, and the ones that returned are faded with what they gave back.
+    private Scene buildTree(int step) {
+        Scene scene = new Scene();
+        Snapshot now = trace.get(step);
+        CallTree.Call running = tree.runningAt(step);
+        while (running != null && !places.containsKey(running)) {
+            running = running.getParent(); // a helper, or a folded call: light the nearest shown one
+        }
+        boolean baseCase = false;
+        for (Moment moment : moments) {
+            baseCase |= moment.step() == step && moment.kind().equals("base-case");
+        }
+        for (CallTree.Call call : shown) {
+            if (call.getStart() > step) {
+                continue; // not called yet
+            }
+            double[] place = places.get(call);
+            double x = place[0];
+            double y = Style.LABEL_SPACE + place[1] * (place[3] + TREE_GAP_Y);
+            String key = "tree:" + call.getStart();
+            boolean done = !call.isActiveAt(step);
+            String line;
+            if (done) {
+                line = call.getReturned() == null ? "done" : "= " + text(call.getReturned(), now);
+            } else if (call == running) {
+                line = baseCase ? "base case" : "running";
+            } else {
+                line = "waits";
+            }
+            Integer folded = hiddenInside.get(call);
+            if (folded != null && !done) {
+                line += "  +" + folded + " inside";
+            }
+            SceneNode.Look look = done ? RETURNED : SceneNode.Look.STILL;
+            scene.add(new SceneNode(key, SceneNode.Kind.OBJECT, x, y, place[2], place[3], "", label(call), look));
+            scene.add(new SceneNode(key + ".line:0", SceneNode.Kind.FIELD, x + 1, y + Style.TITLE_H + 2, place[2] - 1, Style.LINE_H,
+                    line, null, look));
+            if (call == running) {
+                scene.add(new SceneNode("call:running", SceneNode.Kind.FOCUS_WRITE, x - 2, y - 2, place[2] + 4, place[3] + 4, "", null));
+            }
+            CallTree.Call parent = call.getParent();
+            while (parent != null && !places.containsKey(parent)) {
+                parent = parent.getParent();
+            }
+            if (parent != null) {
+                scene.add(new SceneEdge("tree:" + parent.getStart() + ">" + call.getStart(), "tree:" + parent.getStart(), key,
+                        SceneEdge.Kind.TREE));
+            }
+        }
+        return scene;
+    }
+
+    // "fib(3)", or "move(2, 0, 1, 2)": the method and the values it was called with.
+    private static String label(CallTree.Call call) {
+        StringBuilder text = new StringBuilder(call.getMethod()).append('(');
+        boolean first = true;
+        for (Map.Entry<String, Value> argument : call.getArguments().entrySet()) {
+            if (!argument.getKey().equals("this")) {
+                text.append(first ? "" : ", ").append(text(argument.getValue(), call.getStartedIn()));
+                first = false;
+            }
+        }
+        return text.append(')').toString();
     }
 
     // "factorial()", or "Circle.area()" for a method running on an object, then the line.
