@@ -98,7 +98,10 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 Maven plugins: `maven-compiler-plugin` 3.13.0, `maven-surefire-plugin` 3.5.2, `exec-maven-plugin` 3.5.0.
 
 ## Using Raphael
-1. **Choose a program.** Raphael opens on a welcome page: start a **New program**, **Open** a `.java` file with your system's own file dialog, **Paste** one from the clipboard (Ctrl+V), drop one onto the window, or pick one of the 103 examples. **Examples** in the toolbar has them too. Ctrl+W closes the program and goes back to the welcome page.
+1. **Choose a program.** Raphael opens on a Welcome tab: start a **New program**, **Open** a `.java` file with your system's own file dialog, **Paste** one from the clipboard (Ctrl+V), drop one onto the window, or pick one of the 103 examples. **Examples** in the toolbar has them too.
+   - **Tabs:** each program opens in a tab of its own, with its own run. Ctrl+Tab switches tabs, Ctrl+W closes one, and Ctrl+Shift+T brings it back. The logo at the left of the toolbar takes you back to the Welcome tab.
+   - **Programs of several files:** File → **Open Folder** opens a folder of `.java` files (packages too) as one program, with a tab for each file. While stepping, the code follows the program from file to file.
+   - **More windows:** File → **New Window**.
 2. **Give it input, if it needs some.** A **stdin** box appears when the code mentions `System.in`. Type the input there before running.
 3. **Press Run** (Ctrl+Enter). The program plays by itself. While it's being recorded, the picture counts the steps and the button becomes **Stop**; stopping keeps the steps recorded so far.
 4. **Move through the steps** with the keys below. Any manual move pauses playing. Click in the editor to type again.
@@ -156,9 +159,17 @@ Every command is also in the menus (File, Edit, Run, View, Help), with its short
 | Click a line number | Jump to the next time that line runs |
 | Ctrl+N, Ctrl+O, Ctrl+S | New, open, save (open and save use your system's own file dialog) |
 | Ctrl+Shift+S | Save as |
-| Ctrl+W | Close the program and go back to the welcome page |
+| Ctrl+Shift+O | Open a folder as one program |
+| Ctrl+Shift+N | New window |
+| Ctrl+W, Ctrl+Shift+T | Close the tab, reopen the last closed one |
+| Ctrl+Tab, Ctrl+PgDn / PgUp | Next and previous tab |
+| Ctrl+P | Quick Open: the folder's files, recent files and every example |
+| Ctrl+Shift+P | Command palette: every command, found by typing |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
-| Ctrl+F, F3 | Find, find next |
+| Ctrl+F, Ctrl+H | Find, replace (match case, whole word, regular expressions) |
+| F3, Shift+F3 | Next match, previous match |
+| Ctrl+G | Go to line (or click Ln, Col in the status bar) |
+| Shift+Alt+Down | Duplicate the line |
 | Ctrl+/ | Comment or uncomment lines |
 | Tab, Shift+Tab | Move lines in, out |
 | Ctrl + and Ctrl - | Text size (or Ctrl + wheel over the code) |
@@ -265,7 +276,7 @@ Safety:
 | `App` | Starts the app: the log, the safety net, the look and the saved settings, then the main window; or the self-test | `main()`, `setupLook()`, `setupLook(dark)` |
 | `RaphaelException` | Abstract parent of every problem Raphael can explain (checked) | constructors |
 | **compile/** | | |
-| `SourceCompiler` | Compiles the editor's text with javac and finds the class with `main`; blanks the file rules first | `compile(source)`, `topLevelText()`, `withoutFileRules()` |
+| `SourceCompiler` | Compiles the editor's text (blanking the file rules first) or a folder's files (keeping their packages) with javac, out of sight of Raphael's own classes, and finds the class with `main` | `compile(source)`, `compileFolder(files, preferredMain)`, `topLevelText()`, `withoutFileRules()`, `findMainClass()` |
 | `CompileResult` | The result: success, errors (line + message), class folder, main class | record getters |
 | `CompileHints` | A plain hint for javac's common errors ("cannot find symbol" → which name, and what to check) | `hint(message)` |
 | `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
@@ -325,10 +336,14 @@ Safety:
 | `Diff` | What changed between two scenes: added, removed, moved, changed | `between(before, after)` |
 | `Style` | Every colour, size, font and timing; swaps all the colours for dark mode; loads the bundled font | constants, `useTheme(dark)`, `setCodeSize()`, `textWidth()`, `pickMono()` |
 | **ui/** | | |
-| `MainWindow` | The window: toolbar, panels, shortcuts, and run on a background thread | `run()`, `show()`, `bindKeys()`, `newProgram()`, `loadExample()`, `addExamples()`, `showWelcome()`, `pasteProgram()`, `closeProgram()`, `openRecording()`, `saveRecording()`, `exportSteps()`, `remember()`, `addInputFile()`, `open()`, `save()`, `saveAs()`, `chooseFile()`, `updateTitle()`, `dividerForCode()`, `okToLoseCode()`, `startFolder()`, `toggleTheme()`, `applyTheme()`, `changeTextSize()`, `find()`, `showHelp()` |
+| `MainWindow` | The window: menu bar, toolbar, tabs and status bar; every command goes to the program in front (`active()`) | `newTab()`, `tabChanged()`, `closeTab()`, `reopenClosedTab()`, `showWelcome()`, `homeButton()`, `openFile()`, `openFolder()`, `chooseFolder()`, `loadExample()`, `pasteProgram()`, `quickOpen()`, `goToLine()`, `bindKeys()`, `buildMenuBar()`, `autosave()`, `offerDraft()`, `okToLoseAll()`, `remember()`, `chooseFile()`, `toggleTheme()`, `changeTextSize()`, `showHelp()`, the inner class `Host` |
+| `Workbench` | One open program (a tab): its code, its run and its tracer, the picture and the panels below it; a run finishes into the tab that started it | `run()`, `show()`, `showCode()`, `showFiles()`, `showRecording()`, `save()`, `saveRecording()`, `exportSteps()`, `okToLoseCode()`, `statusText()`, `isUntouched()`, the interface `Host` |
+| `Windows` | Every open window, the one in front, New Window, closing and quitting, and the app menu's handlers | `openNew()`, `closed()`, `quitAll()`, `forEach()`, `installAppMenu()` |
+| `FindBar` | The find and replace bar in the editor: every match highlighted, "3 of 7", match case, whole word, regular expressions | `open()`, `next()`, `refresh()`, `replaceAll()` |
+| `CommandPalette` | The command palette (every menu command) and Quick Open, narrowed by typing | `showCommands()`, `showEntries()`, `score()` |
 | `TraceModel` | Holds the run and the current step; tells listeners when it changes | `load()`, `setStep()`, `next()`, `stepOver()`, `stepOut()`, `jumpToLine()`, `getRunSize()` |
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
-| `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks and undo | `showErrors()`, `stepChanged()`, `undo()`, `isDirty()`, `widthForLongestLine()`, `pasteHere()`, `ColoredView.drawUnselectedText()` |
+| `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks, matching brackets and undo; one `FileText` per file of the program, following the program from file to file | `setCode()`, `setFiles()`, `showFile()`, `showErrors()`, `stepChanged()`, `goToLine()`, `undo()`, `isDirty()`, `markBrackets()`, `ColoredView.drawUnselectedText()` |
 | `EditorKeys` | What a code editor does for you: keeps the indentation, moves lines with Tab, comments with Ctrl+/, finds text | `install()`, `newLine()`, `indent()`, `toggleComment()`, `find()` |
 | `JavaTokens` | Splits code into the pieces that get a colour: comments, strings, numbers, keywords, types, methods | `of(code)` |
 | `VisualPanel` | Shows the animated picture: centred and scaled to fit, plus zoom | `stepChanged()`, `paintComponent()`, `fitToRun()`, `zoomBy()`, `setMessage()`, `cardFor()`, `note()` |
@@ -349,7 +364,8 @@ Safety:
 | `SystemTheme` | Whether the computer is in dark mode, for the first launch | `isDark()`, `isDarkAnswer()` |
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
 | `SettingsDialog` | The settings window: run limits, text size, and a System / Light / Dark theme switch | `ask()`, `read()` |
-| **resources/examples/** | The 100 example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
+| `SourceFile` (model) | One file of a program: its path in the program's folder and its text | record |
+| **resources/examples/** | The 103 example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
 | **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
 
 ## OOP concepts
@@ -362,8 +378,8 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 |---|---|---|
 | Encapsulation | `TraceModel` (`setStep` keeps the step valid), `Spring`, `Snapshot`, `Trace`, `HeapObject`, `Animator` | Fields are private, read through getters, and changed only through methods that check them, so nothing can be put in an impossible state. |
 | Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing about JDI; abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
-| Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
-| Composition | `MainWindow` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
+| Interfaces | `Tracer` (`stop()`, `stepsSoFar()` and `setLimits()` are default methods), `Value`, `TraceListener` (with a default method), `Workbench.Host` (a program talks back to its window only through it, and `MainWindow.Host`, an inner class, implements it) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
+| Composition | `MainWindow` holds a `Workbench` per tab, and each `Workbench` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
 | Inheritance | the eleven `ErrorExplainer` subclasses extend it; `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException`, `CompileSetupException` and `RunFileException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `ErrorExplainer.describe()`, `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is. |

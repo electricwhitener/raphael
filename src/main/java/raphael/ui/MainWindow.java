@@ -99,6 +99,8 @@ public class MainWindow extends JFrame {
               Ctrl+F, Ctrl+H     find, replace
               F3, Shift+F3       next match, previous match
               Ctrl+G             go to line
+              Ctrl+P             quick open: files and examples
+              Ctrl+Shift+P       command palette: every command
               Shift+Alt+Down     duplicate line
               Ctrl+/             comment or uncomment lines
               Tab, Shift+Tab     move lines in, out
@@ -410,6 +412,28 @@ public class MainWindow extends JFrame {
         }
     }
 
+    // Quick Open (Ctrl+P): the open folder's files, the recent files and every example, found by
+    // typing part of a name.
+    private void quickOpen() {
+        List<CommandPalette.Entry> entries = new java.util.ArrayList<>();
+        if (current != null && current.getFolder() != null) {
+            for (String path : current.getCode().getPaths()) {
+                Workbench program = current;
+                entries.add(new CommandPalette.Entry(path.substring(path.lastIndexOf('/') + 1), path,
+                        () -> program.getCode().showFile(path)));
+            }
+        }
+        for (File file : recentFiles()) {
+            entries.add(new CommandPalette.Entry(file.getName(), "recent · " + file.getParent(), () -> openFile(file)));
+        }
+        for (ExampleCatalog.Group group : ExampleCatalog.groups()) {
+            for (ExampleCatalog.Example example : group.examples()) {
+                entries.add(new CommandPalette.Entry(example.title(), "example · " + group.name(), () -> loadExample(example)));
+            }
+        }
+        CommandPalette.showEntries(this, "Type part of a file or example name", entries);
+    }
+
     // Ln, Col on the right of the status bar, for the program in front.
     private void showPosition() {
         position.setVisible(current != null);
@@ -716,6 +740,9 @@ public class MainWindow extends JFrame {
         run.add(item("First step  (Home)", null, () -> onModel(TraceModel::first)));
         run.add(item("Last step  (End)", null, () -> onModel(TraceModel::last)));
         JMenu view = menu("View", KeyEvent.VK_V);
+        view.add(item("Command Palette…", "shift control P", () -> CommandPalette.showCommands(this, getJMenuBar())));
+        view.add(item("Quick Open…", "control P", this::quickOpen));
+        view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
         view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
         view.add(item(Shortcuts.label("Smaller text  (Ctrl −)"), null, () -> changeTextSize(-1)));
