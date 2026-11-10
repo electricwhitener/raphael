@@ -86,6 +86,7 @@ public class MainWindow extends JFrame {
               Right, Left        step forward, back
               Home, End          first, last step
               Alt+Down, Alt+Up   skip call, finish call
+              Alt+PgDn, Alt+PgUp  next, previous key moment
               click a line number   jump to when that line runs
               (In the editor, hold Alt with the arrow keys.)
 
@@ -757,6 +758,16 @@ public class MainWindow extends JFrame {
         run.add(item("Finish call", "alt UP", () -> onModel(TraceModel::stepOut)));
         run.add(item("First step  (Home)", null, () -> onModel(TraceModel::first)));
         run.add(item("Last step  (End)", null, () -> onModel(TraceModel::last)));
+        run.addSeparator();
+        run.add(item("Next key moment", "alt PAGE_DOWN", () -> onModel(model -> model.nextMoment(1))));
+        run.add(item("Previous key moment", "alt PAGE_UP", () -> onModel(model -> model.nextMoment(-1))));
+        javax.swing.JCheckBoxMenuItem pauses = new javax.swing.JCheckBoxMenuItem("Pause at key moments", ControlsBar.pausesAtMoments());
+        pauses.setToolTipText("While playing, stop at each key moment (a base case, a caught exception, a refused value…)");
+        pauses.addActionListener(e -> {
+            ControlsBar.setPauseAtMoments(pauses.isSelected());
+            say(pauses.isSelected() ? "playing pauses at key moments" : "playing goes straight through the key moments", Style.INK_SOFT);
+        });
+        run.add(pauses);
         JMenu view = menu("View", KeyEvent.VK_V);
         view.add(item("Command Palette…", "shift control P", () -> {
             CommandPalette.showCommands(this, getJMenuBar());

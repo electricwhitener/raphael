@@ -19,6 +19,7 @@ public class TraceModel {
     private Dimension runSize = new Dimension(); // the room the run's biggest picture needs
     private int step;
     private double speed = 1;   // 1 = normal, 2 = twice as fast
+    private List<raphael.explain.Moment> moments = List.of(); // the run's key moments, in step order
     private final List<TraceListener> listeners = new ArrayList<>();
 
     public void addListener(TraceListener listener) {
@@ -36,6 +37,12 @@ public class TraceModel {
 
     // For pictures that are built when shown (SceneList), which already know the biggest size.
     public void load(Trace trace, List<Scene> scenes, Dimension runSize) {
+        load(trace, scenes, runSize, List.of());
+    }
+
+    // With the run's key moments (see explain/MomentFinder).
+    public void load(Trace trace, List<Scene> scenes, Dimension runSize, List<raphael.explain.Moment> moments) {
+        this.moments = List.copyOf(moments);
         this.trace = trace;
         this.scenes = scenes;
         this.step = 0;
@@ -51,10 +58,59 @@ public class TraceModel {
         }
         trace = null;
         scenes = null;
+        moments = List.of();
         runSize = new Dimension();
         step = 0;
         for (TraceListener listener : listeners) {
             listener.traceChanged(this);
+        }
+    }
+
+    // The run's key moments, in step order.
+    public List<raphael.explain.Moment> getMoments() {
+        return moments;
+    }
+
+    // The moments of one step (usually none).
+    public List<raphael.explain.Moment> momentsAt(int at) {
+        List<raphael.explain.Moment> here = new ArrayList<>();
+        for (raphael.explain.Moment moment : moments) {
+            if (moment.step() == at) {
+                here.add(moment);
+            }
+        }
+        return here;
+    }
+
+    // Whether playing should pause at this step: one of its moments is a key moment.
+    public boolean pausesAt(int at) {
+        for (raphael.explain.Moment moment : moments) {
+            if (moment.step() == at && moment.pauses()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The next (or, going back, the previous) step with a moment; stays put if there's none.
+    public void nextMoment(int direction) {
+        if (!hasSteps()) {
+            return;
+        }
+        if (direction > 0) {
+            for (raphael.explain.Moment moment : moments) {
+                if (moment.step() > step) {
+                    setStep(moment.step());
+                    return;
+                }
+            }
+        } else {
+            for (int i = moments.size() - 1; i >= 0; i--) {
+                if (moments.get(i).step() < step) {
+                    setStep(moments.get(i).step());
+                    return;
+                }
+            }
         }
     }
 

@@ -18,6 +18,7 @@ import raphael.render.Style;
 public class ConsolePanel extends JPanel implements TraceListener {
 
     private final JTextArea output = new JTextArea();
+    private final JLabel heading = Section.header("console");
     private java.util.function.Consumer<String> onLineClicked = line -> { }; // until the program sets it
     private final JTextArea input = new JTextArea(2, 20);
     private final JPanel inputArea = new JPanel(new BorderLayout());
@@ -70,7 +71,7 @@ public class ConsolePanel extends JPanel implements TraceListener {
         JPanel body = new JPanel(new BorderLayout());
         body.add(outputScroll, BorderLayout.CENTER);
         body.add(inputArea, BorderLayout.SOUTH);
-        add(Section.wrap(Section.header("console"), body));
+        add(Section.wrap(heading, body));
     }
 
     // A crash's stack trace, without the lines from inside Java itself, which only hide the student's.
@@ -92,6 +93,11 @@ public class ConsolePanel extends JPanel implements TraceListener {
 
     public boolean isInputShown() {
         return inputArea.isVisible();
+    }
+
+    // Inside the bottom row's tabs, the tab says what this is, so the heading goes.
+    public void hideHeading() {
+        heading.setVisible(false);
     }
 
     // Told the text of a line of the console that was clicked.

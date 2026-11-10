@@ -167,8 +167,7 @@ public class VisualPanel extends JPanel implements TraceListener {
             painter.paint(g2, scene);
         }
         g2.dispose();
-        Snapshot snapshot = model.getSnapshot();
-        Note card = cardFor(snapshot);
+        Note card = model.hasSteps() ? cardFor(model.getStep()) : null;
         if (card != null) {
             note((Graphics2D) g, card);
         }
@@ -262,7 +261,13 @@ public class VisualPanel extends JPanel implements TraceListener {
     //   a crash: filled with the error tint, at the bottom;
     //   a message from the window (a compile error, missing input): filled, near the top.
     // OOP: a record, a small unchangeable data class.
-    private record Note(String title, String headline, String facts, String explanation, boolean filled, boolean atBottom) {
+    //   a key moment (explain/Moment): outlined in the accent blue, at the bottom.
+    private record Note(String title, String headline, String facts, String explanation, boolean filled, boolean atBottom,
+                        boolean moment) {
+
+        Note(String title, String headline, String facts, String explanation, boolean filled, boolean atBottom) {
+            this(title, headline, facts, explanation, filled, atBottom, false);
+        }
     }
 
     // One line of a card, with its kind: title, headline, facts or body.
@@ -271,11 +276,15 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     private static final float BODY_SIZE = 12.5f;
 
-    // The card for this step, if it has one: a crash, or a caught exception.
-    private static Note cardFor(Snapshot snapshot) {
-        if (snapshot == null) {
+    // The card for this step, if it has one: a crash, a caught exception (explained by its key
+    // moment, which says which catch took it and why), or the step's other key moments.
+    private Note cardFor(int step) {
+        Trace trace = model.getTrace();
+        if (trace == null || step < 0 || step >= trace.size()) {
             return null;
         }
+        Snapshot snapshot = trace.get(step);
+        List<raphael.explain.Moment> moments = model.momentsAt(step);
         if (snapshot.getException() != null) {
             String crash = snapshot.getException();
             int colon = crash.indexOf(": ");
@@ -284,19 +293,34 @@ public class VisualPanel extends JPanel implements TraceListener {
             return new Note("crashed at line " + snapshot.getLine(), crash, null, explanation, true, true);
         }
         ThrownException thrown = snapshot.getThrown();
-        if (thrown == null) {
+        if (thrown != null) {
+            List<String> left = thrown.leftMethods();
+            String where = (thrown.throwLine() > 0 ? "thrown at line " + thrown.throwLine() + " · " : "")
+                    + "caught at line " + thrown.catchLine()
+                    + (left.isEmpty() ? "" : " · left " + String.join("(), ", left) + "()");
+            String said = null;
+            for (raphael.explain.Moment moment : moments) {
+                if (moment.kind().equals("caught") || moment.kind().equals("file-missing")) {
+                    said = moment.text();
+                }
+            }
+            String advice = ErrorExplainer.hasAdvice(thrown.type()) ? ErrorExplainer.explain(thrown.type(), thrown.message()) : null;
+            String meaning = said != null ? said + (advice != null ? "\n" + advice : "")
+                    : advice != null ? advice
+                    : "The rest of the try was skipped" + (left.isEmpty() ? ""
+                            : ", and " + String.join("(), ", left) + "() stopped where " + (left.size() == 1 ? "it was" : "they were"))
+                            + ". The program goes on in this catch.";
+            return new Note("caught an exception", thrown.text(), where, meaning, false, true);
+        }
+        if (moments.isEmpty()) {
             return null;
         }
-        List<String> left = thrown.leftMethods();
-        String where = (thrown.throwLine() > 0 ? "thrown at line " + thrown.throwLine() + " · " : "")
-                + "caught at line " + thrown.catchLine()
-                + (left.isEmpty() ? "" : " · left " + String.join("(), ", left) + "()");
-        // Advice for this kind of exception if there is some; otherwise what the catch just did.
-        String meaning = ErrorExplainer.hasAdvice(thrown.type()) ? ErrorExplainer.explain(thrown.type(), thrown.message())
-                : "The rest of the try was skipped" + (left.isEmpty() ? ""
-                        : ", and " + String.join("(), ", left) + "() stopped where " + (left.size() == 1 ? "it was" : "they were"))
-                        + ". The program goes on in this catch.";
-        return new Note("caught an exception", thrown.text(), where, meaning, false, true);
+        List<String> texts = new ArrayList<>();
+        for (raphael.explain.Moment moment : moments) {
+            texts.add(moment.text());
+        }
+        String title = moments.get(0).title() + (moments.size() > 1 ? "  ·  +" + (moments.size() - 1) + " more" : "");
+        return new Note(title, null, null, String.join("\n", texts), false, true, true);
     }
 
     private static int cardWidth(int roomWidth) {
@@ -308,7 +332,7 @@ public class VisualPanel extends JPanel implements TraceListener {
         Trace trace = model.getTrace();
         int tallest = 0;
         if (trace != null) {
-            for (Snapshot step : trace.getSnapshots()) {
+            for (int step = 0; step < trace.size(); step++) {
                 Note card = cardFor(step);
                 if (card != null) {
                     tallest = Math.max(tallest, cardHeight(lines(card, width, shortened)));
@@ -359,7 +383,7 @@ public class VisualPanel extends JPanel implements TraceListener {
         int y = card.atBottom() ? visible.y + visible.height - height - Style.NOTE_GAP : visible.y + Style.SPACE_6;
         g.setColor(card.filled() ? Style.ERROR_TINT : Style.BACKGROUND);
         g.fillRoundRect(x, y, width, height, Style.ARC, Style.ARC);
-        g.setColor(Style.ERROR);
+        g.setColor(card.moment() ? Style.ACCENT : Style.ERROR);
         g.setStroke(new BasicStroke(card.filled() ? 1f : 1.5f));
         g.drawRoundRect(x, y, width, height, Style.ARC, Style.ARC);
         int baseline = y + Style.SPACE_3 + 10;
@@ -368,7 +392,7 @@ public class VisualPanel extends JPanel implements TraceListener {
             switch (line.kind()) {
                 case "title" -> {
                     g.setFont(Style.sans(true, 13f));
-                    g.setColor(Style.ERROR);
+                    g.setColor(card.moment() ? Style.ACCENT : Style.ERROR);
                 }
                 case "headline" -> {
                     g.setFont(Style.UI_FONT.deriveFont(12f));

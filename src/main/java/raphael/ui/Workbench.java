@@ -99,6 +99,10 @@ public class Workbench extends JPanel {
     private final LocalsPanel locals = new LocalsPanel();
     private final ConsolePanel console = new ConsolePanel();
     private final FilesPanel files = new FilesPanel(this::addInputFile, this::clearInputFiles);
+    private final MomentsPanel momentsPanel = new MomentsPanel(model);
+    private final TraceTablePanel traceTable = new TraceTablePanel(model);
+    // The console, the key moments and the trace table share one place in the bottom row, as tabs.
+    private final javax.swing.JTabbedPane bottomTabs = new javax.swing.JTabbedPane();
     private final List<File> inputFiles = new ArrayList<>(); // copied into the program's folder for each run
     private final Tracer tracer = new JdiTracer();
     // The picture area shows either the picture or, before the first run, a short guide.
@@ -135,6 +139,9 @@ public class Workbench extends JPanel {
         model.addListener(locals);
         model.addListener(console);
         model.addListener(files);
+        model.addListener(momentsPanel);
+        model.addListener(traceTable);
+        model.addListener(m -> titleMomentsTab());
 
         JScrollPane picture = new JScrollPane(visual);
         picture.setBorder(BorderFactory.createEmptyBorder());
@@ -184,7 +191,15 @@ public class Workbench extends JPanel {
         bottom.setBorder(Section.hairline(1, 0, 0, 0));
         addBottomPanel(bottom, callStack, 0.25);
         addBottomPanel(bottom, locals, 0.45); // values can be long, so variables get the most room
-        addBottomPanel(bottom, console, 0.30);
+        console.hideHeading(); // the tab says what it is
+        bottomTabs.addTab("Console", console);
+        bottomTabs.addTab("Key moments", momentsPanel);
+        bottomTabs.addTab("Trace table", traceTable);
+        bottomTabs.putClientProperty("JTabbedPane.tabType", "underlined");
+        bottomTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
+        bottomTabs.setFocusable(false);
+        bottomTabs.setBorder(Section.hairline(0, 1, 0, 0));
+        addBottomPanel(bottom, bottomTabs, 0.30);
         addBottomPanel(bottom, files, 0.30);
         files.setVisible(false);
         bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
@@ -209,7 +224,11 @@ public class Workbench extends JPanel {
 
         // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
-            console.showInput(allCode().contains("System.in"));
+            boolean input = allCode().contains("System.in");
+            console.showInput(input);
+            if (input) {
+                bottomTabs.setSelectedIndex(0); // the stdin box is in the console
+            }
             titleFileTabs();
             showFilesIfUsed();
             if (model.getTrace() == null) { // an old run or compile error no longer applies
@@ -296,6 +315,12 @@ public class Workbench extends JPanel {
 
     public boolean isDirty() {
         return code.isDirty();
+    }
+
+    // "Key moments (5)", so it's clear there's something to see there.
+    private void titleMomentsTab() {
+        int count = model.getMoments().size();
+        bottomTabs.setTitleAt(1, count == 0 ? "Key moments" : "Key moments (" + count + ")");
     }
 
     // A program nobody has typed in, run or saved: a new program as it came, or an example just
@@ -489,13 +514,14 @@ public class Workbench extends JPanel {
                 CompileResult program = files != null ? new SourceCompiler().compileFolder(files, preferred)
                         : new SourceCompiler().compile(source);
                 if (!program.success()) {
-                    return new RunResult(program, null, null, source, input, files);
+                    return new RunResult(program, null, null, source, input, files, List.of());
                 }
                 Trace trace = tracer.trace(program, input);
                 recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
                 SceneBuilder builder = files != null ? new SceneBuilder(files) : new SceneBuilder(source);
-                return new RunResult(program, trace, builder.build(trace), source, input, files);
+                List<raphael.explain.Moment> moments = new raphael.explain.MomentFinder().find(trace, program.facts());
+                return new RunResult(program, trace, builder.build(trace), source, input, files, moments);
             }
 
             @Override
@@ -591,7 +617,7 @@ public class Workbench extends JPanel {
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
         lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
-        model.load(trace, result.scenes(), result.scenes().getRunSize());
+        model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments());
         if (isShowing()) {
             visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         }
@@ -611,6 +637,7 @@ public class Workbench extends JPanel {
 
     private void showCompileErrors(List<CompileResult.CompileError> errors) {
         LOG.info("Didn't compile: " + errors.size() + " error(s)");
+        bottomTabs.setSelectedIndex(0); // the errors are listed in the console
         code.showErrors(errors);
         StringBuilder text = new StringBuilder();
         for (CompileResult.CompileError error : errors) {
@@ -652,11 +679,23 @@ public class Workbench extends JPanel {
         lastRun = saved;
         fromFile = saved.trace();
         recordingText = "saved recording · " + saved.trace().size() + " steps";
-        model.load(saved.trace(), scenes, scenes.getRunSize());
+        model.load(saved.trace(), scenes, scenes.getRunSize(), momentsOf(saved));
         if (isShowing()) {
             visual.requestFocusInWindow();
         }
         say("[recording] " + saved.trace().size() + " steps, played back without running · space plays", Style.INK);
+    }
+
+    // A recording's key moments: its code is compiled again for the facts (nothing is run).
+    private static List<raphael.explain.Moment> momentsOf(RunFile.Saved saved) {
+        try {
+            CompileResult program = saved.files() != null ? new SourceCompiler().compileFolder(saved.files(), null)
+                    : new SourceCompiler().compile(saved.source());
+            return new raphael.explain.MomentFinder().find(saved.trace(), program.facts());
+        } catch (raphael.compile.CompileSetupException | RuntimeException e) {
+            LOG.log(Level.INFO, "No key moments for this recording", e);
+            return List.of();
+        }
     }
 
     // ---- saving ----
@@ -878,6 +917,6 @@ public class Workbench extends JPanel {
 
     // What one press of run produced: the compile result, and the trace and pictures if it ran.
     private record RunResult(CompileResult program, Trace trace, SceneList scenes, String source, String input,
-                             List<SourceFile> files) {
+                             List<SourceFile> files, List<raphael.explain.Moment> moments) {
     }
 }

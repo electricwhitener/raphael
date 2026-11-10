@@ -31,7 +31,36 @@ public class ControlsBar extends JPanel implements TraceListener {
     private final JButton out = button(Icons.Glyph.STEP_OUT, "Finish call",
             "Finish call (step out): run until this method returns  (Alt+↑)");
     private final JButton play = button(Icons.Glyph.PLAY, "Play", "Play or pause  (Space)");
-    private final JSlider slider = new JSlider(0, 0, 0);
+    // Playing pauses by itself at each key moment (see explain/Moment), unless switched off.
+    private static boolean pauseAtMoments = raphael.App.SETTINGS.getBoolean("pauseAtMoments", true);
+
+    public static boolean pausesAtMoments() {
+        return pauseAtMoments;
+    }
+
+    public static void setPauseAtMoments(boolean pause) {
+        pauseAtMoments = pause;
+        raphael.App.SETTINGS.putBoolean("pauseAtMoments", pause);
+    }
+
+    // The step slider, with a small mark under each key moment: blue where play pauses, grey for a note.
+    private final JSlider slider = new JSlider(0, 0, 0) {
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            super.paintComponent(g);
+            if (getMaximum() <= 0) {
+                return;
+            }
+            int thumb = 8; // about half the thumb's width: where the track starts and ends
+            int left = getInsets().left + thumb;
+            int width = getWidth() - getInsets().left - getInsets().right - 2 * thumb;
+            for (raphael.explain.Moment moment : model.getMoments()) {
+                int x = left + (int) Math.round(width * (moment.step() / (double) getMaximum()));
+                g.setColor(moment.pauses() ? Style.ACCENT : Style.MUTED);
+                g.fillRect(x - 1, getHeight() - 5, 2, 4);
+            }
+        }
+    };
     // "step 5 of 47", in the softer ink (it's a readout, not a control); asked each time it paints, for dark mode.
     private final JLabel stepLabel = new JLabel("step – of –") {
         @Override
@@ -73,6 +102,9 @@ public class ControlsBar extends JPanel implements TraceListener {
                 timerMoving = true;
                 model.next();
                 timerMoving = false;
+                if (pauseAtMoments && model.pausesAt(model.getStep())) {
+                    stopPlaying(); // a key moment: the card explains it; Space goes on
+                }
             }
         });
         play.addActionListener(e -> togglePlay());
