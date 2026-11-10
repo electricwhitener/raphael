@@ -228,6 +228,9 @@ public class DemoGif {
 
     private static <T extends Component> T find(Container in, Class<T> type, String text) {
         for (Component part : in.getComponents()) {
+            if (!part.isShowing()) {
+                continue; // a tab behind the one in front
+            }
             if (type.isInstance(part) && (text == null || (part instanceof AbstractButton
                     && (text.equals(((AbstractButton) part).getText())
                     || text.equals(part.getAccessibleContext().getAccessibleName()))))) {

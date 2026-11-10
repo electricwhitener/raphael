@@ -137,6 +137,8 @@ public class JdiTracer implements Tracer {
         return false;
     }
 
+    private static final Object CONNECTING = new Object(); // see launch()
+
     // A program started for one run: the debugger's connection to it, and its process.
     private record Launched(VirtualMachine vm, Process process) {
     }
@@ -159,6 +161,16 @@ public class JdiTracer implements Tracer {
         arguments.get("localAddress").setValue("127.0.0.1"); // only programs on this computer can connect
         arguments.get("port").setValue("0");                // any free port
         arguments.get("timeout").setValue(String.valueOf(START_TIMEOUT_MS));
+        // JDI keeps one listener per set of arguments, and every run's arguments are the same, so
+        // two programs starting at once (two tabs) would close each other's listener. One program
+        // connects at a time; the runs themselves still go side by side.
+        synchronized (CONNECTING) {
+            return connect(program, runLimits, folder, connector, arguments);
+        }
+    }
+
+    private Launched connect(CompileResult program, RunLimits runLimits, Path folder, ListeningConnector connector,
+                             Map<String, Connector.Argument> arguments) throws TraceException {
         try {
             String address = connector.startListening(arguments);
             try {

@@ -21,6 +21,7 @@ class MainWindowTest {
     void noPanelAroundThePictureTakesTheShortcutKeys() {
         assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
         MainWindow window = new MainWindow();
+        window.newProgram(); // the window opens on the welcome page, which has no picture
         for (Container around = window.getPicture().getParent(); around != null; around = around.getParent()) {
             InputMap keys = around instanceof JComponent
                     ? ((JComponent) around).getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT) : null;
@@ -30,6 +31,34 @@ class MainWindowTest {
                 }
             }
         }
+        window.dispose();
+    }
+
+    // Each program gets its own tab. New always adds one; an example opened over an untouched
+    // program replaces it; a changed one keeps its tab and its unsaved dot; Ctrl+Shift+T reopens.
+    @Test
+    void programsOpenInTabs() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        assertEquals(java.util.List.of("Welcome"), window.tabTitles());
+        assertNull(window.active(), "nothing to run on the Welcome tab");
+        window.newProgram();
+        window.newProgram();
+        assertEquals(java.util.List.of("Welcome", "Untitled-1", "Untitled-2"), window.tabTitles());
+        window.loadExample("BubbleSort"); // Untitled-2 was never typed in, so the example takes its place
+        assertEquals(java.util.List.of("Welcome", "Untitled-1", "BubbleSort.java (example)"), window.tabTitles());
+        javax.swing.text.Document typed = window.active().getCode().getEditor().getDocument();
+        try {
+            typed.insertString(0, "// my change\n", null); // as if typed
+        } catch (javax.swing.text.BadLocationException e) {
+            throw new AssertionError(e);
+        }
+        window.loadExample("BSTInsert"); // the changed program stays, and the example gets a tab of its own
+        assertEquals(4, window.tabTitles().size());
+        window.closeProgram(); // BSTInsert, unchanged, closes without asking
+        assertEquals(java.util.List.of("Welcome", "Untitled-1", "● BubbleSort.java (example)"), window.tabTitles());
+        window.reopenClosedTab();
+        assertEquals("BSTInsert.java (example)", window.tabTitles().get(3));
         window.dispose();
     }
 

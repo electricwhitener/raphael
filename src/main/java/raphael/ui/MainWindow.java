@@ -2,7 +2,6 @@ package raphael.ui;
 
 import com.formdev.flatlaf.FlatLaf;
 import java.awt.BorderLayout;
-import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
@@ -21,8 +20,6 @@ import java.awt.event.WindowEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -45,9 +42,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
 import javax.swing.JTable;
-import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -56,10 +51,6 @@ import javax.swing.JToolBar;
 import javax.swing.SwingWorker;
 import javax.swing.text.JTextComponent;
 import raphael.App;
-import raphael.RaphaelException;
-import raphael.compile.CompileHints;
-import raphael.compile.CompileResult;
-import raphael.compile.SourceCompiler;
 import raphael.io.AppFolders;
 import raphael.io.AppLog;
 import raphael.io.DraftStore;
@@ -67,25 +58,15 @@ import raphael.io.ExampleCatalog;
 import raphael.io.RunFile;
 import raphael.io.RunFileException;
 import raphael.io.SafeFiles;
-import raphael.io.StepLog;
 import raphael.io.UpdateCheck;
-import raphael.model.EndReason;
-import raphael.model.Snapshot;
-import raphael.model.ThrownException;
-import raphael.model.Trace;
-import raphael.render.SceneList;
-import raphael.render.SceneBuilder;
 import raphael.render.Style;
-import raphael.trace.JdiTracer;
 import raphael.trace.RunLimits;
-import raphael.trace.Tracer;
 
-// Raphael's main window. It builds the panels, connects them to the TraceModel, sets up the
-// keyboard shortcuts, and runs the student's program when "run" is pressed.
-// The slow work (compiling, tracing, building the pictures) runs on a background thread
-// (a SwingWorker), so the window never freezes.
-// OOP: inheritance (extends JFrame); composition (the window is made of panels that each do
-// one job); abstraction (it only knows the Tracer interface, not JdiTracer's details).
+// Raphael's main window: the menu bar, the toolbar, the status bar, and the welcome page or the
+// program that's open (a Workbench, which holds the code, its run and its panels). Every command
+// goes to the program in front, through active(); the window itself never holds a program's state.
+// OOP: inheritance (extends JFrame); composition (the window is made of parts that each do one
+// job); an inner class implements Workbench.Host, the interface a Workbench talks back through.
 public class MainWindow extends JFrame {
 
     private static final String NEW_PROGRAM = """
@@ -125,19 +106,19 @@ public class MainWindow extends JFrame {
               Ctrl+,             settings
               F6, Shift+F6       move between toolbar, code and picture
             """;
-    // The examples the empty picture offers with one click; the rest are in the Examples menu.
-    private static final String[] FEATURED = {"BubbleSort", "ReverseList", "BSTInsert", "Inheritance", "BFS", "MergeSort"};
-
-    private final TraceModel model = new TraceModel();
-    private final CodePanel code = new CodePanel(model);
-    private final VisualPanel visual = new VisualPanel(model);
-    private final ControlsBar controls = new ControlsBar(model);
-    private final CallStackPanel callStack = new CallStackPanel();
-    private final LocalsPanel locals = new LocalsPanel();
-    private final ConsolePanel console = new ConsolePanel();
-    private final FilesPanel files = new FilesPanel(this::addInputFile, this::clearInputFiles);
-    private final List<File> inputFiles = new java.util.ArrayList<>(); // copied into the program's folder for each run
-    private RunFile.Saved lastRun; // the run on show, with the code and input it ran with, for Save recording
+    // One tab per open program, plus the Welcome tab. Each program is a Workbench.
+    private final javax.swing.JTabbedPane tabs = new javax.swing.JTabbedPane();
+    // The program in the tab in front, or null while the Welcome tab is in front.
+    private Workbench current;
+    // Closed tabs, newest first, for Ctrl+Shift+T.
+    private final java.util.Deque<Closed> closedTabs = new java.util.ArrayDeque<>();
+    private int untitled; // how many "Untitled-N" programs this window has made
+    private String welcomeSaid = "start a new program, open a file, or pick an example"; // the status on the Welcome tab
+    private final Workbench.Host host = new Host();
+    // The step controls in the toolbar belong to the open program; this slot holds them, and an
+    // idle set (switched off) on the welcome page.
+    private final JPanel controlsSlot = new JPanel(new BorderLayout());
+    private final ControlsBar idleControls = new ControlsBar(new TraceModel());
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final Legend legend = new Legend();
@@ -146,16 +127,8 @@ public class MainWindow extends JFrame {
     private final JPanel statusBar = new JPanel(new BorderLayout());
     private JToolBar toolBar;
     private JButton examplesButton;
-    // The picture area shows either the picture or, before the first run, a short guide.
-    private final java.awt.CardLayout pictureCards = new java.awt.CardLayout();
-    private final JPanel pictureArea = new JPanel(pictureCards);
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
-    private EmptyState emptyState;
-    private JSplitPane middle; // the work area above, the call stack, variables and console below
-    private boolean legendWanted = true; // false while the status bar shows an error
-    private String said = "";             // the status bar's last message, shown again after a caught step
-    private Color saidColor = Style.INK;
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
     private final JPopupMenu examplesMenu = new JPopupMenu();
     private final JMenu recentMenu = new JMenu("Open recent");
@@ -165,53 +138,36 @@ public class MainWindow extends JFrame {
     private final List<JMenuItem> needsProgram = new java.util.ArrayList<>();
     // "saved recording · 163 steps" in the status bar, while a recording read from a file is on show.
     private final JLabel recordingChip = EmptyState.keyChip("");
-    private Trace fromFile;
     private JMenuItem exportStepsItem;
-    // The middle of the window: the welcome page when no program is open, otherwise the editor,
-    // the picture and the panels below them.
-    private final JPanel workArea = new JPanel(new CardLayout());
     private WelcomePage welcome;
-    private boolean welcomeShown;
-    private final Tracer tracer = new JdiTracer();
-    private JSplitPane top;
-    private File currentFile;
-    private boolean running;
-    private Timer progress;
     private String lastSearch = "";
-    private volatile int recordedSteps; // set by the background run, read on Swing's thread
     private RunLimits limits = savedLimits();
-    private String documentName = "new program"; // shown in the title
 
     // Autosave: every few seconds, unsaved code is copied to a draft file (see DraftStore). The
     // writing happens on a background thread, so a slow disk never pauses the window.
     private static final Logger LOG = Logger.getLogger(MainWindow.class.getName());
     private static final int AUTOSAVE_MS = 5000;
-    private static final int COLLAPSED_ROW_H = 28; // the bottom panels with only their headings showing
-    private final DraftStore draft = openDraft();
+    // One draft file per program with unsaved changes, in a drafts folder.
+    private final java.nio.file.Path draftFolder = draftFolder();
+    private final java.util.Map<Workbench, DraftStore> drafts = new java.util.HashMap<>();
+    private final java.util.Map<Workbench, String> drafted = new java.util.HashMap<>(); // what each draft holds now
+    private int draftCount;
     private final ExecutorService draftWriter = Executors.newSingleThreadExecutor(job -> {
         Thread thread = new Thread(job, "autosave");
         thread.setDaemon(true); // never keeps Raphael running
         return thread;
     });
     private final Timer autosave = new Timer(AUTOSAVE_MS, e -> autosave());
-    private String lastDraft; // what the draft file holds now; null means no draft
 
     public MainWindow() {
         super("Raphael");
         setIconImages(Logo.windowIcons()); // the title bar and the taskbar
-        model.addListener(code);
-        model.addListener(visual);
-        model.addListener(controls);
-        model.addListener(callStack);
-        model.addListener(locals);
-        model.addListener(console);
-        model.addListener(files);
 
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                if (okToLoseCode()) {
+                if (okToLoseAll()) {
                     quit();
                 }
             }
@@ -228,59 +184,14 @@ public class MainWindow extends JFrame {
         north.add(busy, BorderLayout.SOUTH);
         add(north, BorderLayout.NORTH);
 
-        JScrollPane picture = new JScrollPane(visual);
-        picture.setBorder(BorderFactory.createEmptyBorder());
-        picture.getViewport().setBackground(Style.BACKGROUND);
-        pictureArea.setBorder(Section.hairline(0, 1, 0, 0));
-        pictureArea.add(picture, "picture");
-        emptyState = new EmptyState(FEATURED, !WindowsFileDialog.available(), this::loadExample,
-                () -> examplesMenu.show(examplesButton, 0, examplesButton.getHeight()));
-        JScrollPane guide = new JScrollPane(emptyState, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        guide.setBorder(BorderFactory.createEmptyBorder());
-        pictureArea.add(guide, "empty");
-        model.addListener(m -> showPictureOrGuide());
-        model.addListener(m -> showCaughtOrSaid());
-        model.addListener(m -> showLegendIfRoom()); // the recording chip goes once another run replaces it
         // Drop a .java file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
-        visual.setTransferHandler(new FileDrop(null, this::openDropped));
-        code.getEditor().setTransferHandler(new FileDrop(code.getEditor().getTransferHandler(), this::openDropped));
-        top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, code, pictureArea);
-        top.setResizeWeight(0.4);
-        top.setBorder(BorderFactory.createEmptyBorder());
-        JPanel bottom = new JPanel(new GridBagLayout());
-        bottom.setBackground(Style.BACKGROUND);
-        bottom.setBorder(Section.hairline(1, 0, 0, 0));
-        addBottomPanel(bottom, callStack, 0.25);
-        addBottomPanel(bottom, locals, 0.45); // values can be long, so variables get the most room
-        addBottomPanel(bottom, console, 0.30);
-        addBottomPanel(bottom, files, 0.30);
-        files.setVisible(false);
-        bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
-        bottom.setMinimumSize(new Dimension(0, COLLAPSED_ROW_H));
-        middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
-        middle.setResizeWeight(1); // the top gets all the spare room
-        // Whenever the window changes size, including when it first opens, the bottom row keeps its height.
-        middle.addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentResized(ComponentEvent e) {
-                fitBottomRow();
-            }
-        });
-        middle.setBorder(Section.hairline(1, 0, 0, 0));
         welcome = new WelcomePage(new WelcomePage.Actions(this::newProgram, this::open, this::pasteProgram,
-                this::loadExample, file -> {
-                    if (okToReplaceCode()) {
-                        openFile(file);
-                    }
-                }));
-        welcome.setBorder(Section.hairline(1, 0, 0, 0));
+                this::loadExample, this::openFile));
         welcome.setTransferHandler(new FileDrop(null, this::openDropped));
         welcome.showRecent(recentFiles());
-        workArea.add(welcome, "welcome");
-        workArea.add(middle, "work");
-        add(workArea, BorderLayout.CENTER);
+        buildTabs();
+        add(tabs, BorderLayout.CENTER);
 
         status.setFont(Style.UI_FONT.deriveFont(12f));
         status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
@@ -308,29 +219,8 @@ public class MainWindow extends JFrame {
             }
         });
 
-        // Scroll panes and split panes take the arrow keys, Home and End for themselves whenever
-        // something inside them has focus. Without these lines our shortcuts would never hear them.
-        for (JComponent claimsKeys : new JComponent[] {picture, top, middle}) {
-            claimsKeys.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
-        }
-
-        // The stdin box only appears for a program that can read input.
-        code.setOnCodeChanged(() -> {
-            updateTitle();
-            console.showInput(code.getCode().contains("System.in"));
-            showFilesIfUsed();
-            if (model.getTrace() == null) { // an old run or compile error no longer applies
-                visual.clearMessage();
-                console.showMessage("");
-                showPictureOrGuide();
-                if (!running) {
-                    say(Shortcuts.label("code changed · press run (ctrl+enter)"), Style.INK_SOFT);
-                }
-            }
-        });
-        code.setOnTextSizeWheel(this::changeTextSize);
-
         bindKeys();
+        switchTabsWithCtrlTab();
         // The usable part of the screen (without the taskbar), so the window always fits.
         Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
         setSize(Math.min(1300, screen.width), Math.min(840, screen.height));
@@ -339,16 +229,15 @@ public class MainWindow extends JFrame {
         applyTheme();
         applyTextSize();
         showWelcome();
-        tracer.setLimits(limits);
         autosave.start();
         useAppMenu();
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent e) {
-                if (welcomeShown) {
+                if (current == null) {
                     welcome.focusExamples();
                 } else {
-                    code.getEditor().requestFocusInWindow(); // ready to type or paste, not on the first toolbar button
+                    current.focusEditor(); // ready to type or paste, not on the first toolbar button
                 }
                 checkForUpdatesQuietly();
             }
@@ -364,7 +253,7 @@ public class MainWindow extends JFrame {
         Desktop desktop = Desktop.getDesktop();
         if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
             desktop.setQuitHandler((event, response) -> {
-                if (okToLoseCode()) {
+                if (okToLoseAll()) {
                     quit();
                 } else {
                     response.cancelQuit();
@@ -397,23 +286,54 @@ public class MainWindow extends JFrame {
         row.add(panel, constraints);
     }
 
-    // The picture panel, for the tests.
+    // The open program's picture panel (null on the welcome page), for the tests.
     JComponent getPicture() {
-        return visual;
+        return current == null ? null : current.getVisual();
+    }
+
+    // The program in front, or null on the welcome page.
+    Workbench active() {
+        return current;
+    }
+
+    // The tabs' titles, in order, for the tests.
+    List<String> tabTitles() {
+        List<String> titles = new java.util.ArrayList<>();
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            titles.add(tabs.getTitleAt(i));
+        }
+        return titles;
+    }
+
+    // Runs an action on the open program's recorded run; on the welcome page, does nothing.
+    private void onModel(java.util.function.Consumer<TraceModel> action) {
+        if (current != null) {
+            action.accept(current.getModel());
+        }
+    }
+
+    private void onCode(java.util.function.Consumer<CodePanel> action) {
+        if (current != null) {
+            action.accept(current.getCode());
+        }
     }
 
     // Switches between light and dark, and remembers the choice for next time.
     private void toggleTheme() {
         boolean wasError = status.getForeground().equals(Style.ERROR);
-        boolean saidError = Style.ERROR.equals(saidColor);
         App.setupLook(!Style.isDark());
         App.SETTINGS.putBoolean("dark", Style.isDark());
         FlatLaf.updateUI(); // tells every Swing component to pick up the new look
         SwingUtilities.updateComponentTreeUI(examplesMenu); // it isn't in the window until it's opened
-        code.restoreMarks();
+        if (current != null) {
+            SwingUtilities.updateComponentTreeUI(idleControls); // out of the window while a program is open
+            current.themeChanged();
+        }
         applyTheme();
         status.setForeground(wasError ? Style.ERROR : Style.INK);
-        saidColor = saidError ? Style.ERROR : Style.INK;
+        if (current != null) {
+            host.stateChanged(current);
+        }
     }
 
     // The colours Swing doesn't choose by itself. Most of the window is walked in one go.
@@ -460,14 +380,15 @@ public class MainWindow extends JFrame {
 
     private void resetView() {
         changeTextSize(Style.DEFAULT_CODE_SIZE - Style.CODE_FONT.getSize());
-        visual.resetZoom();
+        if (current != null) {
+            current.getVisual().resetZoom();
+        }
     }
 
     private void applyTextSize() {
         refont(getContentPane());
-        code.applyFont();
-        if (top.getWidth() > 0 && top.getDividerLocation() < dividerForCode()) {
-            top.setDividerLocation(dividerForCode());
+        if (current != null) {
+            current.textSizeChanged();
         }
     }
 
@@ -487,6 +408,9 @@ public class MainWindow extends JFrame {
     }
 
     private void find() {
+        if (current == null) {
+            return;
+        }
         javax.swing.JTextField field = new javax.swing.JTextField(lastSearch, 24);
         field.putClientProperty("JTextField.placeholderText", "text to find in the code");
         field.selectAll();
@@ -499,7 +423,7 @@ public class MainWindow extends JFrame {
     }
 
     private void findNext() {
-        if (!lastSearch.isEmpty() && !code.find(lastSearch)) {
+        if (current != null && !lastSearch.isEmpty() && !current.getCode().find(lastSearch)) {
             say("\"" + lastSearch + "\" isn't in the code", Style.INK_SOFT);
         }
     }
@@ -585,6 +509,8 @@ public class MainWindow extends JFrame {
     private JToolBar buildToolBar() {
         JToolBar bar = new JToolBar();
         bar.setFloatable(false);
+        controlsSlot.setOpaque(false);
+        idleControls.setSpeedEnabled(false);
         bar.setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
                 BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_2, Style.SPACE_3)));
         // A toolbar normally moves the keyboard focus with the arrow keys; here they step the program.
@@ -615,6 +541,8 @@ public class MainWindow extends JFrame {
         runButton.setIconTextGap(Style.SPACE_2);
         runButton.addActionListener(e -> run());
 
+        bar.add(homeButton());
+        bar.add(divider());
         bar.add(newProgram);
         bar.add(open);
         bar.add(save);
@@ -622,7 +550,7 @@ public class MainWindow extends JFrame {
         bar.add(divider());
         bar.add(runButton);
         bar.add(divider());
-        bar.add(controls);
+        bar.add(controlsSlot);
         bar.add(divider());
         bar.add(themeButton);
         bar.add(settings);
@@ -658,6 +586,7 @@ public class MainWindow extends JFrame {
     // Run is the one filled button: blue with "Run", or, while recording, dark with "Stop". Its
     // colours are set here because FlatLaf would turn a toolbar button grey under the mouse.
     private void styleRunButton() {
+        boolean running = current != null && current.isRunning();
         java.awt.Color fill = running ? Style.INK : Style.ACCENT;
         java.awt.Color text = running ? Style.BACKGROUND : Style.ON_ACCENT;
         runButton.setText(running ? "Stop" : "Run");
@@ -684,10 +613,8 @@ public class MainWindow extends JFrame {
         bind("F6", () -> moveFocus(1));
         bind("shift F6", () -> moveFocus(-1));
         bind("ESCAPE", () -> {
-            if (running) {
-                tracer.stop();
-            } else {
-                controls.pause();
+            if (current != null) {
+                current.stopOrPause();
             }
         });
         for (String key : new String[] {"shift control EQUALS", "control PLUS", "control ADD"}) {
@@ -696,22 +623,24 @@ public class MainWindow extends JFrame {
         bind("control SUBTRACT", () -> changeTextSize(-1));
         // Only heard when the keyboard is outside the editor; inside it, these keys already work.
         bind("control V", () -> {
-            if (welcomeShown) {
+            if (current == null) {
                 pasteProgram();
             } else {
-                code.pasteHere();
+                current.getCode().pasteHere();
             }
         });
-        bind("control A", code::selectAllHere);
-        bind("RIGHT", model::next);
-        bind("alt RIGHT", model::next);
-        bind("LEFT", model::previous);
-        bind("alt LEFT", model::previous);
-        bind("HOME", model::first);
-        bind("alt HOME", model::first);
-        bind("END", model::last);
-        bind("alt END", model::last);
-        bind("SPACE", controls::togglePlay);
+        bind("control A", () -> onCode(CodePanel::selectAllHere));
+        bind("RIGHT", () -> onModel(TraceModel::next));
+        bind("alt RIGHT", () -> onModel(TraceModel::next));
+        bind("LEFT", () -> onModel(TraceModel::previous));
+        bind("alt LEFT", () -> onModel(TraceModel::previous));
+        bind("HOME", () -> onModel(TraceModel::first));
+        bind("alt HOME", () -> onModel(TraceModel::first));
+        bind("END", () -> onModel(TraceModel::last));
+        bind("alt END", () -> onModel(TraceModel::last));
+        bind("SPACE", this::togglePlay);
+        bind("control PAGE_DOWN", () -> nextTab(1));
+        bind("control PAGE_UP", () -> nextTab(-1));
     }
 
     // The menu bar: every command in one place, with its shortcut beside it. On a Mac it's the
@@ -726,23 +655,31 @@ public class MainWindow extends JFrame {
         addExamples(examples);
         file.add(examples);
         file.add(recentMenu);
-        file.add(item("Close", "control W", this::closeProgram));
-        needsProgram.add(file.getItem(file.getItemCount() - 1));
+        file.add(item("Close tab", "control W", this::closeProgram));
+        file.add(item("Reopen closed tab", "shift control T", this::reopenClosedTab));
         file.addSeparator();
         file.add(item("Save", "control S", this::save));
         file.add(item("Save As…", "shift control S", this::saveAs));
         file.addSeparator();
-        saveRecordingItem = item("Save recording…", null, this::saveRecording);
+        saveRecordingItem = item("Save recording…", null, () -> {
+            if (current != null) {
+                current.saveRecording();
+            }
+        });
         saveRecordingItem.setToolTipText("Save the program and every recorded step in a .raphael file, to play again without running");
         file.add(saveRecordingItem);
-        exportStepsItem = item("Export steps as CSV…", null, this::exportSteps);
+        exportStepsItem = item("Export steps as CSV…", null, () -> {
+            if (current != null) {
+                current.exportSteps();
+            }
+        });
         exportStepsItem.setToolTipText("Each step as a row of a table: its line, its variables, what it printed");
         file.add(exportStepsItem);
         file.addMenuListener(new javax.swing.event.MenuListener() {
             @Override
             public void menuSelected(javax.swing.event.MenuEvent e) {
-                saveRecordingItem.setEnabled(!welcomeShown && lastRun != null && model.getTrace() == lastRun.trace());
-                exportStepsItem.setEnabled(!welcomeShown && model.getTrace() != null);
+                saveRecordingItem.setEnabled(current != null && current.hasRecording());
+                exportStepsItem.setEnabled(current != null && current.getModel().getTrace() != null);
                 fillRecent();
             }
 
@@ -759,27 +696,27 @@ public class MainWindow extends JFrame {
             file.add(item(Shortcuts.label("Settings…  (Ctrl+,)"), null, this::showSettings));
             file.addSeparator();
             file.add(item("Quit", "control Q", () -> {
-                if (okToLoseCode()) {
+                if (okToLoseAll()) {
                     quit();
                 }
             }));
         }
         JMenu edit = menu("Edit", KeyEvent.VK_E);
-        edit.add(item("Undo", "control Z", code::undo));
-        edit.add(item("Redo", "control Y", code::redo));
+        edit.add(item("Undo", "control Z", () -> onCode(CodePanel::undo)));
+        edit.add(item("Redo", "control Y", () -> onCode(CodePanel::redo)));
         edit.addSeparator();
         edit.add(item("Find…", "control F", this::find));
         edit.add(item("Find next", "F3", this::findNext));
         JMenu run = menu("Run", KeyEvent.VK_R);
         run.add(item("Run or stop", "control ENTER", this::run));
-        run.add(item("Play or pause  (Space)", null, controls::togglePlay));
+        run.add(item("Play or pause  (Space)", null, this::togglePlay));
         run.addSeparator();
-        run.add(item("Step forward  (→)", null, model::next));
-        run.add(item("Step back  (←)", null, model::previous));
-        run.add(item("Skip call", "alt DOWN", model::stepOver));
-        run.add(item("Finish call", "alt UP", model::stepOut));
-        run.add(item("First step  (Home)", null, model::first));
-        run.add(item("Last step  (End)", null, model::last));
+        run.add(item("Step forward  (→)", null, () -> onModel(TraceModel::next)));
+        run.add(item("Step back  (←)", null, () -> onModel(TraceModel::previous)));
+        run.add(item("Skip call", "alt DOWN", () -> onModel(TraceModel::stepOver)));
+        run.add(item("Finish call", "alt UP", () -> onModel(TraceModel::stepOut)));
+        run.add(item("First step  (Home)", null, () -> onModel(TraceModel::first)));
+        run.add(item("Last step  (End)", null, () -> onModel(TraceModel::last)));
         JMenu view = menu("View", KeyEvent.VK_V);
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
         view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
@@ -968,7 +905,9 @@ public class MainWindow extends JFrame {
     // F6 moves the keyboard to the next part of the window (toolbar, code, picture), and
     // Shift+F6 back. In the code, Tab indents, so this is the way out of it.
     private void moveFocus(int direction) {
-        JComponent[] regions = {(JComponent) toolBar.getComponentAtIndex(0), code.getEditor(), visual};
+        JComponent first = (JComponent) toolBar.getComponentAtIndex(0);
+        JComponent[] regions = current == null ? new JComponent[] {first, welcome}
+                : new JComponent[] {first, current.getCode().getEditor(), current.getVisual()};
         java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         int now = -1;
         for (int i = 0; i < regions.length; i++) {
@@ -990,186 +929,27 @@ public class MainWindow extends JFrame {
         });
     }
 
-    // Compile, trace and draw on a background thread, then show the result on the Swing thread.
+    // Run, or stop a recording: the open program does it.
     private void run() {
-        if (running) {
-            tracer.stop(); // while recording, the run button is the stop button
-            return;
-        }
-        if (welcomeShown) {
-            return; // no program is open
-        }
-        String source = code.getCode();
-        String input = console.getInput();
-        if (top.getDividerLocation() < dividerForCode()) {
-            top.setDividerLocation(dividerForCode()); // the code may have grown since it was loaded
-        }
-        running = true;
-        styleRunButton();
-        visual.setRecording(true);
-        busy.setVisible(true);
-        showPictureOrGuide();
-        progress = new Timer(200, e -> {
-            if (tracer.stepsSoFar() > 0) { // 0 once recording has finished and drawing has begun
-                visual.setRecordedSteps(tracer.stepsSoFar());
-            }
-            if (tracer.stepsSoFar() > 0) {
-                say("recording your program: " + tracer.stepsSoFar() + " steps · esc stops", Style.INK_SOFT);
-            }
-        });
-        progress.start();
-        code.setEditable(false);
-        model.clear();
-        visual.clearMessage();
-        say("compiling…", Style.INK_SOFT);
-
-        // An anonymous subclass of SwingWorker: doInBackground() runs on a worker thread,
-        // process() and done() run on the Swing thread.
-        new SwingWorker<RunResult, String>() {
-            @Override
-            protected RunResult doInBackground() throws Exception {
-                CompileResult program = new SourceCompiler().compile(source);
-                if (!program.success()) {
-                    return new RunResult(program, null, null, source, input);
-                }
-                Trace trace = tracer.trace(program, input);
-                recordedSteps = trace.size();
-                publish("drawing " + trace.size() + " steps…");
-                return new RunResult(program, trace, new SceneBuilder(source).build(trace), source, input);
-            }
-
-            @Override
-            protected void process(List<String> messages) {
-                visual.setRecordedSteps(recordedSteps); // the picture's count agrees with the status
-                say(messages.get(messages.size() - 1), Style.INK_SOFT);
-            }
-
-            @Override
-            protected void done() {
-                running = false;
-                progress.stop();
-                busy.setVisible(false);
-                styleRunButton();
-                visual.setRecording(false);
-                code.setEditable(true);
-                try {
-                    show(get());
-                } catch (ExecutionException e) {
-                    runFailed(e.getCause());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                showPictureOrGuide();
-            }
-        }.execute();
-    }
-
-    // The picture, or the guide when there's nothing to show yet: no recorded run, nothing being
-    // recorded, and no message (a compile error or a crash belongs in the picture area).
-    private void showPictureOrGuide() {
-        boolean nothingYet = !model.hasSteps() && !running && !visual.hasMessage();
-        pictureCards.show(pictureArea, nothingYet ? "empty" : "picture");
-        fitBottomRow();
-    }
-
-    // The bottom row keeps its height, except before the first run in a small window (or at
-    // 200% scaling): then the empty panels shrink to their headings so the guide fits. Not while
-    // the stdin box is showing, which is needed before running.
-    private void fitBottomRow() {
-        if (middle == null || middle.getHeight() == 0) {
-            return;
-        }
-        int bottom = Style.BOTTOM_ROW_H;
-        boolean guide = !model.hasSteps() && !running && !visual.hasMessage();
-        if (guide && !console.isInputShown()
-                && middle.getHeight() - Style.BOTTOM_ROW_H < emptyState.getPreferredSize().height + 2 * Style.SPACE_6) {
-            bottom = COLLAPSED_ROW_H;
-        }
-        middle.setDividerLocation(middle.getHeight() - middle.getDividerSize() - bottom);
-    }
-
-    // A run that ended with an exception instead of a result. A RaphaelException is a problem
-    // Raphael knows how to explain (no compiler, the program's JVM wouldn't start); anything else
-    // is a bug in Raphael, which ErrorReporter logs and reports.
-    private void runFailed(Throwable cause) {
-        if (cause instanceof RaphaelException) {
-            LOG.log(Level.WARNING, "A run couldn't start", cause);
-            visual.setMessage("couldn't run", cause.getMessage(), null, null);
-            say("[error] " + cause.getMessage(), Style.ERROR);
-        } else {
-            ErrorReporter.report(cause);
-            visual.setMessage("something went wrong inside raphael", cause.toString(), null,
-                    "The details are in its log (Help → Open log folder).");
-            say("[error] something went wrong inside raphael · the details are in its log", Style.ERROR);
+        if (current != null) {
+            current.run();
         }
     }
 
-    private void show(RunResult result) {
-        if (result.trace() == null) {
-            LOG.info("Didn't compile: " + result.program().errors().size() + " error(s)");
-            List<CompileResult.CompileError> errors = result.program().errors();
-            code.showErrors(errors);
-            StringBuilder text = new StringBuilder();
-            for (CompileResult.CompileError error : errors) {
-                text.append(error.line() > 0 ? "line " + error.line() + ": " : "").append(error.message()).append("\n");
-                String hint = CompileHints.hint(error.message());
-                if (hint != null) {
-                    text.append("  hint: ").append(hint).append("\n");
-                }
-                text.append("\n");
-            }
-            console.showMessage(text.toString());
-            CompileResult.CompileError first = errors.get(0);
-            String where = (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
-            String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the console)" : "";
-            String next = null;
-            if (errors.size() > 1) {
-                CompileResult.CompileError second = errors.get(1);
-                next = "next: " + (second.line() > 0 ? "line " + second.line() + " · " : "")
-                        + second.message().lines().findFirst().orElse("") + " (see the console)";
-            }
-            visual.setMessage("didn't compile · " + errors.size() + (errors.size() == 1 ? " error" : " errors"),
-                    where.lines().findFirst().orElse(""), next, CompileHints.hint(first.message()));
-            say("[error] " + where.lines().findFirst().orElse("") + more, Style.ERROR);
-            return;
-        }
-        Trace trace = result.trace();
-        LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
-        lastRun = new RunFile.Saved(result.source(), result.input(), trace);
-        model.load(trace, result.scenes(), result.scenes().getRunSize());
-        visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
-        controls.play();
-        String steps = "recorded " + trace.size() + " steps · space pauses";
-        if (trace.getEndReason() == EndReason.FINISHED) {
-            say("[ok] " + steps, Style.INK);
-        } else if (trace.getEndMessage().startsWith("NoSuchElementException") && code.getCode().contains("System.in")) {
-            visual.setMessage("needs input", "This program reads input, and it ran out.", null,
-                    "Type its input into the stdin box below, then press run.");
-            say("[needs input] type it into the stdin box, then run again", Style.ERROR);
-        } else {
-            say("[" + trace.getEndReason().name().toLowerCase(Locale.ROOT).replace('_', ' ') + "] " + trace.getEndMessage()
-                    + " · " + steps, Style.ERROR);
+    private void togglePlay() {
+        if (current != null) {
+            current.getControls().togglePlay();
         }
     }
 
+    // A message in the status bar. While a program is open it's that program's message, so it
+    // comes back when the program is in front again.
     private void say(String message, Color color) {
-        said = message;
-        saidColor = color;
-        legendWanted = !Style.ERROR.equals(color); // during an error, the message outranks the key
-        showLegendIfRoom();
-        showStatus(message, color);
-    }
-
-    // On the step where a caught exception lands in its catch, the status bar says so; on the
-    // other steps it goes back to what was last said (the run's summary, usually).
-    private void showCaughtOrSaid() {
-        Snapshot snapshot = model.getSnapshot();
-        ThrownException thrown = snapshot == null ? null : snapshot.getThrown();
-        if (thrown == null) {
-            showStatus(said, saidColor);
+        if (current != null) {
+            current.say(message, color);
         } else {
-            showStatus("[caught] " + thrown.type() + (thrown.throwLine() > 0 ? " · thrown at line " + thrown.throwLine() + "," : " ·")
-                    + " caught at line " + thrown.catchLine(), Style.INK);
+            welcomeSaid = message;
+            showStatus(message, color);
         }
     }
 
@@ -1181,19 +961,13 @@ public class MainWindow extends JFrame {
 
     // The key to the picture, unless there's an error to show or the window is too narrow for both.
     private void showLegendIfRoom() {
-        legend.setVisible(legendWanted && !welcomeShown && getWidth() >= 1100);
-        recordingChip.setVisible(fromFile != null && model.getTrace() == fromFile && getWidth() >= 1100);
-    }
-
-    // Where to put the divider so the longest line isn't cut off, keeping room for the picture.
-    private int dividerForCode() {
-        int width = top.getWidth() > 0 ? top.getWidth() : getWidth(); // not laid out yet when the window opens
-        return Math.max((int) (width * 0.4), Math.min(code.widthForLongestLine(), (int) (width * 0.55)));
-    }
-
-    // Asks first if replacing the editor's text would lose changes that haven't been saved.
-    private boolean okToReplaceCode() {
-        return okToLoseCode();
+        boolean room = getWidth() >= 1100;
+        legend.setVisible(current != null && current.wantsLegend() && room);
+        String chip = current == null ? null : current.recordingChip();
+        if (chip != null) {
+            recordingChip.setText(chip);
+        }
+        recordingChip.setVisible(chip != null && room);
     }
 
     private void showSettings() {
@@ -1209,7 +983,6 @@ public class MainWindow extends JFrame {
         App.SETTINGS.putInt("maxSteps", limits.maxSteps());
         App.SETTINGS.putInt("timeoutSeconds", limits.timeoutSeconds());
         App.SETTINGS.putInt("memoryMb", limits.memoryMb());
-        tracer.setLimits(limits);
         App.SETTINGS.putBoolean("checkUpdates", chosen.checkUpdates());
         boolean wantDark = chosen.theme() == SettingsDialog.Theme.SYSTEM ? SystemTheme.isDark()
                 : chosen.theme() == SettingsDialog.Theme.DARK;
@@ -1239,22 +1012,37 @@ public class MainWindow extends JFrame {
         }
     }
 
-    private static DraftStore openDraft() {
+    // The folder for drafts, or null if there's nowhere to write (then autosave is off).
+    private static java.nio.file.Path draftFolder() {
         try {
-            return new DraftStore(AppFolders.data().resolve("draft.java"));
+            java.nio.file.Path folder = AppFolders.data().resolve("drafts");
+            java.nio.file.Files.createDirectories(folder);
+            return folder;
         } catch (IOException e) {
-            LOG.log(Level.WARNING, "No folder for the autosaved draft; autosave is off", e);
+            LOG.log(Level.WARNING, "No folder for autosaved drafts; autosave is off", e);
             return null;
         }
     }
 
-    // Copies unsaved code to the draft, or removes the draft once nothing is unsaved.
+    // Copies each program's unsaved code to its own draft, and removes a draft once its program
+    // has nothing unsaved. The writing happens on the autosave thread.
     private void autosave() {
-        String text = code.isDirty() ? code.getCode() : null;
-        if (draft == null || Objects.equals(text, lastDraft)) {
+        if (draftFolder == null) {
             return;
         }
-        lastDraft = text;
+        for (Workbench program : programs()) {
+            String text = program.isDirty() ? program.getCode().getCode() : null;
+            if (Objects.equals(text, drafted.get(program))) {
+                continue;
+            }
+            drafted.put(program, text);
+            DraftStore draft = drafts.computeIfAbsent(program, p -> new DraftStore(draftFolder.resolve(
+                    "draft-" + ProcessHandle.current().pid() + "-" + (++draftCount) + ".java")));
+            writeDraft(draft, text);
+        }
+    }
+
+    private void writeDraft(DraftStore draft, String text) {
         draftWriter.execute(() -> {
             try {
                 if (text == null) {
@@ -1268,58 +1056,82 @@ public class MainWindow extends JFrame {
         });
     }
 
-    // Called once the window is showing. A draft left from last time means Raphael didn't quit
-    // normally (a normal quit removes it), so offer the code back.
+    // A program's tab closed: its draft goes too.
+    private void dropDraft(Workbench program) {
+        DraftStore draft = drafts.remove(program);
+        drafted.remove(program);
+        if (draft != null) {
+            writeDraft(draft, null);
+        }
+    }
+
+    // Called once the window is showing. Drafts left from last time mean Raphael didn't quit
+    // normally (a normal quit removes them), so offer the code back, each program in its own tab.
+    // The single draft.java of Raphael 1.0 is offered too.
     public void offerDraft() {
-        if (draft == null) {
-            return;
-        }
-        String saved;
+        List<DraftStore> found = new java.util.ArrayList<>();
+        List<String> codes = new java.util.ArrayList<>();
+        java.time.Instant newest = null;
+        List<java.nio.file.Path> files = new java.util.ArrayList<>();
         try {
-            saved = draft.load();
+            files.add(AppFolders.data().resolve("draft.java"));
+            if (draftFolder != null) {
+                try (java.util.stream.Stream<java.nio.file.Path> list = java.nio.file.Files.list(draftFolder)) {
+                    list.filter(f -> f.getFileName().toString().endsWith(".java")).sorted().forEach(files::add);
+                }
+            }
+            for (java.nio.file.Path file : files) {
+                DraftStore draft = new DraftStore(file);
+                String code = draft.load();
+                if (code == null || code.isBlank()) {
+                    continue;
+                }
+                found.add(draft);
+                codes.add(code);
+                java.time.Instant at = draft.savedAt();
+                newest = newest == null || at.isAfter(newest) ? at : newest;
+            }
         } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't read the autosaved draft", e);
+            LOG.log(Level.WARNING, "Couldn't read the autosaved drafts", e);
+        }
+        if (found.isEmpty()) {
             return;
         }
-        if (saved == null || saved.isBlank()) {
-            return;
+        String when = newest == null ? "" : " from " + whenText(newest, java.time.LocalDateTime.now());
+        String what;
+        if (codes.size() == 1) {
+            long lines = codes.get(0).lines().count();
+            what = "a copy of your code" + when + " (" + lines + (lines == 1 ? " line" : " lines") + ")";
+        } else {
+            what = "copies of " + codes.size() + " programs" + when + ", each in its own tab";
         }
-        String when;
-        try {
-            when = " from " + whenText(draft.savedAt(), java.time.LocalDateTime.now());
-        } catch (IOException e) {
-            when = "";
-        }
-        long lines = saved.lines().count();
         String answer = Dialogs.question(this, "Restore your unsaved code?")
-                .body("Raphael didn't close normally last time. It kept a copy of your code" + when
-                        + " (" + lines + (lines == 1 ? " line" : " lines") + ").")
+                .body("Raphael didn't close normally last time. It kept " + what + ".")
                 .buttons("Restore", null, "Discard it")
                 .ask();
         if ("Restore".equals(answer)) {
-            showWork();
-            code.setCode(saved);
-            code.markUnsaved();
-            top.setDividerLocation(dividerForCode());
-            currentFile = null;
-            setDocument("restored code");
+            for (String code : codes) {
+                Workbench program = newTab();
+                program.showCode(code, null, "restored code");
+                program.getCode().markUnsaved();
+                host.stateChanged(program);
+            }
             say(Shortcuts.label("restored your unsaved code · ctrl+s saves it"), Style.INK_SOFT);
-        } else {
-            lastDraft = "";  // differs from "no draft", so the next autosave removes the file
+        }
+        for (DraftStore draft : found) { // restored programs are drafted again as they are now
+            writeDraft(draft, null);
         }
     }
 
     // A normal quit: no draft is left behind, so the next start doesn't offer one.
     private void quit() {
         autosave.stop();
+        for (Workbench program : programs()) {
+            dropDraft(program);
+        }
         draftWriter.shutdown();
         try {
             draftWriter.awaitTermination(2, TimeUnit.SECONDS); // a save in progress finishes first
-            if (draft != null) {
-                draft.clear();
-            }
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't remove the autosaved draft", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -1327,47 +1139,44 @@ public class MainWindow extends JFrame {
         System.exit(0);
     }
 
-    // Before the code in the editor is replaced or Raphael quits: if there are unsaved changes,
-    // offer to save them. True if it's fine to go on.
-    private boolean okToLoseCode() {
-        if (!code.isDirty()) {
-            return true;
+    // Before the window closes: every program with unsaved changes is brought to the front and
+    // asked about in turn. True if it's fine to go on.
+    private boolean okToLoseAll() {
+        for (Workbench program : programs()) {
+            if (program.isDirty()) {
+                tabs.setSelectedComponent(program);
+                if (!program.okToLoseCode()) {
+                    return false;
+                }
+            }
         }
-        String answer = Dialogs.question(this, "Save changes to " + documentName + "?")
-                .body("Your changes will be lost if you don't save them.")
-                .buttons("Save", "Cancel", "Don't save")
-                .ask();
-        if ("Save".equals(answer)) {
-            return save(); // go on only if it really was saved
-        }
-        return "Don't save".equals(answer);
+        return true;
     }
 
-    private void newProgram() {
-        if (!okToReplaceCode()) {
-            return;
+    // The open programs, in tab order.
+    private List<Workbench> programs() {
+        List<Workbench> programs = new java.util.ArrayList<>();
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof Workbench) {
+                programs.add((Workbench) tabs.getComponentAt(i));
+            }
         }
-        showWork();
-        code.setCode(NEW_PROGRAM);
-        code.startTypingAt(3, 8);
-        currentFile = null;
-        setDocument("new program");
+        return programs;
+    }
+
+    void newProgram() {
+        Workbench program = newTab();
+        program.showCode(NEW_PROGRAM, null, "Untitled-" + (++untitled));
+        program.getCode().startTypingAt(3, 8);
         say(Shortcuts.label("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
-    private void loadExample(String name) {
+    void loadExample(String name) {
         loadExample(ExampleCatalog.find(name));
     }
 
     private void loadExample(ExampleCatalog.Example example) {
-        if (!okToReplaceCode()) {
-            return;
-        }
-        showWork();
-        code.setCode(ExampleCatalog.source(example));
-        top.setDividerLocation(dividerForCode());
-        currentFile = null;
-        setDocument(example.name() + ".java (example)");
+        newTab(true).showCode(ExampleCatalog.source(example), null, example.name() + ".java (example)");
         say(example.title() + ": " + example.blurb().replaceAll("\\.$", "")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
     }
@@ -1414,64 +1223,271 @@ public class MainWindow extends JFrame {
             say(Shortcuts.label("the clipboard has no text · copy a Java program first, then press ctrl+v"), Style.INK_SOFT);
             return;
         }
-        if (!okToReplaceCode()) {
-            return;
-        }
-        showWork();
-        code.setCode(text);
-        top.setDividerLocation(dividerForCode());
-        currentFile = null;
-        setDocument("pasted program");
-        code.markUnsaved();
+        Workbench program = newTab();
+        program.showCode(text, null, "pasted program");
+        program.getCode().markUnsaved();
+        host.stateChanged(program);
         say(Shortcuts.label("pasted your program · press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
-    // The welcome page, in place of the editor: no program is open.
+    // The Welcome tab, in front: opened again if it was closed.
     private void showWelcome() {
-        model.clear();
-        code.setCode("");
-        code.showErrors(List.of());
-        visual.clearMessage();
-        console.showMessage("");
-        currentFile = null;
-        ((CardLayout) workArea.getLayout()).show(workArea, "welcome");
-        welcomeShown = true;
-        runButton.setEnabled(false); // there's nothing to run
-        showWelcomeControls(true);
-        setDocument("Welcome");
-        say("start a new program, open a file, or pick an example", Style.INK_SOFT);
+        if (tabs.indexOfComponent(welcome) < 0) {
+            tabs.insertTab("Welcome", null, welcome, "Start a program, open a file, or pick an example", 0);
+        }
+        tabs.setSelectedComponent(welcome);
+        tabChanged(); // also when it was already in front
         welcome.focusExamples();
     }
 
-    private void showWork() {
-        if (welcomeShown) {
-            welcomeShown = false;
-            runButton.setEnabled(true);
-            showWelcomeControls(false);
-            ((CardLayout) workArea.getLayout()).show(workArea, "work");
-            fitBottomRow();
+    // A new tab for the program about to be opened, in front.
+    private Workbench newTab() {
+        return newTab(false);
+    }
+
+    // replaceUntouched: an untouched program in front (a new program nobody typed in, an example
+    // nobody ran) is replaced instead, so trying examples one after another doesn't pile up tabs.
+    private Workbench newTab(boolean replaceUntouched) {
+        Workbench program = new Workbench(host);
+        recolor(program);
+        refont(program);
+        program.textSizeChanged();
+        int at = tabs.getSelectedIndex() + 1;
+        if (replaceUntouched && current != null && current.isUntouched()) {
+            at = tabs.indexOfComponent(current);
+            removeTab(current);
+        }
+        tabs.insertTab("", null, program, null, Math.min(at, tabs.getTabCount()));
+        tabs.setSelectedComponent(program);
+        tabChanged();
+        getContentPane().validate(); // laid out now, so the code's divider can be placed
+        return program;
+    }
+
+    // The tab in front changed: the toolbar, menus, title and status bar follow its program.
+    private void tabChanged() {
+        Component selected = tabs.getSelectedComponent();
+        Workbench now = selected instanceof Workbench ? (Workbench) selected : null;
+        if (current != null && current != now) {
+            current.getControls().pause(); // a program behind another doesn't keep playing
+        }
+        current = now;
+        useControls(current == null ? idleControls : current.getControls());
+        runButton.setEnabled(current != null);
+        showWelcomeControls(current == null);
+        if (current == null) {
+            styleRunButton();
+            busy.setVisible(false);
+            updateTitle();
+            showStatus(welcomeSaid, Style.INK_SOFT);
+        } else {
+            host.stateChanged(current);
         }
     }
 
-    // The welcome page is a mode: everything that needs a program is off, and so is the picture's key.
+    // Puts a program's step controls (or the idle ones) into the toolbar.
+    private void useControls(ControlsBar bar) {
+        if (controlsSlot.getComponentCount() == 1 && controlsSlot.getComponent(0) == bar) {
+            return;
+        }
+        controlsSlot.removeAll();
+        controlsSlot.add(bar, BorderLayout.CENTER);
+        controlsSlot.revalidate();
+        controlsSlot.repaint();
+    }
+
+    // On the Welcome tab, everything that needs a program is off, and so is the picture's key.
     private void showWelcomeControls(boolean welcome) {
         for (JMenuItem item : needsProgram) {
             item.setEnabled(!welcome);
         }
         saveButton.setEnabled(!welcome);
-        controls.setSpeedEnabled(!welcome);
         showLegendIfRoom();
     }
 
-    // File → Close: back to the welcome page, after asking about unsaved code.
-    private void closeProgram() {
-        if (running) {
-            tracer.stop();
-            return; // closing waits until the recording has stopped
+    // File → Close tab (Ctrl+W): closes the tab in front, after asking about unsaved code.
+    void closeProgram() {
+        closeTab(tabs.getSelectedIndex());
+    }
+
+    // Closes one tab. A program with unsaved changes is brought to the front and asked about first;
+    // one still recording stops. The last tab closed brings the Welcome tab back. True if it closed.
+    private boolean closeTab(int index) {
+        if (index < 0 || index >= tabs.getTabCount()) {
+            return false;
         }
-        if (!welcomeShown && okToLoseCode()) {
+        Component tab = tabs.getComponentAt(index);
+        if (tab instanceof Workbench) {
+            Workbench program = (Workbench) tab;
+            if (program.isDirty()) {
+                tabs.setSelectedIndex(index);
+                if (!program.okToLoseCode()) {
+                    return false;
+                }
+            }
+            program.stop();
+            closedTabs.push(new Closed(program.getCurrentFile(), program.getCode().getCode(), program.getDocumentName(),
+                    program.isDirty()));
+            while (closedTabs.size() > 20) {
+                closedTabs.removeLast();
+            }
+            removeTab(program);
+        } else {
+            tabs.removeTabAt(index);
+        }
+        if (tabs.getTabCount() == 0) {
             showWelcome();
         }
+        tabChanged();
+        return true;
+    }
+
+    // Takes a program's tab away, with its draft.
+    private void removeTab(Workbench program) {
+        program.stop();
+        tabs.remove(program);
+        dropDraft(program);
+        if (program == current) {
+            current = null;
+        }
+    }
+
+    // Closes every tab but this one; stops at the first the user keeps (Cancel).
+    private void closeOthers(Component keep) {
+        for (int i = tabs.getTabCount() - 1; i >= 0; i--) {
+            if (tabs.getComponentAt(i) != keep && !closeTab(i)) {
+                return;
+            }
+        }
+    }
+
+    // Ctrl+Shift+T: the last tab closed comes back, from its file if it has one.
+    void reopenClosedTab() {
+        Closed closed = closedTabs.poll();
+        if (closed == null) {
+            say("no closed tab to reopen", Style.INK_SOFT);
+            return;
+        }
+        if (closed.file() != null && closed.file().isFile()) {
+            openFile(closed.file());
+            return;
+        }
+        Workbench program = newTab();
+        program.showCode(closed.code(), null, closed.name());
+        if (closed.unsaved()) {
+            program.getCode().markUnsaved();
+            host.stateChanged(program);
+        }
+        say("reopened " + closed.name(), Style.INK_SOFT);
+    }
+
+    // Ctrl+Tab, Ctrl+PgDn: the next tab; with Shift, or Ctrl+PgUp, the one before. They go round.
+    private void nextTab(int direction) {
+        int count = tabs.getTabCount();
+        if (count > 1) {
+            tabs.setSelectedIndex(Math.floorMod(tabs.getSelectedIndex() + direction, count));
+            if (current != null) {
+                current.getVisual().requestFocusInWindow();
+            }
+        }
+    }
+
+    // Ctrl+Tab normally moves the keyboard focus out of the editor before any shortcut hears it, so
+    // it's caught first, while this window is the one in front.
+    private void switchTabsWithCtrlTab() {
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(event -> {
+            if (event.getID() != KeyEvent.KEY_PRESSED || event.getKeyCode() != KeyEvent.VK_TAB
+                    || !event.isControlDown() || !isActive()) {
+                return false;
+            }
+            nextTab(event.isShiftDown() ? -1 : 1);
+            return true; // used up: the focus stays where it was
+        });
+    }
+
+    // The tab strip: a close button on each tab, a menu on right-click, and middle-click closes.
+    private void buildTabs() {
+        tabs.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabs.putClientProperty("JTabbedPane.tabClosable", true);
+        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", Shortcuts.label("Close  (Ctrl+W)"));
+        tabs.putClientProperty("JTabbedPane.tabCloseCallback",
+                (java.util.function.IntConsumer) index -> closeTab(index));
+        tabs.putClientProperty("JTabbedPane.showTabSeparators", true);
+        tabs.putClientProperty("JTabbedPane.tabHeight", 32);
+        tabs.putClientProperty("JTabbedPane.maximumTabWidth", 240);
+        tabs.putClientProperty("JTabbedPane.tabsPopupPolicy", "asNeeded");
+        tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
+        tabs.setFocusable(false); // the keyboard stays with the code or the picture
+        tabs.addChangeListener(e -> tabChanged());
+        tabs.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                int index = tabs.indexAtLocation(e.getX(), e.getY());
+                if (index < 0) {
+                    return;
+                }
+                if (SwingUtilities.isMiddleMouseButton(e)) {
+                    closeTab(index);
+                } else if (e.isPopupTrigger()) {
+                    tabMenu(index).show(tabs, e.getX(), e.getY());
+                }
+            }
+
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                int index = tabs.indexAtLocation(e.getX(), e.getY());
+                if (index >= 0 && e.isPopupTrigger()) { // Windows opens the menu on release
+                    tabMenu(index).show(tabs, e.getX(), e.getY());
+                }
+            }
+        });
+        tabs.insertTab("Welcome", null, welcome, "Start a program, open a file, or pick an example", 0);
+    }
+
+    // Right-click on a tab: close it, the others or all, and, for a saved file, copy its path or show its folder.
+    private JPopupMenu tabMenu(int index) {
+        Component tab = tabs.getComponentAt(index);
+        File file = tab instanceof Workbench ? ((Workbench) tab).getCurrentFile() : null;
+        JPopupMenu menu = new JPopupMenu();
+        menu.add(item("Close", null, () -> closeTab(tabs.indexOfComponent(tab))));
+        menu.add(item("Close Others", null, () -> closeOthers(tab)));
+        menu.add(item("Close All", null, () -> closeOthers(null)));
+        if (file != null) {
+            menu.addSeparator();
+            menu.add(item("Copy Path", null, () -> java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(file.getAbsolutePath()), null)));
+            menu.add(item(Shortcuts.isMac() ? "Reveal in Finder" : "Show in Folder", null, () -> showInFolder(file)));
+        }
+        return menu;
+    }
+
+    // Opens the folder that holds a file, with the file selected where the computer can do that.
+    private void showInFolder(File file) {
+        try {
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.BROWSE_FILE_DIR)) {
+                desktop.browseFileDirectory(file);
+            } else {
+                desktop.open(file.getAbsoluteFile().getParentFile());
+            }
+        } catch (IOException | UnsupportedOperationException | IllegalArgumentException e) {
+            Dialogs.tell(this, "The folder couldn't be opened", "It's here: " + file.getAbsoluteFile().getParent());
+        }
+    }
+
+    // The logo at the start of the toolbar: it's also the way home, to the Welcome tab.
+    private JButton homeButton() {
+        java.awt.Image icon = new java.awt.image.BaseMultiResolutionImage(Logo.draw(22), Logo.draw(44), Logo.draw(66));
+        JButton home = new JButton(new javax.swing.ImageIcon(icon));
+        home.putClientProperty("JButton.buttonType", "toolBarButton");
+        home.setToolTipText("Home: the Welcome tab");
+        home.getAccessibleContext().setAccessibleName("Home");
+        home.setRequestFocusEnabled(false);
+        home.addActionListener(e -> showWelcome());
+        Dimension size = new Dimension(32, 32);
+        home.setPreferredSize(size);
+        home.setMaximumSize(size);
+        return home;
     }
 
     // Where open and save start: the Desktop, if there is one. Inside WSL (Linux running on
@@ -1489,9 +1505,6 @@ public class MainWindow extends JFrame {
     }
 
     private void open() {
-        if (!okToReplaceCode()) { // ask before the file dialog, not after picking a file
-            return;
-        }
         File file = chooseFile(false, FileKind.CODE_OR_RUN, null);
         if (file != null) {
             openFile(file);
@@ -1514,23 +1527,25 @@ public class MainWindow extends JFrame {
                     + " isn't one. Drop Java code (a name ending in .java) or a saved recording (.raphael).");
             return;
         }
-        if (okToReplaceCode()) {
-            openFile(file);
-        }
+        openFile(file);
     }
 
     private void openFile(File file) {
+        for (int i = 0; i < tabs.getTabCount(); i++) { // already open: its tab comes to the front
+            Component tab = tabs.getComponentAt(i);
+            if (tab instanceof Workbench && file.getAbsoluteFile().equals(((Workbench) tab).getCurrentFile() == null ? null
+                    : ((Workbench) tab).getCurrentFile().getAbsoluteFile())) {
+                tabs.setSelectedIndex(i);
+                return;
+            }
+        }
         if (FileKind.RUN.accepts(file.getName())) {
             openRecording(file);
             return;
         }
         try {
             String text = SafeFiles.readCode(file.toPath());
-            showWork();
-            code.setCode(text);
-            top.setDividerLocation(dividerForCode());
-            currentFile = file;
-            setDocument(file.getName());
+            newTab(true).showCode(text, file, file.getName());
             remember(file);
             say("opened " + file.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
@@ -1553,61 +1568,8 @@ public class MainWindow extends JFrame {
             Dialogs.tell(this, "Couldn't open " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
             return;
         }
-        showWork();
-        code.setCode(saved.source());
-        console.setInput(saved.input());
-        top.setDividerLocation(dividerForCode());
-        currentFile = null; // Ctrl+S saves the code as a .java file, never over the recording
-        setDocument(file.getName());
+        newTab(true).showRecording(file, saved);
         remember(file);
-        SceneList scenes = new SceneBuilder(saved.source()).build(saved.trace());
-        lastRun = saved;
-        fromFile = saved.trace();
-        recordingChip.setText("saved recording · " + saved.trace().size() + " steps");
-        model.load(saved.trace(), scenes, scenes.getRunSize());
-        visual.requestFocusInWindow();
-        say("[recording] " + saved.trace().size() + " steps, played back without running · space plays", Style.INK);
-    }
-
-    // File → Save recording: the program, its input and every step, in a .raphael file.
-    private void saveRecording() {
-        if (lastRun == null || model.getTrace() != lastRun.trace()) {
-            say("run the program first, then save its recording", Style.INK_SOFT);
-            return;
-        }
-        String name = (currentFile != null ? currentFile.getName() : suggestedName(lastRun.source())).replaceAll("\\.java$", "");
-        File file = chooseFile(true, FileKind.RUN, name + RunFile.EXTENSION);
-        if (file == null) {
-            return;
-        }
-        try {
-            RunFile.write(file.toPath(), lastRun);
-            remember(file);
-            say("[saved] " + file.getName() + " · " + lastRun.trace().size() + " steps", Style.INK_SOFT);
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't save the recording " + file, e);
-            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
-        }
-    }
-
-    // File → Export steps as CSV: the run as a table for a spreadsheet.
-    private void exportSteps() {
-        Trace trace = model.getTrace();
-        if (trace == null) {
-            return;
-        }
-        String name = (currentFile != null ? currentFile.getName() : suggestedName(code.getCode())).replaceAll("\\.java$", "");
-        File file = chooseFile(true, FileKind.CSV, name + "-steps.csv");
-        if (file == null) {
-            return;
-        }
-        try {
-            StepLog.write(file.toPath(), trace);
-            say("[saved] " + file.getName() + " · " + trace.size() + " rows", Style.INK_SOFT);
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't write " + file, e);
-            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e) + ".");
-        }
     }
 
     // Recent files: the last few opened or saved, newest first, kept in Preferences.
@@ -1639,86 +1601,23 @@ public class MainWindow extends JFrame {
         recentMenu.removeAll();
         List<File> recent = recentFiles();
         for (File file : recent) {
-            JMenuItem item = item(file.getName(), null, () -> {
-                if (okToReplaceCode()) {
-                    openFile(file);
-                }
-            });
+            JMenuItem item = item(file.getName(), null, () -> openFile(file));
             item.setToolTipText(file.getPath());
             recentMenu.add(item);
         }
         recentMenu.setEnabled(!recent.isEmpty());
     }
 
-    // The Files panel shows when the program could use files, or the user has given it some.
-    private void showFilesIfUsed() {
-        String text = code.getCode();
-        boolean used = !inputFiles.isEmpty() || usesFiles(text);
-        if (files.isVisible() != used) {
-            files.setVisible(used);
-            files.getParent().revalidate();
+    // Saves the open program to its file, or asks where if it has none yet.
+    private void save() {
+        if (current != null) {
+            current.save();
         }
     }
 
-    // Whether code works with files: it names one of Java's file classes. Not just "java.io", which
-    // an import of IOException alone would match, or "Path", which a graph program may call a class.
-    static boolean usesFiles(String code) {
-        return code.matches("(?s).*\\b(FileReader|FileWriter|FileInputStream|FileOutputStream|PrintWriter|Files|Paths|File)\\b.*");
-    }
-
-    private void addInputFile() {
-        File file = chooseFile(false, FileKind.ANY, null);
-        if (file == null) {
-            return;
-        }
-        if (file.length() > 10_000_000) {
-            Dialogs.tell(this, file.getName() + " is too big", "Input files can be up to 10 MB.");
-            return;
-        }
-        inputFiles.removeIf(f -> f.getName().equals(file.getName())); // one file per name in the folder
-        inputFiles.add(file);
-        useInputFiles();
-    }
-
-    private void clearInputFiles() {
-        inputFiles.clear();
-        useInputFiles();
-    }
-
-    private void useInputFiles() {
-        List<java.nio.file.Path> paths = inputFiles.stream().map(File::toPath).toList();
-        tracer.setInputFiles(paths);
-        files.setInputs(paths);
-        showFilesIfUsed();
-        say(inputFiles.isEmpty() ? "no input files" : "input files: " + String.join(", ", inputFiles.stream().map(File::getName).toList())
-                + Shortcuts.label(" · copied in before each run (ctrl+enter)"), Style.INK_SOFT);
-    }
-
-    // Saves to the current file, or asks where if there isn't one yet. True if it was saved.
-    private boolean save() {
-        return currentFile != null ? saveTo(currentFile) : saveAs();
-    }
-
-    private boolean saveAs() {
-        File file = chooseFile(true, FileKind.CODE, currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
-        return file != null && saveTo(file);
-    }
-
-    private boolean saveTo(File file) {
-        try {
-            SafeFiles.write(file.toPath(), code.getCode());
-            currentFile = file;
-            code.markSaved();
-            setDocument(file.getName());
-            remember(file);
-            say("[saved] " + file.getName(), Style.INK_SOFT);
-            return true;
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Couldn't save " + file, e);
-            Dialogs.tell(this, "Couldn't save " + file.getName(), "Because " + SafeFiles.describe(e)
-                    + ". Your code is still here; try saving it somewhere else.");
-            currentFile = null; // so the next save asks where
-            return false;
+    private void saveAs() {
+        if (current != null) {
+            current.saveAs();
         }
     }
 
@@ -1770,6 +1669,7 @@ public class MainWindow extends JFrame {
 
     // Where the file dialogs open: the current file's folder, the last folder used, or the Desktop.
     private String lastFolder() {
+        File currentFile = current == null ? null : current.getCurrentFile();
         if (currentFile != null && currentFile.getParent() != null) {
             return currentFile.getParent();
         }
@@ -1783,13 +1683,12 @@ public class MainWindow extends JFrame {
 
     // A file name for code that has none yet: its public class (or first class), then .java.
     static String suggestedName(String code) {
-        java.util.regex.Matcher publicClass = java.util.regex.Pattern
-                .compile("public\\s+(?:final\\s+|abstract\\s+)?class\\s+(\\w+)").matcher(code);
-        if (publicClass.find()) {
-            return publicClass.group(1) + ".java";
-        }
-        java.util.regex.Matcher anyClass = java.util.regex.Pattern.compile("\\bclass\\s+(\\w+)").matcher(code);
-        return anyClass.find() ? anyClass.group(1) + ".java" : "Main.java";
+        return Workbench.suggestedName(code);
+    }
+
+    // Whether code works with files (see Workbench.usesFiles).
+    static boolean usesFiles(String code) {
+        return Workbench.usesFiles(code);
     }
 
     // "today at 14:32", "yesterday at 09:05" or "3 Nov at 18:40", for the restore question.
@@ -1805,25 +1704,79 @@ public class MainWindow extends JFrame {
         return then.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)) + " at " + time;
     }
 
-    // The window's title: the document's name, with a dot while it has unsaved changes. On a
+    // The window's title: the open program's name, with a dot while it has unsaved changes. On a
     // Mac, the title is just the name, and the dot goes in the close button, as Mac apps do it.
-    private void setDocument(String name) {
-        documentName = name;
-        updateTitle();
-    }
-
     private void updateTitle() {
-        boolean unsaved = code.isDirty();
+        String name = current == null ? "Welcome" : current.getDocumentName();
+        boolean unsaved = current != null && current.isDirty();
         if (Shortcuts.isMac()) {
-            setTitle(documentName);
+            setTitle(name);
             getRootPane().putClientProperty("Window.documentModified", unsaved);
-            getRootPane().putClientProperty("Window.documentFile", currentFile);
+            getRootPane().putClientProperty("Window.documentFile", current == null ? null : current.getCurrentFile());
         } else {
-            setTitle((unsaved ? "● " : "") + documentName + " — Raphael");
+            setTitle((unsaved ? "● " : "") + name + " — Raphael");
         }
     }
 
-    // What one press of run produced: the compile result, and the trace and pictures if it ran.
-    private record RunResult(CompileResult program, Trace trace, SceneList scenes, String source, String input) {
+    // A tab that was closed, enough to open it again.
+    private record Closed(File file, String code, String name, boolean unsaved) {
+    }
+
+    // How the open program talks back to the window.
+    // OOP: an inner class implementing an interface; it can use the window's private methods.
+    private class Host implements Workbench.Host {
+        @Override
+        public void stateChanged(Workbench workbench) {
+            int index = tabs.indexOfComponent(workbench);
+            if (index >= 0) {
+                tabs.setTitleAt(index, (workbench.isDirty() ? "● " : "") + workbench.getDocumentName());
+                File file = workbench.getCurrentFile();
+                tabs.setToolTipTextAt(index, file != null ? file.getAbsolutePath()
+                        : workbench.isRunning() ? "recording…" : "not saved yet");
+            }
+            if (workbench != current) {
+                return; // a program that isn't in front: its state shows when it is
+            }
+            updateTitle();
+            styleRunButton();
+            busy.setVisible(workbench.isRunning());
+            showStatus(workbench.statusText(), workbench.statusColor());
+            showLegendIfRoom();
+        }
+
+        @Override
+        public File chooseFile(boolean forSaving, FileKind kind, String suggested) {
+            return MainWindow.this.chooseFile(forSaving, kind, suggested);
+        }
+
+        @Override
+        public void remember(File file) {
+            MainWindow.this.remember(file);
+        }
+
+        @Override
+        public void openDropped(File file) {
+            MainWindow.this.openDropped(file);
+        }
+
+        @Override
+        public void loadExample(String name) {
+            MainWindow.this.loadExample(name);
+        }
+
+        @Override
+        public void showExamples() {
+            examplesMenu.show(examplesButton, 0, examplesButton.getHeight());
+        }
+
+        @Override
+        public void changeTextSize(int change) {
+            MainWindow.this.changeTextSize(change);
+        }
+
+        @Override
+        public RunLimits limits() {
+            return limits;
+        }
     }
 }

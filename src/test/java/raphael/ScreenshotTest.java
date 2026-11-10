@@ -108,6 +108,9 @@ class ScreenshotTest {
 
     private static AbstractButton find(Container in, String name) {
         for (Component part : in.getComponents()) {
+            if (!part.isShowing()) {
+                continue; // a tab behind the one in front
+            }
             if (part instanceof AbstractButton && (name.equals(((AbstractButton) part).getText())
                     || name.equals(part.getAccessibleContext().getAccessibleName()))) {
                 return (AbstractButton) part;

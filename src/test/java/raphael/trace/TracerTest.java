@@ -43,6 +43,39 @@ class TracerTest {
 
     // The program runs in a folder of its own: a file it writes is recorded step by step, a file
     // the user added is there for it to read, and the folder is gone after the run.
+    // Several programs starting at once (one per tab) each get their own connection. JDI keeps one
+    // listener per set of arguments, and every run's are the same, so without a lock in launch()
+    // one program's clean-up closed another's listener ("Not listening").
+    @Test
+    void programsStartedAtTheSameTimeAllRun() throws Exception {
+        CompileResult program = new SourceCompiler().compile("""
+                public class Hello {
+                    public static void main(String[] args) {
+                        System.out.println("hi");
+                    }
+                }
+                """);
+        List<Thread> threads = new ArrayList<>();
+        List<String> outputs = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<Throwable> failures = java.util.Collections.synchronizedList(new ArrayList<>());
+        for (int i = 0; i < 4; i++) {
+            Thread thread = new Thread(() -> {
+                try {
+                    outputs.add(new JdiTracer().trace(program).getOutput());
+                } catch (Throwable e) {
+                    failures.add(e);
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        for (Thread thread : threads) {
+            thread.join(60_000);
+        }
+        assertEquals(List.of(), failures);
+        assertEquals(List.of("hi\n", "hi\n", "hi\n", "hi\n"), outputs);
+    }
+
     @Test
     void theProgramsFilesAreRecordedInItsOwnFolder(@org.junit.jupiter.api.io.TempDir Path somewhere) throws Exception {
         Path input = somewhere.resolve("names.txt");
