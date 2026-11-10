@@ -190,10 +190,9 @@ public class Workbench extends JPanel {
         viewTabs.addTab("Calls", placeholder());
         viewTabs.addTab("Objects", placeholder());
         viewTabs.addTab("Files", placeholder());
-        viewTabs.setToolTipTextAt(0, "the program's arrays, lists, trees and objects");
-        viewTabs.setToolTipTextAt(1, "the methods running now, as a stack: the one on top runs, the ones below wait for it");
-        viewTabs.setToolTipTextAt(2, "the program's classes (a UML diagram) and its objects, private fields marked -");
-        viewTabs.setToolTipTextAt(3, "what the program read of its input, and the files in its folder, line by line");
+        for (int i = 0; i < VIEW_TIPS.length; i++) {
+            viewTabs.setToolTipTextAt(i, VIEW_TIPS[i]);
+        }
         viewTabs.putClientProperty("JTabbedPane.tabType", "underlined");
         viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
         viewTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
@@ -271,6 +270,34 @@ public class Workbench extends JPanel {
 
     // The view a run opens on: calls for recursion, objects for a program about classes
     // (inheritance, interfaces, setters), otherwise the picture of its data.
+    private static final String[] VIEW_TIPS = {
+        "the program's arrays, lists, trees and objects",
+        "the methods running now: the one on top runs, the ones below wait for it; recursion that branches is a tree of calls",
+        "the program's classes (a UML diagram) and its objects, private fields marked -",
+        "what the program read of its input, and the files in its folder, line by line"};
+    private static final String[] VIEW_EMPTY = {"",
+        "this program calls no methods of its own",
+        "this program has no classes of its own besides main's",
+        "this program reads no input and uses no files"};
+    private static final String[] VIEW_WHY = {"", "showing Calls: this program calls itself",
+        "showing Objects: this program is about its classes and objects", "showing Files: this program uses files"};
+
+    // After a run: the views with nothing to show are switched off (their tooltip says why), and
+    // the one that suits the program is shown. Returns what to say about it, or null for the picture.
+    private String chooseView(raphael.analysis.CodeFacts facts) {
+        for (VisualPanel.View view : VisualPanel.View.values()) {
+            boolean has = visual.hasContent(view);
+            viewTabs.setEnabledAt(view.ordinal(), has);
+            viewTabs.setToolTipTextAt(view.ordinal(), has ? VIEW_TIPS[view.ordinal()] : VIEW_EMPTY[view.ordinal()]);
+        }
+        VisualPanel.View best = bestView(facts);
+        if (!visual.hasContent(best)) {
+            best = VisualPanel.View.PICTURE;
+        }
+        viewTabs.setSelectedIndex(best.ordinal());
+        return best == VisualPanel.View.PICTURE ? null : VIEW_WHY[best.ordinal()];
+    }
+
     private static VisualPanel.View bestView(raphael.analysis.CodeFacts facts) {
         if (facts.hasRecursion()) {
             return VisualPanel.View.CALLS;
@@ -670,14 +697,14 @@ public class Workbench extends JPanel {
         lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
         model.setInput(result.input());
         model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments(), result.program().facts());
-        viewTabs.setSelectedIndex(bestView(result.program().facts()).ordinal());
+        String chose = chooseView(result.program().facts());
         if (isShowing()) {
             visual.requestFocusInWindow(); // so the arrow keys step the program, not the editor's cursor
         }
         controls.play();
         String steps = "recorded " + trace.size() + " steps · space pauses";
         if (trace.getEndReason() == EndReason.FINISHED) {
-            say("[ok] " + steps, Style.INK);
+            say("[ok] " + steps + (chose == null ? "" : " · " + chose), Style.INK);
         } else if (trace.getEndMessage().startsWith("NoSuchElementException") && allCode().contains("System.in")) {
             visual.setMessage("needs input", "This program reads input, and it ran out.", null,
                     "Type its input into the stdin box below, then press run.");
@@ -735,6 +762,7 @@ public class Workbench extends JPanel {
         raphael.analysis.CodeFacts facts = factsOf(saved);
         model.setInput(saved.input());
         model.load(saved.trace(), scenes, scenes.getRunSize(), new raphael.explain.MomentFinder().find(saved.trace(), facts), facts);
+        chooseView(facts);
         if (isShowing()) {
             visual.requestFocusInWindow();
         }

@@ -3,6 +3,7 @@ package raphael.render;
 import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -252,10 +253,20 @@ public class ObjectsScenes implements SceneSource {
                 scene.add(new SceneNode(key + ".line:" + line, SceneNode.Kind.FIELD, x + 1, y + Style.TITLE_H + line * Style.LINE_H + 2,
                         objectW - 1, Style.LINE_H, lines.get(line), null));
             }
+            // Under the object: the variables that hold it, so "a" in a sentence can be found, and
+            // the method running on it.
+            List<String> under = new ArrayList<>();
+            String holders = holders(object.getId(), now);
+            if (!holders.isEmpty()) {
+                under.add("in " + holders);
+            }
             if (object.getId() == running) {
                 scene.add(new SceneNode("obj:running", SceneNode.Kind.FOCUS_WRITE, x - 2, y - 2, objectW + 4, height + 4, "", null));
-                scene.add(new SceneNode("obj:method", SceneNode.Kind.TEXT, x, y + height + 3, objectW, Style.LINE_H,
-                        "running " + now.getFrames().get(0).getMethodName() + "()", null));
+                under.add("running " + now.getFrames().get(0).getMethodName() + "()");
+            }
+            if (!under.isEmpty()) {
+                scene.add(new SceneNode(key + ".under", SceneNode.Kind.TEXT, x, y + height + 3, objectW, Style.LINE_H,
+                        String.join(" · ", under), null));
             }
         }
         return scene;
@@ -270,9 +281,23 @@ public class ObjectsScenes implements SceneSource {
             }
         }
         Set<String> methods = new LinkedHashSet<>();
+        Set<String> own = new HashSet<>();
         for (CodeFacts.MethodFact method : facts.methods()) {
-            if (method.className().equals(name) && !method.name().equals(name)) { // constructors left out
+            if (method.className().equals(name) && method.name().equals(name)) { // constructors first, as in UML
                 methods.add("+ " + method.name() + "()");
+            }
+        }
+        for (CodeFacts.MethodFact method : facts.methods()) {
+            if (method.className().equals(name) && !method.name().equals(name)) {
+                methods.add("+ " + method.name() + "()");
+                own.add(method.name());
+            }
+        }
+        for (String implemented : facts.interfaces().getOrDefault(name, List.of())) {
+            for (CodeFacts.MethodFact method : facts.methods()) { // an interface's default method it doesn't override
+                if (method.className().equals(implemented) && !own.contains(method.name()) && facts.isInterface(implemented)) {
+                    methods.add("+ " + method.name() + "()  (from " + implemented + ")");
+                }
             }
         }
         for (String method : facts.abstractMethods(name)) {
@@ -326,7 +351,24 @@ public class ObjectsScenes implements SceneSource {
             String mark = fact != null && fact.isPrivate() ? "- " : "+ ";
             lines.add(mark + field.getKey() + text(field.getValue(), step) + (from != null && !from.equals(type) ? "  (from " + from + ")" : ""));
         }
+        if (lines.isEmpty()) {
+            lines.add("(no fields)");
+        }
         return lines;
+    }
+
+    // The variables that hold this object at this step, the running call's first: "a", "acct".
+    private static String holders(long id, Snapshot step) {
+        List<String> names = new ArrayList<>();
+        for (FrameSnapshot frame : step.getFrames()) {
+            for (Map.Entry<String, Value> local : frame.getLocals().entrySet()) {
+                if (!local.getKey().equals("this") && local.getValue() instanceof ReferenceValue
+                        && ((ReferenceValue) local.getValue()).id() == id && !names.contains(local.getKey())) {
+                    names.add(local.getKey());
+                }
+            }
+        }
+        return String.join(", ", names.subList(0, Math.min(3, names.size())));
     }
 
     // Which class declares a field: the object's own, or the nearest parent that has it.

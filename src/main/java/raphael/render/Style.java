@@ -61,6 +61,17 @@ public final class Style {
     public static final int NOTE_LINE_H = 18;
     public static final int NOTE_GAP = SPACE_3;
     public static final int STATUS_H = 28;   // the status bar
+    // How far each view may shrink or grow its run to fit the room. The views of boxes and text
+    // (calls, objects, files) stay near their real size and scroll instead of shrinking their text.
+    public static final double FIT_PICTURE_MIN = 0.6;
+    public static final double FIT_PICTURE_MAX = 1.5;
+    public static final double FIT_CALLS_MIN = 0.72;  // a tree of calls: as much of it in sight as can still be read
+    public static final double FIT_CALLS_MAX = 1.2;
+    public static final double FIT_OBJECTS_MIN = 0.65; // a class diagram beside its objects is wide; below this its text is too small
+    public static final double FIT_OBJECTS_MAX = 1.0;
+    public static final double FIT_FILES_MIN = 0.9;
+    public static final double FIT_FILES_MAX = 1.0;
+
     public static final int TAB_H = 32;      // the program tabs under the toolbar
     public static final int FILE_TAB_H = 28; // the file tabs of a program of several files, one level lower
     public static final int CONTROL_H = 28;  // small controls: the find bar's fields and buttons

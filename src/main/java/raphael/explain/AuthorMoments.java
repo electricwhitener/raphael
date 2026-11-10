@@ -42,7 +42,7 @@ class AuthorMoments extends Concept {
                 continue;
             }
             String text = fill(comment.text(), top, step);
-            String title = text.length() > 48 ? text.substring(0, 45) + "…" : text;
+            String title = "Note on line " + top.getLine(); // the sentence itself is the text, so the card doesn't say it twice
             into.add(new Moment(s, "author", title, text, true, top.getFile(), top.getLine())); // as the author wrote it
         }
     }

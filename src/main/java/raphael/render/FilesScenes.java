@@ -144,6 +144,10 @@ public class FilesScenes implements SceneSource {
                 scene.add(new SceneNode("file:" + name + ".line:0", SceneNode.Kind.FIELD, x + 1, y + Style.TITLE_H + 2, cardW - 1,
                         Style.LINE_H, "no such file in the folder", null, SceneNode.Look.DIM));
             } else if (text != null) {
+                if (missing != null && missing <= step) { // made after it was looked for: say so, so the ghost isn't forgotten
+                    scene.add(new SceneNode("file:" + name + ".was", SceneNode.Kind.TEXT, x + cardW + 6, y + 1, textW("wasn't there at first"),
+                            Style.LINE_H, "wasn't there at first", null));
+                }
                 addFile(scene, name, text.replace("\r\n", "\n"), x, y, step, justRead, next != null && next[0] == 0);
             }
         }
@@ -201,7 +205,7 @@ public class FilesScenes implements SceneSource {
         boolean read = to <= done && spot == null;
         scene.add(new SceneNode(key, SceneNode.Kind.FIELD, x, y, w, Style.LINE_H, word, null,
                 read ? SceneNode.Look.DIM : SceneNode.Look.STILL));
-        if (spot != null && spot.to() <= to + 1 && spot.into() != null) { // after the line: where the latest read went
+        if (spot != null && spot.to() <= to + 1 && spot.into() != null && inScope(spot.into(), step)) { // after the line: where the latest read went
             String note = "← read into " + spot.into();
             scene.add(new SceneNode("input:into", SceneNode.Kind.TEXT, lineEnd + 2 * charW, y, textW(note), Style.LINE_H, note, null));
         }
@@ -240,7 +244,7 @@ public class FilesScenes implements SceneSource {
             String shownText = String.format("%2d  %s", i + 1, line.length() > MAX_CHARS ? line.substring(0, MAX_CHARS - 1) + "…" : line);
             scene.add(new SceneNode(key + ".line:" + i, SceneNode.Kind.FIELD, x + 1, ly, cardW - 1, Style.LINE_H, shownText, null,
                     read ? SceneNode.Look.DIM : SceneNode.Look.STILL));
-            if (spot != null && spot.into() != null) {
+            if (spot != null && spot.into() != null && inScope(spot.into(), step)) {
                 String note = "← read into " + spot.into();
                 scene.add(new SceneNode(key + ".into", SceneNode.Kind.TEXT, x + cardW + 6, ly, textW(note), Style.LINE_H, note, null));
             }
@@ -290,6 +294,12 @@ public class FilesScenes implements SceneSource {
         }
         int end = text.indexOf('\n', from);
         return new int[] {from, end < 0 ? text.length() : end + 1};
+    }
+
+    // Whether a variable of this name is in the running call at this step (so a note about it still means something).
+    private boolean inScope(String variable, int step) {
+        Snapshot now = trace.get(step);
+        return !now.getFrames().isEmpty() && now.getFrames().get(0).getLocals().containsKey(variable);
     }
 
     // FileNotFoundException says "notes.txt (No such file or directory)": just the name.

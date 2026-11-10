@@ -40,8 +40,6 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     private static final double MIN_ZOOM = 0.5;
     private static final double MAX_ZOOM = 3;
-    private static final double MIN_FIT = 0.6;
-    private static final double MAX_FIT = 1.5;
 
     private final TraceModel model;
     private final ScenePainter painter = new ScenePainter();
@@ -50,7 +48,23 @@ public class VisualPanel extends JPanel implements TraceListener {
     // chosen; see showCalls().
     private final java.util.Map<View, raphael.render.SceneSource> views = new java.util.EnumMap<>(View.class); // all but the picture
     // Which view of the run is on show: the picture of the data, the calls, or the objects.
-    public enum View { PICTURE, CALLS, OBJECTS, FILES }
+    // The views, each with how far it may be scaled to fit (see Style.FIT_*).
+    public enum View {
+        PICTURE(Style.FIT_PICTURE_MIN, Style.FIT_PICTURE_MAX, "no arrays or objects yet · plain variables are listed below"),
+        CALLS(Style.FIT_CALLS_MIN, Style.FIT_CALLS_MAX, "no calls yet"),
+        OBJECTS(Style.FIT_OBJECTS_MIN, Style.FIT_OBJECTS_MAX, "no objects yet · they appear when the program says new"),
+        FILES(Style.FIT_FILES_MIN, Style.FIT_FILES_MAX, "no input or files yet");
+
+        private final double minFit;
+        private final double maxFit;
+        private final String empty;
+
+        View(double minFit, double maxFit, String empty) {
+            this.minFit = minFit;
+            this.maxFit = maxFit;
+            this.empty = empty;
+        }
+    }
     private View view = View.PICTURE;
     private int shownStep = -1;
     private double fit = 1;  // the scale that fits this run's biggest picture into the panel
@@ -111,6 +125,54 @@ public class VisualPanel extends JPanel implements TraceListener {
         }
         shownStep = model.getStep();
         updateSize();
+        showFocus();
+    }
+
+    // In a view that's bigger than the room (a wide tree of calls), keeps the running call or
+    // object in sight: the shape outlined as "running" is scrolled into view.
+    private void showFocus() {
+        if (view == View.PICTURE) {
+            return;
+        }
+        Scene scene = sceneNow();
+        if (scene == null) {
+            return;
+        }
+        for (raphael.render.SceneNode node : scene.getNodes()) {
+            if (node.kind() == raphael.render.SceneNode.Kind.FOCUS_WRITE) {
+                Dimension run = runSize();
+                double scale = fit * zoom;
+                double left = Math.max(0, Math.round((getWidth() - run.width * scale) / 2));
+                double top = Math.max(0, Math.round((getHeight() - reserve - run.height * scale) / 2));
+                int pad = 40;
+                java.awt.Rectangle box = new java.awt.Rectangle((int) (left + node.x() * scale) - pad, (int) (top + node.y() * scale) - pad,
+                        (int) (node.w() * scale) + 2 * pad, (int) (node.h() * scale) + 2 * pad);
+                SwingUtilities.invokeLater(() -> scrollRectToVisible(box)); // after the panel has its new size
+                return;
+            }
+        }
+    }
+
+    // Whether a view has something to show for this run (the picture always does).
+    public boolean hasContent(View chosen) {
+        if (chosen == View.OBJECTS) {
+            return views.get(chosen) instanceof raphael.render.ObjectsScenes && ((raphael.render.ObjectsScenes) views.get(chosen)).hasClasses();
+        }
+        if (chosen == View.FILES) {
+            return views.get(chosen) instanceof raphael.render.FilesScenes && ((raphael.render.FilesScenes) views.get(chosen)).hasContent();
+        }
+        if (chosen == View.CALLS) {
+            if (model.getTrace() == null) {
+                return false;
+            }
+            for (raphael.model.Snapshot step : model.getTrace().getSnapshots()) {
+                if (step.getFrames().size() > 1) {
+                    return true; // main called a method of its own
+                }
+            }
+            return false;
+        }
+        return true;
     }
 
     // The scene for the step on show: the picture of the data, or the calls view.
@@ -135,6 +197,7 @@ public class VisualPanel extends JPanel implements TraceListener {
         view = chosen;
         animator.show(sceneNow());
         fitToRun();
+        showFocus();
         revalidate();
         repaint();
     }
@@ -160,7 +223,7 @@ public class VisualPanel extends JPanel implements TraceListener {
                 reserve = tallestCard(width, true);
             }
             double best = Math.min((room.getWidth() - 2.0) / run.width, (room.getHeight() - 2.0 - reserve) / run.height);
-            fit = Math.max(MIN_FIT, Math.min(MAX_FIT, best));
+            fit = Math.max(view.minFit, Math.min(view.maxFit, best));
         }
         updateSize();
     }
@@ -198,7 +261,7 @@ public class VisualPanel extends JPanel implements TraceListener {
             }
         } else {
             if (scene.getNodes().isEmpty()) {
-                hint(g2, "no arrays or objects yet · plain variables are listed below");
+                hint(g2, view.empty);
             }
             Dimension run = runSize();
             double scale = fit * zoom;

@@ -41,7 +41,7 @@ public class CallsScenes implements SceneSource {
     private final Map<CallTree.Call, double[]> places = new HashMap<>();
     private final Map<CallTree.Call, Integer> hiddenInside = new HashMap<>();
 
-    private static final SceneNode.Look RETURNED = new SceneNode.Look(0.62, 0, 1, null, 1); // faded, but its value still easy to read
+    private static final SceneNode.Look RETURNED = new SceneNode.Look(0.75, 0, 1, null, 1); // faded, but its value still easy to read
     private static final int MAX_CALLS = 63;    // more than this, and the deepest calls fold into their parent
     private static final double TREE_GAP_X = 12;
     private static final double TREE_GAP_Y = 30;
@@ -277,17 +277,57 @@ public class CallsScenes implements SceneSource {
         return scene;
     }
 
-    // "fib(3)", or "move(2, 0, 1, 2)": the method and the values it was called with.
-    private static String label(CallTree.Call call) {
+    // "fib(3)", or "move(2, 0, 1, 2)": the method and the values it was called with. An argument
+    // that's the same in every call (the array being searched, the list being filled) is left
+    // out, and then the others are named: "subsets(i = 1, chosen = "c")".
+    private String label(CallTree.Call call) {
+        List<String> same = sameInEveryCall.computeIfAbsent(call.getMethod(), this::unchangingArguments);
         StringBuilder text = new StringBuilder(call.getMethod()).append('(');
         boolean first = true;
         for (Map.Entry<String, Value> argument : call.getArguments().entrySet()) {
-            if (!argument.getKey().equals("this")) {
-                text.append(first ? "" : ", ").append(text(argument.getValue(), call.getStartedIn()));
+            if (!argument.getKey().equals("this") && !same.contains(argument.getKey())) {
+                Value value = argument.getValue();
+                HeapObject object = value instanceof ReferenceValue ? call.getStartedIn().getObject(((ReferenceValue) value).id()) : null;
+                text.append(first ? "" : ", ").append(same.isEmpty() ? "" : argument.getKey() + " = ")
+                        .append(object != null ? Names.simple(object.getTypeName()) : text(value, call.getStartedIn()));
                 first = false;
             }
         }
         return text.append(')').toString();
+    }
+
+    private final Map<String, List<String>> sameInEveryCall = new HashMap<>();
+
+    private List<String> unchangingArguments(String method) {
+        Map<String, Value> firstSeen = null;
+        List<String> same = new ArrayList<>();
+        for (CallTree.Call call : shownOrAll()) {
+            if (!call.getMethod().equals(method)) {
+                continue;
+            }
+            if (firstSeen == null) {
+                firstSeen = call.getArguments();
+                same.addAll(firstSeen.keySet());
+            } else {
+                Map<String, Value> before = firstSeen;
+                same.removeIf(name -> !java.util.Objects.equals(before.get(name), call.getArguments().get(name)));
+            }
+        }
+        if (same.size() == (firstSeen == null ? 0 : firstSeen.size())) {
+            return List.of(); // one call, or nothing changes: show them all
+        }
+        return same;
+    }
+
+    private List<CallTree.Call> shownOrAll() {
+        List<CallTree.Call> all = new ArrayList<>();
+        List<CallTree.Call> todo = new ArrayList<>(tree.getRoots());
+        while (!todo.isEmpty()) {
+            CallTree.Call call = todo.remove(todo.size() - 1);
+            all.add(call);
+            todo.addAll(call.getChildren());
+        }
+        return all;
     }
 
     // "factorial()", or "Circle.area()" for a method running on an object, then the line.
