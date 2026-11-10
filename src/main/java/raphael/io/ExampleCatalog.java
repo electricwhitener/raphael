@@ -68,6 +68,17 @@ public final class ExampleCatalog {
     }
 
     // The example's code.
+    // The input an example comes with, from its "// stdin: 3 | Asha 19" line (one line of
+    // input between each |), for the stdin box. "" if it has none.
+    public static String input(String source) {
+        for (String line : source.split("\n")) {
+            if (line.startsWith("// stdin: ")) {
+                return String.join("\n", line.substring("// stdin: ".length()).trim().split("\\s*\\|\\s*")) + "\n";
+            }
+        }
+        return "";
+    }
+
     public static String source(Example example) {
         try (InputStream in = ExampleCatalog.class.getResourceAsStream(FOLDER + example.path() + ".java")) {
             if (in == null) {

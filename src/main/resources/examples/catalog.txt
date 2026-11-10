@@ -1,11 +1,24 @@
 ## Java
 
+# Basics
+basics/VariablesAndTypes | Variables and types | int, double, char, boolean, String, a final, and a cast.
+basics/Operators | Operators | Integer division, %, i++ against ++i, and overflow.
+basics/IfAndSwitch | if and switch | The first true branch runs; switch jumps to its case.
+basics/Loops | Loops | for, while and do-while, and when each checks its condition.
+basics/Methods | Methods | Parameters in, a value back, and a box on the call stack for each call.
+basics/ArraysBasics | Arrays | A row of numbered boxes from 0, and a 2D array of rows.
+basics/StringsBasics | Strings | Strings never change, StringBuilder does, and == against equals().
+basics/ReadingInput | Reading input | A Scanner on System.in, and the line end nextInt() leaves behind.
+
 # Classes and objects
 java/ClassesAndObjects | Classes and objects | A class is a blueprint; each new makes another object with its own fields.
 java/References | References | Two variables can point at the same object, and null points at none.
 java/Constructors | Constructors | Overloaded constructors, and this(…) calling another one.
 java/StaticMembers | Static and instance | A static field is shared by every object; an instance field belongs to one.
 java/PassByValue | Pass by value | Java copies arguments: a method can change an object, but not your variable.
+java/ObjectEquality | toString and equals | When two objects count as equal, and how one prints.
+java/ImmutableClass | An immutable class | Final fields and no setters: a change makes a new object.
+java/ConstructorChaining | Constructor chaining | super(…) runs the parent's constructor first, all the way up.
 
 # OOP principles
 java/Encapsulation | Encapsulation | Private fields, changed only through methods that check the values.
@@ -13,6 +26,8 @@ java/Inheritance | Inheritance | A subclass gets its parent's fields and methods
 java/Polymorphism | Polymorphism | One call, area(), runs a different method for each kind of shape.
 java/Abstraction | Abstract classes | An abstract method each subclass must write for itself.
 java/Interfaces | Interfaces | A class can promise several abilities by implementing interfaces.
+java/DefaultMethods | Default methods | An interface method with a body, used or overridden.
+java/Lambdas | Lambdas | An anonymous class and a lambda, both handed to sort().
 java/Composition | Composition | An object built from other objects: a car has an engine.
 java/Overloading | Overloading | Methods with one name and different parameters.
 java/Generics | Generics | One Box class that holds any type, checked by the compiler.
@@ -20,6 +35,10 @@ java/BankAccounts | All together: bank accounts | An interface, an abstract clas
 
 # Exceptions
 java/TryCatchFinally | try, catch, finally | The catch runs only on an error; finally runs either way.
+java/MultipleCatches | Several catches | The first catch whose type matches takes the exception.
+java/ThrowAndThrows | throw and throws | Checked exceptions must be declared; unchecked ones needn't be.
+java/Propagation | Up the call stack | An exception leaves each method until a catch takes it.
+java/TryWithResources | try-with-resources | What try (…) opens is closed for you, newest first.
 java/CustomException | Your own exception | A checked exception class of your own, thrown and caught.
 java/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a cause, and finally.
 
@@ -27,6 +46,10 @@ java/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a 
 files/WriteAndRead | Write and read a file | try-with-resources, PrintWriter and BufferedReader, and when the file really fills up.
 files/MissingFile | A missing file | FileNotFoundException is checked: catch it, make the file, try again.
 files/AppendLog | Append to a file | FileWriter in append mode, flush(), and Files.readAllLines.
+files/ReadNumbers | Read numbers from a file | A Scanner on a file, reading one number at a time.
+files/CsvParse | Read a CSV file | Split each line at its commas into fields.
+files/WordCount | Count words in a file | Files.readAllLines, split, and a map of counts.
+files/CopyFile | Copy a file | Read a line, write a line, and the copy's buffer.
 
 # Strings and collections
 strings/Palindrome | Palindrome check | Two indexes walk in from both ends of a string.
@@ -57,8 +80,15 @@ searching/TwoPointers | Two pointers | Finds a pair with a given sum, from both 
 
 # Recursion and backtracking
 recursion/Factorial | Factorial | A method that calls itself, and the base case that stops it.
+recursion/SumArray | Sum of an array | The first value plus the sum of the rest.
+recursion/FastPower | Fast power | x^n from x^(n/2): about log n calls.
+recursion/ReverseString | Reverse a string | Reverse the rest, then add the first letter.
+recursion/RecursivePalindrome | Palindrome, recursively | Match the ends, then check the middle.
+recursion/RecursiveBinarySearch | Binary search, recursively | Each call searches half the range.
 recursion/Fibonacci | Fibonacci | Two recursive calls each time: watch the call stack grow.
 recursion/TowersOfHanoi | Towers of Hanoi | Moving n disks means moving n−1 disks twice.
+recursion/Subsets | Subsets | Leave each letter out, or put it in: a tree of calls.
+recursion/FloodFill | Flood fill | Fill a cell, then its four neighbours.
 recursion/Permutations | Permutations | Swap, recurse, swap back: every order of A, B and C.
 recursion/NQueens | N queens | Backtracking: place a queen, and undo it when it leads nowhere.
 

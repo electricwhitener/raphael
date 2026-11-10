@@ -35,7 +35,7 @@ class ExamplesTest {
         String source = ExampleCatalog.source(ExampleCatalog.find(name));
         CompileResult program = new SourceCompiler().compile(source);
         assertTrue(program.success(), () -> name + " didn't compile: " + program.errors());
-        Trace trace = new JdiTracer().trace(program, "");
+        Trace trace = new JdiTracer().trace(program, ExampleCatalog.input(source));
         assertEquals(trace.size(), new SceneBuilder(source).build(trace).size());
         assertTrue(trace.size() > 0, name + " recorded no steps");
         return trace;

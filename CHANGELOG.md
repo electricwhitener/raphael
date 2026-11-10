@@ -15,6 +15,14 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - Write `// moment: text with {variable}` on a line to add a key moment of your own.
 - The slider marks each moment; Alt+PgDn and Alt+PgUp go to the next and previous one; Run → Pause at key moments switches pausing off.
 - New tabs beside the console: Key moments (a list) and Trace table (a row per step, a column per variable).
+
+**Views of the run**
+- Four tabs above the picture, and a run opens the one that suits it:
+  - **Calls**: the call stack as boxes, with what each call is waiting for and what came back; recursion that branches (Fibonacci, Towers of Hanoi) is drawn as the whole tree of calls, each with the value it returned.
+  - **Objects**: the classes as a small UML diagram (parents above, a dashed line to an interface, private fields marked -) beside the objects alive now; the running method is outlined on its object and in its class.
+  - **Files**: the input typed into the stdin box, word by word as the program reads it (so the line end nextInt() leaves behind shows), and every file in the program's folder, with the lines read so far faded and a missing file drawn as a ghost.
+- 28 new examples: Java basics, equality, an immutable class, constructor chaining, default methods, lambdas, several catches, throw and throws, propagation, try-with-resources, reading and copying files, a CSV, word counts, and seven recursions (131 in all). An example can bring its own input with a `// stdin:` line.
+- Fix: an exception passing through a try-with-resources was reported as caught on the try line.
 - Fix: if Raphael is killed while a program is paused, the program now ends within a fifth of a second (it could take several seconds on a Mac).
 
 ## 1.1.1 (2026-11-10)

@@ -405,6 +405,11 @@ public class Workbench extends JPanel {
         host.stateChanged(this);
     }
 
+    // The text in the stdin box, for the next run.
+    public void setInput(String input) {
+        console.setInput(input);
+    }
+
     // A program of several files: each file gets a tab, and first (or the first file) is shown.
     // folder is where they're saved (null for a recording's files, which aren't in any folder yet).
     public void showFiles(List<SourceFile> files, String first, File folder, String name) {

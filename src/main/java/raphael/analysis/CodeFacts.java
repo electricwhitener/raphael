@@ -190,6 +190,22 @@ public class CodeFacts {
         return null;
     }
 
+    // Whether a catch at this line is javac's own, hidden one: a try (…) closes its resources there
+    // when an exception passes through, then throws it on. (A try line has no catch of its own.)
+    public boolean isResourceCleanup(String file, int line) {
+        for (TryFact tried : tries) {
+            if (Objects.equals(tried.file(), file) && tried.tryLine() == line) {
+                for (CatchFact c : tried.catches()) {
+                    if (c.line() == line) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     public List<CallFact> callsAt(String file, int line) {
         List<CallFact> found = new ArrayList<>();
         for (CallFact call : calls) {

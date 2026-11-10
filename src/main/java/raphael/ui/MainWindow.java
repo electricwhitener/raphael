@@ -1233,7 +1233,9 @@ public class MainWindow extends JFrame {
 
     private void loadExample(ExampleCatalog.Example example) {
         Workbench program = newTab(true);
-        program.showCode(ExampleCatalog.source(example), null, example.name() + ".java (example)");
+        String source = ExampleCatalog.source(example);
+        program.showCode(source, null, example.name() + ".java (example)");
+        program.setInput(ExampleCatalog.input(source)); // an example that reads input comes with some
         program.setTabTitle(example.title()); // "Bubble sort"; the tooltip says it's an example
         say(example.title() + ": " + example.blurb().replaceAll("\\.$", "")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);

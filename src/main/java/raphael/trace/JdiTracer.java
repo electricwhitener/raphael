@@ -530,6 +530,8 @@ public class JdiTracer implements Tracer {
         // An exception that will be caught. Java's own code throws and catches many exceptions
         // inside itself (while loading classes, for instance), so only the ones the student's code
         // throws or catches are kept: Integer.parseInt throwing into the student's catch counts.
+        private ThrownException cleanedUp; // an exception a try (…) is passing on after closing its resources
+
         private void caught(ExceptionEvent event) {
             Location thrownAt = event.location();
             Location caughtAt = event.catchLocation();
@@ -566,8 +568,25 @@ public class JdiTracer implements Tracer {
             } catch (IncompatibleThreadStateException e) {
                 // The thread isn't paused after all: keep what's known.
             }
+            String catchFile = fileOf(caughtAt, sourceFiles);
+            if (facts != null && facts.isResourceCleanup(catchFile, caughtAt.lineNumber())) {
+                // try (…) closing its resources: javac's hidden catch on the try line, which
+                // closes them and throws the same exception on. The student's catch comes next.
+                if (cleanedUp == null) {
+                    cleanedUp = new ThrownException(type, message, throwLine, -1, left, throwFile, null);
+                }
+                return;
+            }
+            if (cleanedUp != null) { // thrown on by a try (…): say where it was really thrown
+                List<String> all = new ArrayList<>(cleanedUp.leftMethods());
+                all.addAll(left);
+                throwLine = cleanedUp.throwLine();
+                throwFile = cleanedUp.throwFile();
+                left = all;
+                cleanedUp = null;
+            }
             justCaught = new ThrownException(type, message, throwLine, caughtAt.lineNumber(), left,
-                    throwFile, fileOf(caughtAt, sourceFiles));
+                    throwFile, catchFile);
         }
 
         private static boolean isStudentCode(Location at) {
