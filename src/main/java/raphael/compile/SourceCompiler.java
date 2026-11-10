@@ -106,6 +106,7 @@ public class SourceCompiler {
             throw new CompileSetupException("No Java compiler found. Raphael needs a JDK, not a JRE.");
         }
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
         boolean ok;
         // The files were written as UTF-8, so javac reads them as UTF-8 on every computer, and it
         // reports errors in English, like the rest of Raphael, whatever the computer's language.
@@ -115,7 +116,21 @@ public class SourceCompiler {
             // -g keeps variable names; -d puts the .class files in our temp folder; the class
             // path is that folder alone, so Raphael's own classes are out of sight.
             List<String> options = List.of("-g", "-d", classes.toString(), "-classpath", classes.toString());
-            ok = compiler.getTask(null, fileManager, diagnostics, options, null, files).call();
+            com.sun.source.util.JavacTask task = (com.sun.source.util.JavacTask)
+                    compiler.getTask(null, fileManager, diagnostics, options, null, files);
+            // As soon as javac has worked out what each file's names mean, FactScanner reads its
+            // syntax tree into the facts: no second compile is needed.
+            com.sun.source.util.Trees trees = com.sun.source.util.Trees.instance(task);
+            task.addTaskListener(new com.sun.source.util.TaskListener() {
+                @Override
+                public void finished(com.sun.source.util.TaskEvent event) {
+                    if (event.getKind() == com.sun.source.util.TaskEvent.Kind.ANALYZE && event.getCompilationUnit() != null) {
+                        SourceFile from = written.get(Path.of(event.getSourceFile().toUri()));
+                        raphael.analysis.FactScanner.scan(facts, trees, event.getCompilationUnit(), from == null ? null : from.path());
+                    }
+                }
+            });
+            ok = task.call();
         } catch (IOException e) { // making the folder, or closing the file manager, failed
             throw new CompileSetupException("The compiler couldn't read or write its files.", e);
         }
@@ -142,7 +157,7 @@ public class SourceCompiler {
                         "No main method found. Add: public static void main(String[] args)"));
             }
         }
-        return new CompileResult(ok, errors, classes, mainClass, sourceFiles);
+        return new CompileResult(ok, errors, classes, mainClass, sourceFiles, facts);
     }
 
     // The program's file an error is in, or null (text from the editor, or no file at all).
