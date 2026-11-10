@@ -27,9 +27,24 @@ public final class ParentWatch {
     }
 
     // Runs inside the student's program, before its main.
+    // Raphael isn't this program's child's parent in Java's eyes (Java can only wait on its own
+    // children), so ProcessHandle.onExit() would only poll, waiting longer and longer between
+    // looks. A small thread of our own looks five times a second instead.
     public static void premain(String args) {
-        ProcessHandle.current().parent().ifPresent(raphael ->
-                raphael.onExit().thenRun(() -> Runtime.getRuntime().halt(1)));
+        ProcessHandle.current().parent().ifPresent(raphael -> {
+            Thread watch = new Thread(() -> {
+                while (raphael.isAlive()) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                }
+                Runtime.getRuntime().halt(1);
+            }, "raphael-parent-watch");
+            watch.setDaemon(true); // never keeps the program running by itself
+            watch.start();
+        });
     }
 
     // The agent jar: a manifest naming this class, and this class's own compiled bytes.

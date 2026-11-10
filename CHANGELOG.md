@@ -15,6 +15,7 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - Write `// moment: text with {variable}` on a line to add a key moment of your own.
 - The slider marks each moment; Alt+PgDn and Alt+PgUp go to the next and previous one; Run → Pause at key moments switches pausing off.
 - New tabs beside the console: Key moments (a list) and Trace table (a row per step, a column per variable).
+- Fix: if Raphael is killed while a program is paused, the program now ends within a fifth of a second (it could take several seconds on a Mac).
 
 ## 1.1.1 (2026-11-10)
 
