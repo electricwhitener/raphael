@@ -24,7 +24,7 @@ import raphael.model.Value;
 // and the picture's Animator moves and flashes it like any other shape.
 // OOP: a class that builds Scene objects (the same pictures ScenePainter draws), each step's
 // built once, when asked.
-public class CallsScenes {
+public class CallsScenes implements SceneSource {
 
     private static final double CARD_W = 220;
     private static final double GAP = 10;
@@ -69,10 +69,12 @@ public class CallsScenes {
     }
 
     // The room the run's deepest stack needs, for one scale for the whole run.
+    @Override
     public Dimension getRunSize() {
         return size;
     }
 
+    @Override
     public Scene sceneAt(int step) {
         return built.computeIfAbsent(step, this::build);
     }

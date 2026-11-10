@@ -207,6 +207,19 @@ public class FactScanner extends TreePathScanner<Void, Void> {
                 && tree.getArguments().get(0).toString().equals("System.in")) {
             facts.markReadsInput();
         }
+        if (tree.getArguments().size() == 1 && tree.getArguments().get(0).toString().equals("System.in")) {
+            // the variable that reads the keyboard: Scanner sc = new Scanner(System.in), or a
+            // BufferedReader around an InputStreamReader around System.in
+            TreePath up = getCurrentPath().getParentPath();
+            while (up != null && up.getLeaf() instanceof NewClassTree) {
+                up = up.getParentPath();
+            }
+            if (up != null && up.getLeaf() instanceof VariableTree) {
+                facts.addInputReader(((VariableTree) up.getLeaf()).getName().toString());
+            } else if (up != null && up.getLeaf() instanceof AssignmentTree) {
+                facts.addInputReader(textOf(((AssignmentTree) up.getLeaf()).getVariable()));
+            }
+        }
         if (name.equals("java.util.Scanner") && tree.getArguments().size() == 1) {
             TypeMirror argument = trees.getTypeMirror(new TreePath(getCurrentPath(), tree.getArguments().get(0)));
             if (argument != null && FILE_CLASSES.contains(argument.toString())) {

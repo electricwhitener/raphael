@@ -27,6 +27,8 @@ public class TraceModel {
         listeners.add(listener);
     }
 
+    private String input = "";
+
     public void load(Trace trace, List<Scene> scenes) {
         Dimension biggest = new Dimension();
         for (Scene scene : scenes) {
@@ -44,6 +46,16 @@ public class TraceModel {
     // With the run's key moments (see explain/MomentFinder).
     public void load(Trace trace, List<Scene> scenes, Dimension runSize, List<raphael.explain.Moment> moments) {
         load(trace, scenes, runSize, moments, new raphael.analysis.CodeFacts());
+    }
+
+    // The text typed into the stdin box for this run (the files view shows what was read of it).
+    // Set before load(), so the views see it when they hear of the new run.
+    public void setInput(String input) {
+        this.input = input == null ? "" : input;
+    }
+
+    public String getInput() {
+        return input;
     }
 
     // With what the code says too (for the views that draw classes, like the objects view).

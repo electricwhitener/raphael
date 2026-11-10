@@ -189,9 +189,11 @@ public class Workbench extends JPanel {
         viewTabs.addTab("Picture", placeholder());
         viewTabs.addTab("Calls", placeholder());
         viewTabs.addTab("Objects", placeholder());
+        viewTabs.addTab("Files", placeholder());
         viewTabs.setToolTipTextAt(0, "the program's arrays, lists, trees and objects");
         viewTabs.setToolTipTextAt(1, "the methods running now, as a stack: the one on top runs, the ones below wait for it");
         viewTabs.setToolTipTextAt(2, "the program's classes (a UML diagram) and its objects, private fields marked -");
+        viewTabs.setToolTipTextAt(3, "what the program read of its input, and the files in its folder, line by line");
         viewTabs.putClientProperty("JTabbedPane.tabType", "underlined");
         viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
         viewTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
@@ -281,7 +283,7 @@ public class Workbench extends JPanel {
                 return VisualPanel.View.OBJECTS;
             }
         }
-        return VisualPanel.View.PICTURE;
+        return facts.usesFiles() ? VisualPanel.View.FILES : VisualPanel.View.PICTURE;
     }
 
     // An empty tab: the tabs are only headings, and what they choose is shown below them.
@@ -661,6 +663,7 @@ public class Workbench extends JPanel {
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
         lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
+        model.setInput(result.input());
         model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments(), result.program().facts());
         viewTabs.setSelectedIndex(bestView(result.program().facts()).ordinal());
         if (isShowing()) {
@@ -725,6 +728,7 @@ public class Workbench extends JPanel {
         fromFile = saved.trace();
         recordingText = "saved recording · " + saved.trace().size() + " steps";
         raphael.analysis.CodeFacts facts = factsOf(saved);
+        model.setInput(saved.input());
         model.load(saved.trace(), scenes, scenes.getRunSize(), new raphael.explain.MomentFinder().find(saved.trace(), facts), facts);
         if (isShowing()) {
             visual.requestFocusInWindow();

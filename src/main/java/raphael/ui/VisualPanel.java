@@ -48,10 +48,9 @@ public class VisualPanel extends JPanel implements TraceListener {
     private final Animator animator = new Animator(this::repaint);
     // The calls view of the same run (the call stack as boxes), shown instead of the picture when
     // chosen; see showCalls().
-    private raphael.render.CallsScenes calls;
-    private raphael.render.ObjectsScenes objects;
+    private final java.util.Map<View, raphael.render.SceneSource> views = new java.util.EnumMap<>(View.class); // all but the picture
     // Which view of the run is on show: the picture of the data, the calls, or the objects.
-    public enum View { PICTURE, CALLS, OBJECTS }
+    public enum View { PICTURE, CALLS, OBJECTS, FILES }
     private View view = View.PICTURE;
     private int shownStep = -1;
     private double fit = 1;  // the scale that fits this run's biggest picture into the panel
@@ -90,8 +89,12 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     @Override
     public void traceChanged(TraceModel model) {
-        calls = model.getTrace() == null ? null : new raphael.render.CallsScenes(model.getTrace(), model.getMoments());
-        objects = model.getTrace() == null ? null : new raphael.render.ObjectsScenes(model.getTrace(), model.getFacts());
+        views.clear();
+        if (model.getTrace() != null) {
+            views.put(View.CALLS, new raphael.render.CallsScenes(model.getTrace(), model.getMoments()));
+            views.put(View.OBJECTS, new raphael.render.ObjectsScenes(model.getTrace(), model.getFacts()));
+            views.put(View.FILES, new raphael.render.FilesScenes(model.getTrace(), model.getFacts(), model.getInput()));
+        }
         clearMessage();
         animator.show(sceneNow()); // a new run starts without animating from the old one
         shownStep = model.getStep();
@@ -115,23 +118,13 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (!model.hasSteps()) {
             return model.getScene();
         }
-        if (view == View.CALLS && calls != null) {
-            return calls.sceneAt(model.getStep());
-        }
-        if (view == View.OBJECTS && objects != null) {
-            return objects.sceneAt(model.getStep());
-        }
-        return model.getScene();
+        raphael.render.SceneSource source = views.get(view);
+        return source == null ? model.getScene() : source.sceneAt(model.getStep());
     }
 
     private Dimension runSize() {
-        if (view == View.CALLS && calls != null) {
-            return calls.getRunSize();
-        }
-        if (view == View.OBJECTS && objects != null) {
-            return objects.getRunSize();
-        }
-        return model.getRunSize();
+        raphael.render.SceneSource source = views.get(view);
+        return source == null ? model.getRunSize() : source.getRunSize();
     }
 
     // Shows one view of the run, for this run and the next ones.

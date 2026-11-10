@@ -26,7 +26,7 @@ import raphael.model.Value;
 // with the method under it.
 // OOP: a class that builds Scene objects (drawn and animated like the picture's), from the run
 // and from what the code says (CodeFacts).
-public class ObjectsScenes {
+public class ObjectsScenes implements SceneSource {
 
     private static final int PER_ROW = 3;      // boxes in a row before the row wraps
     private static final double MIN_W = 150;
@@ -114,10 +114,12 @@ public class ObjectsScenes {
         return !classes.isEmpty();
     }
 
+    @Override
     public Dimension getRunSize() {
         return size;
     }
 
+    @Override
     public Scene sceneAt(int step) {
         return built.computeIfAbsent(step, this::build);
     }

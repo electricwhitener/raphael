@@ -68,6 +68,7 @@ public class CodeFacts {
     private final Set<String> interfaceTypes = new HashSet<>();
     private final Map<String, List<String>> abstractMethods = new LinkedHashMap<>(); // class → methods without a body
     private final List<Integer> throwLines = new ArrayList<>();
+    private final Set<String> inputReaders = new HashSet<>(); // variables that read the keyboard (System.in)
     private boolean usesFiles;
     private boolean readsInput;
 
@@ -132,6 +133,11 @@ public class CodeFacts {
     }
 
     // Whether it reads typed input (a Scanner on System.in, or System.in itself).
+    // Whether this variable reads the keyboard: sc in Scanner sc = new Scanner(System.in).
+    public boolean isInputReader(String variable) {
+        return inputReaders.contains(variable);
+    }
+
     public boolean readsInput() {
         return readsInput;
     }
@@ -280,6 +286,10 @@ public class CodeFacts {
 
     void markUsesFiles() {
         usesFiles = true;
+    }
+
+    void addInputReader(String variable) {
+        inputReaders.add(variable);
     }
 
     void markReadsInput() {
