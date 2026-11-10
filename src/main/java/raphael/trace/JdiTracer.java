@@ -59,9 +59,9 @@ public class JdiTracer implements Tracer {
 
     // Java's own packages. We never pause inside them, and we don't draw their objects.
     private static final String[] JDK_PACKAGES = {"java.", "javax.", "sun.", "jdk."};
-    // Raphael's own classes that run inside the program (ParentWatch). The student's code has no
-    // package (SourceCompiler blanks the package line), so it can never be in here.
-    private static final String RAPHAEL_PACKAGE = "raphael.";
+    // Raphael's own class that runs inside the program (the ParentWatch agent), left out by its
+    // exact name: a student's program may have a package called raphael too.
+    private static final String AGENT_CLASS = ParentWatch.class.getName();
     private static final long POLL_MS = 100; // how often to look up from waiting, to see if stop was pressed
 
     private static final Logger LOG = Logger.getLogger(JdiTracer.class.getName());
@@ -87,7 +87,7 @@ public class JdiTracer implements Tracer {
         RunLimits runLimits = limits; // one set of limits for the whole run, even if settings change meanwhile
         try (RunFolder folder = new RunFolder(inputFiles)) {
             Launched launched = launch(program, runLimits, folder.path());
-            current = new Run(launched.vm(), launched.process(), folder, runLimits, remember);
+            current = new Run(launched.vm(), launched.process(), folder, runLimits, remember, program.sourceFiles());
             try {
                 return current.record(input);
             } finally {
@@ -211,6 +211,18 @@ public class JdiTracer implements Tracer {
 
     // One run of one program: everything that changes while it runs.
     // OOP: a private nested class, only used inside JdiTracer.
+    // The program's file a line is in (from the compiler's list), or null if it isn't known.
+    static String fileOf(Location at, Map<String, String> sourceFiles) {
+        try {
+            String type = at.declaringType().name();
+            int dot = type.lastIndexOf('.');
+            String folder = dot < 0 ? "" : type.substring(0, dot).replace('.', '/') + "/";
+            return sourceFiles.get(folder + at.sourceName());
+        } catch (com.sun.jdi.AbsentInformationException e) {
+            return null; // compiled without a source file name
+        }
+    }
+
     private static class Run {
 
         private final VirtualMachine vm;
@@ -220,7 +232,8 @@ public class JdiTracer implements Tracer {
         private final EventRequestManager requests;
         private final StringBuffer output = new StringBuffer();
         private final List<ReferenceType> studentClasses = new ArrayList<>();
-        private final HeapReader reader = new HeapReader(studentClasses);
+        private final Map<String, String> sourceFiles; // Java's name for each running file → the program's path
+        private final HeapReader reader;
         private final List<Snapshot> snapshots = new ArrayList<>();
         private EndReason endReason = EndReason.FINISHED;
         private String endMessage = "Program finished.";
@@ -229,7 +242,10 @@ public class JdiTracer implements Tracer {
         private volatile boolean stopRequested;
         private volatile int steps;
 
-        Run(VirtualMachine vm, Process process, RunFolder folder, RunLimits limits, boolean remember) {
+        Run(VirtualMachine vm, Process process, RunFolder folder, RunLimits limits, boolean remember,
+            Map<String, String> sourceFiles) {
+            this.sourceFiles = sourceFiles;
+            this.reader = new HeapReader(studentClasses, sourceFiles);
             this.vm = vm;
             this.process = process;
             this.folder = folder;
@@ -252,7 +268,7 @@ public class JdiTracer implements Tracer {
             for (String prefix : JDK_PACKAGES) {
                 classLoaded.addClassExclusionFilter(prefix + "*");
             }
-            classLoaded.addClassExclusionFilter(RAPHAEL_PACKAGE + "*");
+            classLoaded.addClassExclusionFilter(AGENT_CLASS + "*"); // also its nested classes, ParentWatch$1
             classLoaded.enable();
             // ...and when an exception is thrown, caught or not. One nothing catches ends the run;
             // one the student's code throws or catches is shown on the step its catch begins.
@@ -416,6 +432,7 @@ public class JdiTracer implements Tracer {
             String type = Names.simple(exception.referenceType().name());
             String message = messageOf(exception, event.thread());
             int throwLine = -1;
+            String throwFile = null;
             List<String> left = new ArrayList<>();
             try {
                 // From the frame that threw, outwards, to the frame whose method has the catch:
@@ -425,12 +442,14 @@ public class JdiTracer implements Tracer {
                     if (at.method().equals(caughtAt.method())) {
                         if (throwLine < 0) {
                             throwLine = at.lineNumber(); // thrown in the same method that catches it
+                            throwFile = fileOf(at, sourceFiles);
                         }
                         break;
                     }
                     if (isStudentCode(at)) {
                         if (throwLine < 0) {
                             throwLine = at.lineNumber(); // the student's line the exception came from
+                            throwFile = fileOf(at, sourceFiles);
                         }
                         String method = at.method().name();
                         left.add(method.equals("<init>") ? Names.simple(at.declaringType().name()) : method); // a constructor by its class
@@ -439,12 +458,13 @@ public class JdiTracer implements Tracer {
             } catch (IncompatibleThreadStateException e) {
                 // The thread isn't paused after all: keep what's known.
             }
-            justCaught = new ThrownException(type, message, throwLine, caughtAt.lineNumber(), left);
+            justCaught = new ThrownException(type, message, throwLine, caughtAt.lineNumber(), left,
+                    throwFile, fileOf(caughtAt, sourceFiles));
         }
 
         private static boolean isStudentCode(Location at) {
             String name = at.declaringType().name();
-            return !isJdkClass(name) && !name.startsWith(RAPHAEL_PACKAGE);
+            return !isJdkClass(name) && !name.startsWith(AGENT_CLASS);
         }
 
         // An exception nothing catches: record it as the last step, then let the program finish

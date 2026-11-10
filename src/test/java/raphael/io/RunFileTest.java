@@ -1,6 +1,7 @@
 package raphael.io;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -130,5 +131,30 @@ class RunFileTest {
         }
         Files.write(file, bytes.toByteArray());
         assertThrows(RunFileException.class, () -> RunFile.read(file));
+    }
+
+    // A recording saved by an earlier Raphael (format 1, before programs could have several
+    // files) still opens, with every step.
+    @Test
+    void aVersionOneRecordingStillOpens() throws Exception {
+        Path file = Path.of(getClass().getResource("/runs/hello-v1.raphael").toURI());
+        RunFile.Saved saved = RunFile.read(file);
+        assertTrue(saved.source().contains("x = x + 41"));
+        assertEquals(4, saved.trace().size());
+        assertEquals("42\n", saved.trace().getOutput());
+        assertNull(saved.files(), "a version 1 file has no list of files");
+        assertNull(saved.trace().get(0).getFrames().get(0).getFile());
+    }
+
+    // A program of several files keeps them all.
+    @Test
+    void theFilesOfAProgramAreKept(@org.junit.jupiter.api.io.TempDir Path folder) throws Exception {
+        java.util.List<raphael.model.SourceFile> files = java.util.List.of(
+                new raphael.model.SourceFile("Main.java", "public class Main {}"),
+                new raphael.model.SourceFile("shapes/Circle.java", "package shapes; public class Circle {}"));
+        raphael.model.Trace empty = new raphael.model.Trace(java.util.List.of(), "", raphael.model.EndReason.FINISHED, "done");
+        Path file = folder.resolve("two.raphael");
+        RunFile.write(file, new RunFile.Saved(null, "", empty, files));
+        assertEquals(files, RunFile.read(file).files());
     }
 }

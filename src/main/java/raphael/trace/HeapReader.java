@@ -76,8 +76,16 @@ public class HeapReader {
     // paused program costs time, and a list of 64 Integers would otherwise ask 64 times per step.
     private final Map<ObjectReference, Value> boxedValues = new HashMap<>();
 
+    private final Map<String, String> sourceFiles;
+
     public HeapReader(List<ReferenceType> studentClasses) {
+        this(studentClasses, Map.of());
+    }
+
+    // sourceFiles: Java's name for each running file → the program's own path for it (see CompileResult).
+    public HeapReader(List<ReferenceType> studentClasses, Map<String, String> sourceFiles) {
         this.studentClasses = studentClasses;
+        this.sourceFiles = sourceFiles;
     }
 
     int objectsRead() {
@@ -151,7 +159,8 @@ public class HeapReader {
                 } catch (AbsentInformationException e) {
                     // Compiled without -g: there are no variable names to show.
                 }
-                frames.add(new FrameSnapshot(Names.simple(className), methodName(where), where.lineNumber(), locals));
+                frames.add(new FrameSnapshot(Names.simple(className), methodName(where), where.lineNumber(), locals,
+                        JdiTracer.fileOf(where, sourceFiles)));
             }
         } catch (IncompatibleThreadStateException e) {
             throw new IllegalStateException("The program must be paused before it can be read", e);

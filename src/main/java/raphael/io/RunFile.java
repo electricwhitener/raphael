@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipException;
+import java.util.List;
+import raphael.model.SourceFile;
 import raphael.model.Trace;
 
 // A recorded run saved in a .raphael file: the program, its input and every step, so it can be
@@ -44,10 +46,18 @@ public final class RunFile {
 
     public static final String EXTENSION = ".raphael";
     private static final int MAGIC = 0x52415048; // "RAPH" in ASCII: says "this is a Raphael run"
-    private static final int VERSION = 1;        // goes up when the saved classes change
+    // Goes up when the saved classes change. 2: a program can have several files (Saved.files).
+    // Version 1 files still open (their files come back as null); Raphael 1.0 refuses version 2.
+    private static final int VERSION = 2;
 
-    // What a .raphael file holds.
-    public record Saved(String source, String input, Trace trace) implements Serializable {
+    // What a .raphael file holds. source is the program of one file; files, for a program of
+    // several files, holds each of them (null for one file, and in version 1 files).
+    // A record is read back by its parts' names, so a part added later is simply null in older files.
+    public record Saved(String source, String input, Trace trace, List<SourceFile> files) implements Serializable {
+
+        public Saved(String source, String input, Trace trace) {
+            this(source, input, trace, null);
+        }
     }
 
     // Only these classes may come out of a file; anything else stops the reading.
