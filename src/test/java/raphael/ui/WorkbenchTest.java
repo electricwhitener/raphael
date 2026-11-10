@@ -52,6 +52,10 @@ class WorkbenchTest {
         }
 
         @Override
+        public void caretMoved(Workbench workbench) {
+        }
+
+        @Override
         public RunLimits limits() {
             return RunLimits.DEFAULTS;
         }

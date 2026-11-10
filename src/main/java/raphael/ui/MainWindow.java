@@ -92,9 +92,14 @@ public class MainWindow extends JFrame {
             the editor
               Ctrl+N, O, S       new, open, save
               Ctrl+Shift+S       save as
-              Ctrl+W             close, back to the welcome page
+              Ctrl+W             close the tab
+              Ctrl+Shift+T       reopen a closed tab
+              Ctrl+Tab           next tab (Shift: the one before)
               Ctrl+Z, Ctrl+Y     undo, redo
-              Ctrl+F, F3         find, find next
+              Ctrl+F, Ctrl+H     find, replace
+              F3, Shift+F3       next match, previous match
+              Ctrl+G             go to line
+              Shift+Alt+Down     duplicate line
               Ctrl+/             comment or uncomment lines
               Tab, Shift+Tab     move lines in, out
 
@@ -121,6 +126,7 @@ public class MainWindow extends JFrame {
     private final ControlsBar idleControls = new ControlsBar(new TraceModel());
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
+    private final JButton position = new JButton(); // "Ln 12, Col 5"; a click opens Go to Line
     private final Legend legend = new Legend();
     // "Raphael 1.1.0 is available ↗": stays in the status bar, and opens the download page.
     private final JButton updateNotice = new JButton();
@@ -140,8 +146,6 @@ public class MainWindow extends JFrame {
     private final JLabel recordingChip = EmptyState.keyChip("");
     private JMenuItem exportStepsItem;
     private WelcomePage welcome;
-    private String lastSearch = "";
-    private RunLimits limits = savedLimits();
 
     // Autosave: every few seconds, unsaved code is copied to a draft file (see DraftStore). The
     // writing happens on a background thread, so a slow disk never pauses the window.
@@ -151,7 +155,7 @@ public class MainWindow extends JFrame {
     private final java.nio.file.Path draftFolder = draftFolder();
     private final java.util.Map<Workbench, DraftStore> drafts = new java.util.HashMap<>();
     private final java.util.Map<Workbench, String> drafted = new java.util.HashMap<>(); // what each draft holds now
-    private int draftCount;
+    private static final java.util.concurrent.atomic.AtomicInteger DRAFTS = new java.util.concurrent.atomic.AtomicInteger(); // numbers drafts across windows
     private final ExecutorService draftWriter = Executors.newSingleThreadExecutor(job -> {
         Thread thread = new Thread(job, "autosave");
         thread.setDaemon(true); // never keeps Raphael running
@@ -168,7 +172,7 @@ public class MainWindow extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 if (okToLoseAll()) {
-                    quit();
+                    Windows.closed(MainWindow.this); // the last window closed ends Raphael
                 }
             }
         });
@@ -207,6 +211,12 @@ public class MainWindow extends JFrame {
         updateNotice.addActionListener(e -> openReleasePage(App.SETTINGS.get("newerPage", UpdateCheck.RELEASES_PAGE)));
         recordingChip.setToolTipText("These steps were recorded earlier. Press Run to record this code again.");
         recordingChip.setVisible(false);
+        position.putClientProperty("JButton.buttonType", "borderless");
+        position.setFont(Style.UI_FONT.deriveFont(12f));
+        position.setRequestFocusEnabled(false);
+        position.setToolTipText(Shortcuts.label("Go to line  (Ctrl+G)"));
+        position.addActionListener(e -> goToLine());
+        statusRight.add(position);
         statusRight.add(recordingChip);
         statusRight.add(updateNotice);
         statusRight.add(legend);
@@ -230,7 +240,12 @@ public class MainWindow extends JFrame {
         applyTextSize();
         showWelcome();
         autosave.start();
-        useAppMenu();
+        addWindowFocusListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowGainedFocus(WindowEvent e) {
+                Windows.focused(MainWindow.this);
+            }
+        });
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent e) {
@@ -242,48 +257,6 @@ public class MainWindow extends JFrame {
                 checkForUpdatesQuietly();
             }
         });
-    }
-
-    // On a Mac, Quit (Cmd+Q) and Settings… live in the app's own menu. Route them through the
-    // same unsaved-code question and the same settings dialog as everywhere else.
-    private void useAppMenu() {
-        if (!Desktop.isDesktopSupported()) {
-            return;
-        }
-        Desktop desktop = Desktop.getDesktop();
-        if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
-            desktop.setQuitHandler((event, response) -> {
-                if (okToLoseAll()) {
-                    quit();
-                } else {
-                    response.cancelQuit();
-                }
-            });
-        }
-        if (desktop.isSupported(Desktop.Action.APP_OPEN_FILE)) { // a Mac passes double-clicked files here, not to main
-            desktop.setOpenFileHandler(event -> SwingUtilities.invokeLater(() -> {
-                for (File file : event.getFiles()) {
-                    openFromSystem(file);
-                }
-            }));
-        }
-        if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
-            desktop.setPreferencesHandler(event -> showSettings());
-        }
-        if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
-            desktop.setAboutHandler(event -> showAbout());
-        }
-    }
-
-    // Adds a panel that takes this share of the row's width. With no preferred width of its own,
-    // the share is all it gets, so long values can't push its neighbours around.
-    private static void addBottomPanel(JPanel row, JComponent panel, double share) {
-        GridBagConstraints constraints = new GridBagConstraints();
-        constraints.fill = GridBagConstraints.BOTH;
-        constraints.weightx = share;
-        constraints.weighty = 1;
-        panel.setPreferredSize(new Dimension(0, 0));
-        row.add(panel, constraints);
     }
 
     // The open program's picture panel (null on the welcome page), for the tests.
@@ -318,16 +291,24 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // Switches between light and dark, and remembers the choice for next time.
+    // Switches between light and dark, and remembers the choice for next time. Every window follows.
     private void toggleTheme() {
-        boolean wasError = status.getForeground().equals(Style.ERROR);
         App.setupLook(!Style.isDark());
         App.SETTINGS.putBoolean("dark", Style.isDark());
-        FlatLaf.updateUI(); // tells every Swing component to pick up the new look
+        FlatLaf.updateUI(); // tells every Swing component, in every window, to pick up the new look
+        Windows.forEach(MainWindow::themeChanged);
+        if (!Windows.all().contains(this)) {
+            themeChanged(); // a window the registry doesn't know (the tests make one directly)
+        }
+    }
+
+    // The theme changed: the colours this window sets itself, and its programs' marks.
+    private void themeChanged() {
+        boolean wasError = status.getForeground().equals(Style.ERROR);
         SwingUtilities.updateComponentTreeUI(examplesMenu); // it isn't in the window until it's opened
-        if (current != null) {
-            SwingUtilities.updateComponentTreeUI(idleControls); // out of the window while a program is open
-            current.themeChanged();
+        SwingUtilities.updateComponentTreeUI(idleControls); // out of the window while a program is open
+        for (Workbench program : programs()) {
+            program.themeChanged();
         }
         applyTheme();
         status.setForeground(wasError ? Style.ERROR : Style.INK);
@@ -374,7 +355,10 @@ public class MainWindow extends JFrame {
     private void changeTextSize(int change) {
         Style.setCodeSize(Style.CODE_FONT.getSize() + change);
         App.SETTINGS.putInt("textSize", Style.CODE_FONT.getSize());
-        applyTextSize();
+        Windows.forEach(MainWindow::applyTextSize); // every window, this one included
+        if (!Windows.all().contains(this)) {
+            applyTextSize();
+        }
         say("text size " + Style.CODE_FONT.getSize() + Shortcuts.label(" · ctrl+0 for normal"), Style.INK_SOFT);
     }
 
@@ -387,8 +371,8 @@ public class MainWindow extends JFrame {
 
     private void applyTextSize() {
         refont(getContentPane());
-        if (current != null) {
-            current.textSizeChanged();
+        for (Workbench program : programs()) {
+            program.textSizeChanged();
         }
     }
 
@@ -407,24 +391,30 @@ public class MainWindow extends JFrame {
         }
     }
 
-    private void find() {
+    // Edit → Go to Line… (Ctrl+G, or a click on Ln, Col): asks for a line number and goes there.
+    private void goToLine() {
         if (current == null) {
             return;
         }
-        javax.swing.JTextField field = new javax.swing.JTextField(lastSearch, 24);
-        field.putClientProperty("JTextField.placeholderText", "text to find in the code");
+        CodePanel code = current.getCode();
+        javax.swing.JTextField field = new javax.swing.JTextField(String.valueOf(code.caretLine()), 8);
         field.selectAll();
-        String answer = Dialogs.question(this, "Find in the code").title("Find").extra(field)
-                .buttons("Find", "Close").ask();
-        if ("Find".equals(answer)) {
-            lastSearch = field.getText();
-            findNext();
+        String answer = Dialogs.question(this, "Go to line (1 to " + code.lineCount() + ")").title("Go to Line").extra(field)
+                .buttons("Go", "Cancel").ask();
+        if ("Go".equals(answer)) {
+            try {
+                code.goToLine(Integer.parseInt(field.getText().trim()));
+            } catch (NumberFormatException e) {
+                say("\"" + field.getText().trim() + "\" isn't a line number", Style.INK_SOFT);
+            }
         }
     }
 
-    private void findNext() {
-        if (current != null && !lastSearch.isEmpty() && !current.getCode().find(lastSearch)) {
-            say("\"" + lastSearch + "\" isn't in the code", Style.INK_SOFT);
+    // Ln, Col on the right of the status bar, for the program in front.
+    private void showPosition() {
+        position.setVisible(current != null);
+        if (current != null) {
+            position.setText("Ln " + current.getCode().caretLine() + ", Col " + current.getCode().caretColumn());
         }
     }
 
@@ -650,6 +640,7 @@ public class MainWindow extends JFrame {
         JMenuBar bar = new JMenuBar();
         JMenu file = menu("File", KeyEvent.VK_F);
         file.add(item("New", "control N", this::newProgram));
+        file.add(item("New Window", "shift control N", Windows::openNew));
         file.add(item("Open…", "control O", this::open));
         file.add(item("Open Folder…", "shift control O", this::openFolder));
         JMenu examples = menu("Open example", KeyEvent.VK_E);
@@ -696,18 +687,24 @@ public class MainWindow extends JFrame {
             file.addSeparator();
             file.add(item(Shortcuts.label("Settings…  (Ctrl+,)"), null, this::showSettings));
             file.addSeparator();
-            file.add(item("Quit", "control Q", () -> {
-                if (okToLoseAll()) {
-                    quit();
-                }
-            }));
+            file.add(item("Quit", "control Q", Windows::quitAll));
         }
         JMenu edit = menu("Edit", KeyEvent.VK_E);
         edit.add(item("Undo", "control Z", () -> onCode(CodePanel::undo)));
         edit.add(item("Redo", "control Y", () -> onCode(CodePanel::redo)));
         edit.addSeparator();
-        edit.add(item("Find…", "control F", this::find));
-        edit.add(item("Find next", "F3", this::findNext));
+        edit.add(item("Cut", "control X", () -> onCode(CodePanel::cut)));
+        edit.add(item("Copy", "control C", () -> onCode(CodePanel::copy)));
+        edit.add(item("Paste", "control V", () -> onCode(CodePanel::pasteHere)));
+        edit.add(item("Select All", "control A", () -> onCode(CodePanel::selectAllHere)));
+        edit.add(item("Duplicate Line", "shift alt DOWN", () -> onCode(CodePanel::duplicateLine)));
+        edit.addSeparator();
+        edit.add(item("Find…", "control F", () -> onCode(code -> code.openFind(false))));
+        edit.add(item("Replace…", "control H", () -> onCode(code -> code.openFind(true))));
+        edit.add(item("Find Next", "F3", () -> onCode(code -> code.findNext(false))));
+        edit.add(item("Find Previous", "shift F3", () -> onCode(code -> code.findNext(true))));
+        edit.addSeparator();
+        edit.add(item("Go to Line…", "control G", this::goToLine));
         JMenu run = menu("Run", KeyEvent.VK_R);
         run.add(item("Run or stop", "control ENTER", this::run));
         run.add(item("Play or pause  (Space)", null, this::togglePlay));
@@ -732,7 +729,7 @@ public class MainWindow extends JFrame {
         if (AppLog.folder() != null) {
             help.add(item("Open log folder", null, this::openLogFolder));
         }
-        if (!Shortcuts.isMac()) { // on a Mac, About is in the app's own menu (useAppMenu)
+        if (!Shortcuts.isMac()) { // on a Mac, About is in the app's own menu (Windows.installAppMenu)
             help.add(item("About Raphael", null, this::showAbout));
         }
         for (JMenu menu : new JMenu[] {file, edit, run, view, help}) {
@@ -869,7 +866,7 @@ public class MainWindow extends JFrame {
     }
 
     // About Raphael: the version, what it is, the licence, and the details a bug report needs.
-    private void showAbout() {
+    void showAbout() {
         String version = UpdateCheck.currentVersion();
         String details = "Raphael " + versionText() + ", Java " + System.getProperty("java.version") + ", "
                 + System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch");
@@ -971,16 +968,16 @@ public class MainWindow extends JFrame {
         recordingChip.setVisible(chip != null && room);
     }
 
-    private void showSettings() {
+    void showSettings() {
         String saved = App.SETTINGS.get("dark", null); // no choice saved: follow the computer
         SettingsDialog.Theme theme = saved == null ? SettingsDialog.Theme.SYSTEM
                 : Boolean.parseBoolean(saved) ? SettingsDialog.Theme.DARK : SettingsDialog.Theme.LIGHT;
         SettingsDialog.Values chosen = SettingsDialog.ask(this,
-                new SettingsDialog.Values(limits, Style.CODE_FONT.getSize(), theme, App.SETTINGS.getBoolean("checkUpdates", true)));
+                new SettingsDialog.Values(savedLimits(), Style.CODE_FONT.getSize(), theme, App.SETTINGS.getBoolean("checkUpdates", true)));
         if (chosen == null) {
             return;
         }
-        limits = chosen.limits();
+        RunLimits limits = chosen.limits();
         App.SETTINGS.putInt("maxSteps", limits.maxSteps());
         App.SETTINGS.putInt("timeoutSeconds", limits.timeoutSeconds());
         App.SETTINGS.putInt("memoryMb", limits.memoryMb());
@@ -1038,7 +1035,7 @@ public class MainWindow extends JFrame {
             }
             drafted.put(program, text);
             DraftStore draft = drafts.computeIfAbsent(program, p -> new DraftStore(draftFolder.resolve(
-                    "draft-" + ProcessHandle.current().pid() + "-" + (++draftCount) + ".java")));
+                    "draft-" + ProcessHandle.current().pid() + "-" + DRAFTS.incrementAndGet() + ".java")));
             writeDraft(draft, text);
         }
     }
@@ -1124,8 +1121,8 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // A normal quit: no draft is left behind, so the next start doesn't offer one.
-    private void quit() {
+    // The window is closing normally: its drafts go, so the next start doesn't offer them.
+    void forgetDrafts() {
         autosave.stop();
         for (Workbench program : programs()) {
             dropDraft(program);
@@ -1136,13 +1133,11 @@ public class MainWindow extends JFrame {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        LOG.info("Raphael quit");
-        System.exit(0);
     }
 
     // Before the window closes: every program with unsaved changes is brought to the front and
     // asked about in turn. True if it's fine to go on.
-    private boolean okToLoseAll() {
+    boolean okToLoseAll() {
         for (Workbench program : programs()) {
             if (program.isDirty()) {
                 tabs.setSelectedComponent(program);
@@ -1280,6 +1275,7 @@ public class MainWindow extends JFrame {
             styleRunButton();
             busy.setVisible(false);
             updateTitle();
+            showPosition();
             showStatus(welcomeSaid, Style.INK_SOFT);
         } else {
             host.stateChanged(current);
@@ -1709,7 +1705,9 @@ public class MainWindow extends JFrame {
             recent = recent.subList(0, RECENT_MAX);
         }
         App.SETTINGS.put("recentFiles", String.join("\n", recent.stream().map(File::getPath).toList()));
-        welcome.showRecent(recent);
+        List<File> shown = recent;
+        welcome.showRecent(shown);
+        Windows.forEach(window -> window.welcome.showRecent(shown));
     }
 
     // File → Open recent, filled each time the File menu opens.
@@ -1858,6 +1856,14 @@ public class MainWindow extends JFrame {
             busy.setVisible(workbench.isRunning());
             showStatus(workbench.statusText(), workbench.statusColor());
             showLegendIfRoom();
+            showPosition();
+        }
+
+        @Override
+        public void caretMoved(Workbench workbench) {
+            if (workbench == current) {
+                showPosition();
+            }
         }
 
         @Override
@@ -1897,7 +1903,7 @@ public class MainWindow extends JFrame {
 
         @Override
         public RunLimits limits() {
-            return limits;
+            return savedLimits(); // from the settings, which another window may have changed
         }
     }
 }

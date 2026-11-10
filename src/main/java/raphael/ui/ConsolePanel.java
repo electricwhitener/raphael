@@ -18,6 +18,7 @@ import raphael.render.Style;
 public class ConsolePanel extends JPanel implements TraceListener {
 
     private final JTextArea output = new JTextArea();
+    private java.util.function.Consumer<String> onLineClicked = line -> { }; // until the program sets it
     private final JTextArea input = new JTextArea(2, 20);
     private final JPanel inputArea = new JPanel(new BorderLayout());
     private final DefaultHighlighter.DefaultHighlightPainter newOutput =
@@ -31,6 +32,21 @@ public class ConsolePanel extends JPanel implements TraceListener {
     public ConsolePanel() {
         super(new BorderLayout());
         output.setEditable(false);
+        // A click on a compile error ("Circle.java, line 12: …" or "line 12: …") goes to that line.
+        output.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                try {
+                    int at = output.viewToModel2D(e.getPoint());
+                    int line = output.getLineOfOffset(at);
+                    int start = output.getLineStartOffset(line);
+                    int end = output.getLineEndOffset(line);
+                    onLineClicked.accept(output.getText(start, end - start));
+                } catch (javax.swing.text.BadLocationException ignored) {
+                    // clicked below the text
+                }
+            }
+        });
         output.setLineWrap(true);
         output.setWrapStyleWord(true);
         output.setFont(Style.CODE_FONT);
@@ -76,6 +92,11 @@ public class ConsolePanel extends JPanel implements TraceListener {
 
     public boolean isInputShown() {
         return inputArea.isVisible();
+    }
+
+    // Told the text of a line of the console that was clicked.
+    public void setOnLineClicked(java.util.function.Consumer<String> onLineClicked) {
+        this.onLineClicked = onLineClicked;
     }
 
     public void showMessage(String message) {

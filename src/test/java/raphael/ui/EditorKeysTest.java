@@ -76,4 +76,44 @@ class EditorKeysTest {
         assertEquals(0, editor.getSelectionStart());
         assertFalse(keys.find("missing"));
     }
+
+    // A bracket brings its partner (not in front of a word), and typing the partner steps over it.
+    @Test
+    void bracketsAndQuotesCloseThemselves() {
+        set("f", 1, 1);
+        keys.typeOpener('(', ')');
+        assertEquals("f()", editor.getText());
+        assertEquals(2, editor.getCaretPosition(), "the cursor goes between");
+        keys.typeCloser(')');
+        assertEquals("f()", editor.getText(), "typing the closer steps over it");
+        assertEquals(3, editor.getCaretPosition());
+        set("word", 0, 0);
+        keys.typeOpener('(', ')');
+        assertEquals("(word", editor.getText(), "no closer in front of a word");
+        set("x = ", 4, 4);
+        keys.typeQuote('"');
+        assertEquals("x = \"\"", editor.getText());
+        keys.typeQuote('"');
+        assertEquals("x = \"\"", editor.getText(), "the second quote steps over the first's partner");
+        set("don", 3, 3);
+        keys.typeQuote('\'');
+        assertEquals("don'", editor.getText(), "an apostrophe after a letter stays alone");
+    }
+
+    // Enter between { and } opens the block: the cursor indented inside, the } on its own line.
+    @Test
+    void enterBetweenBracesOpensTheBlock() {
+        set("void f() {}", 10, 10);
+        keys.newLine();
+        assertEquals("void f() {\n    \n}", editor.getText());
+        assertEquals(15, editor.getCaretPosition());
+    }
+
+    @Test
+    void aLineCanBeDuplicated() {
+        set("a\nb\n", 2, 2);
+        keys.duplicateLines();
+        assertEquals("a\nb\nb\n", editor.getText());
+        assertEquals(4, editor.getCaretPosition(), "the cursor is on the copy");
+    }
 }

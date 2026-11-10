@@ -72,6 +72,9 @@ public class CodePanel extends JPanel implements TraceListener {
     private final LineNumbers lineNumbers;
     private final JScrollPane scroll;
     private final EditorKeys keys;
+    private final FindBar findBar;
+    private Runnable onCaretMoved = () -> { }; // does nothing until the program sets it
+    private final List<Object> bracketMarks = new ArrayList<>();
     private Runnable onCodeChanged = () -> { }; // does nothing until the window sets it
     private IntConsumer onTextSizeWheel = change -> { }; // does nothing until the window sets it
 
@@ -106,11 +109,21 @@ public class CodePanel extends JPanel implements TraceListener {
         scroll.setRowHeaderView(lineNumbers);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         add(scroll);
+        findBar = new FindBar(editor, this::asOneEdit);
+        add(findBar, BorderLayout.NORTH);
 
         show(newText(null, ""));
         bindEditKey("control Z", this::undo);
         bindEditKey("control Y", this::redo);
         bindEditKey("shift control Z", this::redo); // the usual redo on a Mac, and in many editors
+        bindEditKey("control F", () -> findBar.open(false));
+        bindEditKey("control H", () -> findBar.open(true)); // in a text box, Ctrl+H would otherwise delete a letter
+        bindEditKey("F3", () -> findBar.next(false));
+        bindEditKey("shift F3", () -> findBar.next(true));
+        editor.addCaretListener(e -> {
+            markBrackets();
+            onCaretMoved.run();
+        });
         keys = new EditorKeys(editor);
         keys.install();
         editor.addMouseWheelListener(e -> {
@@ -261,6 +274,7 @@ public class CodePanel extends JPanel implements TraceListener {
         lineNumbers.revalidate();
         lineNumbers.repaint();
         stepChanged(model);
+        findBar.refresh();
         onFileShown.accept(text.path);
     }
 
@@ -292,6 +306,167 @@ public class CodePanel extends JPanel implements TraceListener {
     public boolean find(String text) {
         return keys.find(text);
     }
+
+    // The find bar: opened (with the replace row, or not), or the next or previous match.
+    public void openFind(boolean withReplace) {
+        findBar.open(withReplace);
+    }
+
+    public void findNext(boolean backwards) {
+        findBar.next(backwards);
+    }
+
+    // Esc: closes the find bar if it's open. False if it wasn't.
+    public boolean closeFind() {
+        if (!findBar.isVisible()) {
+            return false;
+        }
+        findBar.close();
+        return true;
+    }
+
+    // The cursor's line and column, counting from 1.
+    public int caretLine() {
+        try {
+            return editor.getLineOfOffset(editor.getCaretPosition()) + 1;
+        } catch (BadLocationException e) {
+            return 1;
+        }
+    }
+
+    public int caretColumn() {
+        try {
+            return editor.getCaretPosition() - editor.getLineStartOffset(caretLine() - 1) + 1;
+        } catch (BadLocationException e) {
+            return 1;
+        }
+    }
+
+    public int lineCount() {
+        return editor.getLineCount();
+    }
+
+    public void setOnCaretMoved(Runnable onCaretMoved) {
+        this.onCaretMoved = onCaretMoved;
+    }
+
+    // Go to line: the cursor at its start, in view.
+    public void goToLine(int line) {
+        int target = Math.max(1, Math.min(line, editor.getLineCount()));
+        try {
+            editor.setCaretPosition(editor.getLineStartOffset(target - 1));
+        } catch (BadLocationException e) {
+            return;
+        }
+        scrollToLine(target);
+        editor.requestFocusInWindow();
+    }
+
+    // Edit menu: cut, copy and paste in the editor, wherever the keyboard is.
+    public void cut() {
+        editor.requestFocusInWindow();
+        editor.cut();
+    }
+
+    public void copy() {
+        editor.requestFocusInWindow();
+        editor.copy();
+    }
+
+    // Shift+Alt+Down: the line the cursor is on (or the selected lines) again, below.
+    public void duplicateLine() {
+        if (editor.isEditable()) {
+            keys.duplicateLines();
+        }
+    }
+
+    // Runs a change made of many edits (Replace All) as one, so one undo takes it all back.
+    private void asOneEdit(Runnable change) {
+        javax.swing.undo.CompoundEdit all = new javax.swing.undo.CompoundEdit();
+        javax.swing.event.UndoableEditListener collect = e -> all.addEdit(e.getEdit());
+        shown.document.removeUndoableEditListener(shown.undo);
+        shown.document.addUndoableEditListener(collect);
+        try {
+            change.run();
+        } finally {
+            shown.document.removeUndoableEditListener(collect);
+            shown.document.addUndoableEditListener(shown.undo);
+            all.end();
+            shown.undo.addEdit(all);
+        }
+    }
+
+    // A bracket next to the cursor and the one it pairs with are outlined, as in an IDE.
+    private void markBrackets() {
+        for (Object mark : bracketMarks) {
+            editor.getHighlighter().removeHighlight(mark);
+        }
+        bracketMarks.clear();
+        String text = editor.getText();
+        int caret = editor.getCaretPosition();
+        int at = -1;
+        if (caret > 0 && "()[]{}".indexOf(text.charAt(caret - 1)) >= 0) {
+            at = caret - 1;
+        } else if (caret < text.length() && "()[]{}".indexOf(text.charAt(caret)) >= 0) {
+            at = caret;
+        }
+        if (at < 0 || inStringOrComment(at)) {
+            return;
+        }
+        int match = matchingBracket(text, at);
+        if (match < 0) {
+            return;
+        }
+        for (int position : new int[] {at, match}) {
+            try {
+                bracketMarks.add(editor.getHighlighter().addHighlight(position, position + 1, BRACKET_PAINTER));
+            } catch (BadLocationException e) {
+                // the text changed meanwhile
+            }
+        }
+    }
+
+    // Where the bracket at this position is closed (or opened), skipping strings and comments; -1 if nowhere.
+    private int matchingBracket(String text, int at) {
+        char c = text.charAt(at);
+        int pair = "()[]{}".indexOf(c);
+        boolean opens = pair % 2 == 0;
+        char other = "()[]{}".charAt(opens ? pair + 1 : pair - 1);
+        int depth = 0;
+        for (int i = at; i >= 0 && i < text.length(); i += opens ? 1 : -1) {
+            char here = text.charAt(i);
+            if ((here == c || here == other) && !inStringOrComment(i)) {
+                depth += here == c ? 1 : -1;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private boolean inStringOrComment(int position) {
+        for (JavaTokens.Token token : shown.tokens) {
+            if (token.start() > position) {
+                return false;
+            }
+            if (position < token.end()) {
+                return token.kind() == JavaTokens.Kind.STRING || token.kind() == JavaTokens.Kind.COMMENT;
+            }
+        }
+        return false;
+    }
+
+    // An outline round a bracket and its partner.
+    private static final Highlighter.HighlightPainter BRACKET_PAINTER = (g, start, end, bounds, text) -> {
+        try {
+            Rectangle2D box = text.modelToView2D(start).createUnion(text.modelToView2D(end));
+            g.setColor(Style.MUTED);
+            g.drawRect((int) box.getX(), (int) box.getY(), Math.max(1, (int) box.getWidth() - 1), (int) box.getHeight() - 1);
+        } catch (BadLocationException e) {
+            // nothing to draw
+        }
+    };
 
     public void setOnTextSizeWheel(IntConsumer onTextSizeWheel) {
         this.onTextSizeWheel = onTextSizeWheel;
@@ -444,6 +619,7 @@ public class CodePanel extends JPanel implements TraceListener {
         if (text != shown) {
             return;
         }
+        javax.swing.SwingUtilities.invokeLater(findBar::refresh); // the matches move with the text
         editor.repaint(); // a /* can change the colour of every line after it
         clearErrors();
         model.clear();

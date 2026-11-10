@@ -75,6 +75,9 @@ public class Workbench extends JPanel {
 
         void showExamples();
 
+        // The cursor moved in the code (for Ln, Col in the status bar).
+        void caretMoved(Workbench workbench);
+
         // Ctrl + mouse wheel over the code.
         void changeTextSize(int change);
 
@@ -218,6 +221,8 @@ public class Workbench extends JPanel {
             host.stateChanged(this); // the title's unsaved dot
         });
         code.setOnTextSizeWheel(host::changeTextSize);
+        code.setOnCaretMoved(() -> host.caretMoved(this));
+        console.setOnLineClicked(this::goToError);
         showPictureOrGuide();
     }
 
@@ -365,6 +370,23 @@ public class Workbench extends JPanel {
         code.getEditor().requestFocusInWindow();
     }
 
+    // A compile error clicked in the console: "Circle.java, line 12: …" (a program of several
+    // files) or "line 12: …" brings that line into view.
+    private void goToError(String text) {
+        java.util.regex.Matcher error = java.util.regex.Pattern.compile("^(?:(\\S+\\.java), )?line (\\d+):").matcher(text);
+        if (!error.find()) {
+            return;
+        }
+        if (error.group(1) != null) {
+            for (String path : code.getPaths()) {
+                if (path != null && path.equals(error.group(1))) {
+                    code.showFile(path);
+                }
+            }
+        }
+        code.goToLine(Integer.parseInt(error.group(2)));
+    }
+
     // ---- the status bar ----
 
     public void say(String message, Color color) {
@@ -490,6 +512,9 @@ public class Workbench extends JPanel {
 
     // Esc: stop a recording, or pause the playing.
     public void stopOrPause() {
+        if (code.closeFind()) {
+            return; // Esc closes the find bar first
+        }
         if (running) {
             tracer.stop();
         } else {

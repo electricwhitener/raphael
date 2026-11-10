@@ -12,6 +12,7 @@ import raphael.io.AppLog;
 import raphael.render.Style;
 import raphael.ui.ErrorReporter;
 import raphael.ui.MainWindow;
+import raphael.ui.Windows;
 import raphael.ui.Shortcuts;
 import raphael.ui.SystemTheme;
 
@@ -36,9 +37,8 @@ public class App {
         ErrorReporter.install(); // then the safety net, so even a problem while starting up is caught
         setupLook();
         SwingUtilities.invokeLater(() -> {
-            MainWindow window = new MainWindow();
-            ErrorReporter.setOwner(window);
-            window.setVisible(true);
+            MainWindow window = Windows.openNew();
+            Windows.installAppMenu(); // the Mac's Quit, About and Settings, and double-clicked files
             window.offerDraft();
             // A file to open: given by the system when a .raphael file is double-clicked, or
             // typed after the command (Raphael scores.java).

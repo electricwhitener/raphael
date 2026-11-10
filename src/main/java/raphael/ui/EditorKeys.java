@@ -10,7 +10,8 @@ import javax.swing.JTextArea;
 import javax.swing.text.BadLocationException;
 
 // The small things a code editor does for you: Enter keeps the indentation, Tab and Shift+Tab
-// move lines in and out, "}" lines up with its block, Ctrl+/ comments lines, and find.
+// move lines in and out, "}" lines up with its block, Ctrl+/ comments lines, brackets and quotes
+// close themselves, Shift+Alt+Down duplicates a line, and find.
 // OOP: composition (it holds a text area and adds to it, instead of being one); encapsulation
 // (the line handling is private).
 public class EditorKeys {
@@ -28,8 +29,16 @@ public class EditorKeys {
         bind("ENTER", this::newLine);
         bind("TAB", this::indent);
         bind("shift TAB", this::unindent);
-        bind("typed }", this::closeBrace);
+        bind("typed }", () -> typeCloser('}'));
+        bind("typed )", () -> typeCloser(')'));
+        bind("typed ]", () -> typeCloser(']'));
+        bind("typed (", () -> typeOpener('(', ')'));
+        bind("typed [", () -> typeOpener('[', ']'));
+        bind("typed {", () -> typeOpener('{', '}'));
+        bind("typed \"", () -> typeQuote('"'));
+        bind("typed '", () -> typeQuote('\''));
         bind("control SLASH", this::toggleComment);
+        bind("shift alt DOWN", this::duplicateLines);
     }
 
     private void bind(String key, Runnable action) {
@@ -44,11 +53,86 @@ public class EditorKeys {
         });
     }
 
-    // Starts a new line at the same indentation, one level deeper after a "{".
+    // Starts a new line at the same indentation, one level deeper after a "{". Between "{" and
+    // "}" it opens the block: the cursor on its own line inside, the "}" below.
     void newLine() {
         String before = textBeforeCaretOnLine();
         String indent = before.substring(0, before.length() - before.stripLeading().length());
-        editor.replaceSelection("\n" + indent + (before.stripTrailing().endsWith("{") ? INDENT : ""));
+        boolean opens = before.stripTrailing().endsWith("{");
+        if (opens && editor.getSelectedText() == null && charAfterCaret() == '}') {
+            int at = editor.getSelectionStart();
+            editor.replaceSelection("\n" + indent + INDENT + "\n" + indent);
+            editor.setCaretPosition(at + 1 + indent.length() + INDENT.length());
+            return;
+        }
+        editor.replaceSelection("\n" + indent + (opens ? INDENT : ""));
+    }
+
+    // An opening bracket brings its closer, when the next character is a space, the end of the
+    // line or another closer (so typing before a word doesn't add one). The cursor goes between.
+    void typeOpener(char open, char close) {
+        char next = charAfterCaret();
+        if (editor.getSelectedText() == null && (next == 0 || next == '\n' || next == ' ' || ")]};,".indexOf(next) >= 0)) {
+            int at = editor.getSelectionStart();
+            editor.replaceSelection(String.valueOf(open) + close);
+            editor.setCaretPosition(at + 1); // between the two
+        } else {
+            editor.replaceSelection(String.valueOf(open));
+        }
+    }
+
+    // A closer typed just before the same closer steps over it instead of adding a second one.
+    // A "}" at the start of a line moves back one level, to line up with its block.
+    void typeCloser(char close) {
+        if (editor.getSelectedText() == null && charAfterCaret() == close) {
+            editor.setCaretPosition(editor.getCaretPosition() + 1);
+            return;
+        }
+        if (close == '}') {
+            closeBrace();
+        } else {
+            editor.replaceSelection(String.valueOf(close));
+        }
+    }
+
+    // A quote brings its partner, unless it's closing one (then it steps over it) or comes right
+    // after a letter or digit (as in don't).
+    void typeQuote(char quote) {
+        if (editor.getSelectedText() == null && charAfterCaret() == quote) {
+            editor.setCaretPosition(editor.getCaretPosition() + 1);
+            return;
+        }
+        String before = textBeforeCaretOnLine();
+        char previous = before.isEmpty() ? ' ' : before.charAt(before.length() - 1);
+        char next = charAfterCaret();
+        boolean pairs = editor.getSelectedText() == null && !Character.isLetterOrDigit(previous) && previous != '\\'
+                && (next == 0 || next == '\n' || next == ' ' || ")]};,".indexOf(next) >= 0);
+        int at = editor.getSelectionStart();
+        editor.replaceSelection(pairs ? "" + quote + quote : String.valueOf(quote));
+        editor.setCaretPosition(at + 1); // after the quote: between the pair, if there is one
+    }
+
+    // The selected lines (or the cursor's line) again, just below; the cursor moves with the copy.
+    void duplicateLines() {
+        try {
+            int[] range = selectedRange();
+            String lines = editor.getText(range[0], range[1] - range[0]);
+            int caretFromStart = editor.getCaretPosition() - range[0];
+            editor.insert("\n" + lines, range[1]);
+            editor.setCaretPosition(range[1] + 1 + Math.min(caretFromStart, lines.length()));
+        } catch (BadLocationException e) {
+            // the text changed underneath us; nothing to do
+        }
+    }
+
+    // The character just after the cursor, or 0 at the end of the text.
+    private char charAfterCaret() {
+        int caret = editor.getSelectionEnd();
+        try {
+            return caret < editor.getDocument().getLength() ? editor.getText(caret, 1).charAt(0) : 0;
+        } catch (BadLocationException e) {
+            return 0;
+        }
     }
 
     // A "}" typed at the start of a line moves back one level, to line up with its block.
