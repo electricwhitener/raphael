@@ -21,6 +21,9 @@ public class ArrayRenderer extends StructureRenderer {
 
     @Override
     public Dimension render(Scene scene, double x, double y) {
+        if (context.isStack(structure.getArray().getId())) {
+            return renderUpright(scene, x, y);
+        }
         ArrayNode array = structure.getArray();
         int shown = array.getElements().size();
         double top = y + Style.LABEL_SPACE;
@@ -62,6 +65,45 @@ public class ArrayRenderer extends StructureRenderer {
             height += Style.HEAP_GAP + tree.height;
         }
         return new Dimension((int) width, height);
+    }
+
+    // A stack: the same cells standing in a column, index 0 at the bottom, so push and pop happen
+    // at the top, as in a textbook. The index is on the left, and top stands on the right of its cell.
+    private Dimension renderUpright(Scene scene, double x, double y) {
+        ArrayNode array = structure.getArray();
+        int length = Math.max(1, context.longestLength(array.getId()));
+        double cellW = context.cellWidth(array.getId());
+        double indexW = 22;
+        double markerW = 60; // room on the left for "top", pointing at its cell
+        for (RenderContext.Marker marker : context.markersFor(array.getId())) {
+            markerW = Math.max(markerW, Style.textWidth(marker.name() + "=" + marker.index(), Style.MARKER_FONT) + 22);
+        }
+        double cellX = x + markerW;
+        double top = y + Style.LABEL_SPACE;
+        String id = key(array.getId());
+        scene.add(new SceneNode(id, SceneNode.Kind.FRAME, cellX, top, cellW, length * Style.CELL_H, "",
+                Names.simple(array.getTypeName())));
+        for (int i = 0; i < array.getElements().size(); i++) {
+            double cellY = top + (length - 1 - i) * Style.CELL_H;
+            addCell(scene, id + "[" + i + "]", array.getElements().get(i), cellX, cellY, cellW, null);
+            scene.add(new SceneNode(id + "[" + i + "]:index", SceneNode.Kind.TEXT, cellX + cellW + 4, cellY, indexW - 4, Style.CELL_H,
+                    String.valueOf(i), null));
+        }
+        java.util.Map<Integer, Double> used = new java.util.HashMap<>();
+        for (RenderContext.Marker marker : context.markersFor(array.getId())) {
+            if (marker.axis() != RenderContext.Axis.ROW) {
+                continue;
+            }
+            String text = marker.inRange() ? marker.name() : marker.name() + "=" + marker.index();
+            double w = Style.textWidth(text, Style.MARKER_FONT) + 16;
+            int row = Math.max(-1, Math.min(length, marker.index())); // past either end: just outside the column
+            double right = cellX - 4 - used.getOrDefault(row, 0.0);
+            used.merge(row, w + 2, Double::sum);
+            scene.add(new SceneNode("idx:" + array.getId() + ":ROW:" + marker.name(), SceneNode.Kind.SIDE_MARKER, right - w,
+                    top + (length - 1 - row) * Style.CELL_H + (Style.CELL_H - Style.MARKER_H) / 2.0, w, Style.MARKER_H, text, null));
+        }
+        // a top past the last cell (a full stack) or at -1 (an empty one) sits a row outside the column
+        return new Dimension((int) (markerW + cellW + indexW + 4), (int) (Style.LABEL_SPACE + (length + 1) * Style.CELL_H));
     }
 
     // The same cells as the tree they stand for: cell i's children are cells 2i+1 and 2i+2, so

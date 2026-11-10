@@ -102,6 +102,18 @@ public class RenderContext {
         return markerRows.getOrDefault(arrayId, 0);
     }
 
+    // ---- stacks: an array indexed by top, drawn upright ----
+
+    private final java.util.Set<Long> stacks = new java.util.HashSet<>();
+
+    public void markStack(long arrayId) {
+        stacks.add(arrayId);
+    }
+
+    public boolean isStack(long arrayId) {
+        return stacks.contains(arrayId);
+    }
+
     // ---- heaps: an array that is also drawn as the tree it stands for ----
 
     private final Map<Long, Integer> heapDepth = new HashMap<>(); // heap array id → deepest level it ever has

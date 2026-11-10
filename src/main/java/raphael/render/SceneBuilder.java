@@ -68,6 +68,7 @@ public class SceneBuilder {
     public SceneBuilder(String source) {
         this.indexes = new IndexUsage(source);
         this.heapNames = heapArrays(source);
+        this.stackNames = stackArrays(source);
     }
 
     // A program of several files: path → text. A step's line is read from the file it's in.
@@ -79,6 +80,20 @@ public class SceneBuilder {
         }
         this.indexes = new IndexUsage(all.toString());
         this.heapNames = heapArrays(all.toString());
+        this.stackNames = stackArrays(all.toString());
+    }
+
+    private final Set<String> stackNames; // arrays the code indexes with top: a stack
+
+    private static Set<String> stackArrays(String source) {
+        Set<String> arrays = new HashSet<>();
+        java.util.regex.Matcher m = INDEXED.matcher(source);
+        while (m.find()) {
+            if (Pattern.compile("\\btop\\b").matcher(m.group(2)).find()) {
+                arrays.add(m.group(1));
+            }
+        }
+        return arrays;
     }
 
     // ---- heaps ----
@@ -122,6 +137,9 @@ public class SceneBuilder {
             Map<String, Value> visible = visibleVariables(snapshot);
             for (Map.Entry<String, Value> named : visible.entrySet()) {
                 ArrayNode array = arrayOf(snapshot, named.getValue());
+                if (array != null && stackNames.contains(named.getKey()) && !array.getElementType().endsWith("[]")) {
+                    context.markStack(array.getId());
+                }
                 if (array != null && heapNames.contains(named.getKey()) && !array.getElements().isEmpty()
                         && array.getElements().get(0) instanceof PrimitiveValue) {
                     context.markHeap(array.getId(), array.getLength());
