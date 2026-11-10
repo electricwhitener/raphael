@@ -121,10 +121,12 @@ public class SourceCompiler {
             // As soon as javac has worked out what each file's names mean, FactScanner reads its
             // syntax tree into the facts: no second compile is needed.
             com.sun.source.util.Trees trees = com.sun.source.util.Trees.instance(task);
+            java.util.Set<com.sun.source.tree.CompilationUnitTree> scanned = new java.util.HashSet<>(); // javac says it for each class
             task.addTaskListener(new com.sun.source.util.TaskListener() {
                 @Override
                 public void finished(com.sun.source.util.TaskEvent event) {
-                    if (event.getKind() == com.sun.source.util.TaskEvent.Kind.ANALYZE && event.getCompilationUnit() != null) {
+                    if (event.getKind() == com.sun.source.util.TaskEvent.Kind.ANALYZE && event.getCompilationUnit() != null
+                            && scanned.add(event.getCompilationUnit())) { // each file once, though javac reports each class
                         SourceFile from = written.get(Path.of(event.getSourceFile().toUri()));
                         raphael.analysis.FactScanner.scan(facts, trees, event.getCompilationUnit(), from == null ? null : from.path());
                     }
