@@ -2,6 +2,10 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## 1.1.1 (2026-11-10)
+
+- Fix: in a program of one file, the line about to run wasn't marked in the code while stepping, and clicking a line number did nothing.
+
 ## 1.1.0 (2026-11-10)
 
 **Works like an IDE**

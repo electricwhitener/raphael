@@ -54,7 +54,7 @@ public class SourceCompiler {
         Map<Path, SourceFile> written = new LinkedHashMap<>();
         write(file, withoutFileRules(source, topLevel));
         written.put(file, null); // one text with no file of its own: its errors have no file name
-        Map<String, String> sourceFiles = Map.of(className + ".java", className + ".java");
+        Map<String, String> sourceFiles = Map.of(); // one file: its frames have no file name (null), like the editor's one text
         return compileFiles(written, dir.resolve("classes"), className, sourceFiles);
     }
 
