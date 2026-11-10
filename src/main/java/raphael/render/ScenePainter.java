@@ -239,7 +239,7 @@ public class ScenePainter {
         if (dx == 0 && dy == 0) {
             return new Point2D.Double(cx, cy);
         }
-        if (node.kind() == SceneNode.Kind.CIRCLE) {
+        if (node.kind() == SceneNode.Kind.CIRCLE || node.kind() == SceneNode.Kind.RED_NODE || node.kind() == SceneNode.Kind.BLACK_NODE) {
             double length = Math.hypot(dx, dy);
             return new Point2D.Double(cx + dx / length * node.w() / 2, cy + dy / length * node.h() / 2);
         }
@@ -295,6 +295,17 @@ public class ScenePainter {
                 g.setStroke(HAIR);
                 g.draw(circle);
                 value(g, node, circle, alpha);
+            }
+            case RED_NODE, BLACK_NODE -> {
+                boolean red = node.kind() == SceneNode.Kind.RED_NODE;
+                Ellipse2D circle = new Ellipse2D.Double(node.x() + 0.5, node.y() + 0.5, node.w(), node.h());
+                setAlpha(g, alpha);
+                g.setColor(blend(red ? Style.NODE_RED : Style.NODE_BLACK, Style.CHANGE, look.flash()));
+                g.fill(circle);
+                g.setColor(red ? Style.NODE_RED_EDGE : Style.OUTLINE);
+                g.setStroke(HAIR);
+                g.draw(circle);
+                value(g, node, circle, alpha, red ? Style.NODE_RED_INK : Style.NODE_BLACK_INK);
             }
             case OBJECT -> object(g, node, box, alpha);
             case FIELD -> {
@@ -360,19 +371,23 @@ public class ScenePainter {
     // The value inside a cell or node. While it changes, the old value rolls up and out and the
     // new one rolls in from below (clipped to the shape, like a counter).
     private void value(Graphics2D g, SceneNode node, Shape clip, double alpha) {
+        value(g, node, clip, alpha, Style.INK);
+    }
+
+    private void value(Graphics2D g, SceneNode node, Shape clip, double alpha, Color ink) {
         SceneNode.Look look = node.look();
         double cx = node.centerX();
         double cy = node.centerY();
         if (look.oldText() == null || look.roll() >= 0.999) {
-            text(g, node.text(), Style.VALUE_FONT, Style.INK, cx, cy, alpha);
+            text(g, node.text(), Style.VALUE_FONT, ink, cx, cy, alpha);
             return;
         }
         Shape savedClip = g.getClip();
         g.clip(clip);
         double roll = Math.max(0, Math.min(1, look.roll()));
         double shift = node.h() * 0.6;
-        text(g, look.oldText(), Style.VALUE_FONT, Style.INK, cx, cy - shift * roll, alpha * (1 - roll));
-        text(g, node.text(), Style.VALUE_FONT, Style.INK, cx, cy + shift * (1 - roll), alpha * roll);
+        text(g, look.oldText(), Style.VALUE_FONT, ink, cx, cy - shift * roll, alpha * (1 - roll));
+        text(g, node.text(), Style.VALUE_FONT, ink, cx, cy + shift * (1 - roll), alpha * roll);
         g.setClip(savedClip);
     }
 

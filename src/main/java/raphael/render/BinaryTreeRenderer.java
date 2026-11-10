@@ -40,8 +40,18 @@ public class BinaryTreeRenderer extends StructureRenderer {
             long id = inOrder.get(i);
             int d = depth.get(id);
             maxDepth = Math.max(maxDepth, d);
-            scene.add(new SceneNode(key(id), SceneNode.Kind.CIRCLE, x + i * (size + Style.TREE_X_GAP),
-                    top + d * Style.TREE_LEVEL_H, size, size, tree.getLabel(id), null));
+            raphael.model.ObjectNode node = tree.getNode(id);
+            String tone = raphael.detect.LinkedStructure.toneOf(node);
+            SceneNode.Kind kind = "red".equals(tone) ? SceneNode.Kind.RED_NODE : "black".equals(tone) ? SceneNode.Kind.BLACK_NODE
+                    : SceneNode.Kind.CIRCLE;
+            double nx = x + i * (size + Style.TREE_X_GAP);
+            double ny = top + d * Style.TREE_LEVEL_H;
+            scene.add(new SceneNode(key(id), kind, nx, ny, size, size, tree.getLabel(id), null));
+            String caption = raphael.detect.LinkedStructure.captionOf(node); // an AVL node's height, under it
+            if (caption != null) {
+                scene.add(new SceneNode(key(id) + ":h", SceneNode.Kind.TEXT, nx - 6, ny + size + 1, size + 12, Style.CAPTION_H,
+                        caption, null));
+            }
         }
         for (long id : inOrder) {
             addLink(scene, id, "left", tree.getLeft(id));

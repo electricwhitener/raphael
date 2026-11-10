@@ -116,7 +116,7 @@ public class StructureDetector {
     private ClassShape shapeOf(ObjectNode node) {
         List<String> links = new ArrayList<>();
         for (String field : node.getFields().keySet()) {
-            if (node.getTypeName().equals(node.getFieldType(field))) {
+            if (node.getTypeName().equals(node.getFieldType(field)) && !LinkedStructure.isBackLink(field)) {
                 links.add(field);
             }
         }

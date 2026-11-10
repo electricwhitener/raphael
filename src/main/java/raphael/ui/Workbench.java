@@ -299,6 +299,11 @@ public class Workbench extends JPanel {
     }
 
     private static VisualPanel.View bestView(raphael.analysis.CodeFacts facts) {
+        for (raphael.analysis.CodeFacts.FieldFact field : facts.fields()) {
+            if (field.type().equals(field.className()) || field.type().equals(field.className() + "[]")) {
+                return VisualPanel.View.PICTURE; // a node class: a list or tree, which the picture draws
+            }
+        }
         if (facts.hasRecursion()) {
             return VisualPanel.View.CALLS;
         }

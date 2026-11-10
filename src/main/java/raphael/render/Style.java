@@ -99,6 +99,13 @@ public final class Style {
     public static Color CONTROL_BORDER; // edges of fields and buttons (3:1 against the background, as WCAG asks)
     public static Color ICON_DISABLED; // an icon on a button that can't be used now
     public static Color FILL;          // inside a cell
+    // Red-black tree nodes. The red is a soft rose with dark text, so it can't be mistaken for
+    // the red of an error; the black is a dark fill with light text, in both themes.
+    public static Color NODE_RED;
+    public static Color NODE_RED_EDGE;
+    public static Color NODE_RED_INK;
+    public static Color NODE_BLACK;
+    public static Color NODE_BLACK_INK;
     public static Color FILL_ALT;      // pointer slots, title bars
     public static Color ACCENT;        // variables, the next line
     public static Color ACCENT_PRESSED; // the run button under the mouse
@@ -172,6 +179,11 @@ public final class Style {
         ICON_DISABLED = pick(0xBBC2CA, 0x4A525C);
         ON_ACCENT = pick(0xFFFFFF, 0x0D1117);
         FILL = pick(0xFFFFFF, 0x161B22);
+        NODE_RED = pick(0xF9D3D8, 0x5C2630);
+        NODE_RED_EDGE = pick(0xC9707E, 0xC9707E);
+        NODE_RED_INK = pick(0x5C1621, 0xFFE1E5);
+        NODE_BLACK = pick(0x2D333B, 0x000000);
+        NODE_BLACK_INK = pick(0xFFFFFF, 0xE6EDF3);
         FILL_ALT = pick(0xF6F8FA, 0x21262D);
         ACCENT = pick(0x0969DA, 0x4493F8);
         ACCENT_PRESSED = pick(0x0757B3, 0x1F6FEB);

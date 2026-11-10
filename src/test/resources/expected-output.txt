@@ -1454,3 +1454,12 @@ Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 3 out
 Exception in thread "main" java.lang.NullPointerException: Cannot read field "val" because "curr" is null
 	at NullNode.main(NullNode.java:20)
 
+## trees/AVLInsert
+root 20, height 4
+
+## trees/RedBlackLLRB
+root 20
+
+## trees/RedBlackCLRS
+root 38 (B)
+

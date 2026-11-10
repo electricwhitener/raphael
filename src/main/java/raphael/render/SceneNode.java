@@ -14,6 +14,8 @@ public record SceneNode(String key, Kind kind, double x, double y, double w, dou
         NULL_SLOT,   // a pointer slot holding null, drawn with a slash
         BOX,         // the value part of a linked-list node
         CIRCLE,      // a tree node
+        RED_NODE,    // a red-black tree's red node (a soft rose, not the red of an error)
+        BLACK_NODE,  // a red-black tree's black node
         OBJECT,      // a plain object: the box and its class name
         FIELD,       // one field line inside a plain object, so only a field that changed flashes
         TEXT,        // plain grey text, e.g. row numbers

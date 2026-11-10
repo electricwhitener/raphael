@@ -145,6 +145,9 @@ trees/Postorder | Postorder traversal | Left, right, node: children before their
 trees/LevelOrder | Level order (BFS) | A queue visits the tree level by level.
 trees/TreeHeight | Height and size | Two recursive counts over the whole tree.
 trees/Trie | Trie | Words stored letter by letter, sharing their prefixes.
+trees/AVLInsert | AVL insert | Heights kept in each node, and the LL, RR, LR and RL rotations.
+trees/RedBlackLLRB | Red-black tree (left-leaning) | Rotate left, rotate right, flip colours, on the way back up.
+trees/RedBlackCLRS | Red-black tree (CLRS) | Insert red, then fix cases 1, 2 and 3 going up, with parent links.
 trees/BTreeInsert | B-tree insert | Full nodes split, and the middle key moves up.
 
 # Heaps and hashing
