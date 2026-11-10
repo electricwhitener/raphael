@@ -135,6 +135,10 @@ public class StructureDetector {
     }
 
     private ClassShape shapeOf(ObjectNode node) {
+        ClassShape multiway = multiwayShapeOf(node);
+        if (multiway.shape() == Shape.MULTIWAY) {
+            return multiway; // a children array decides, even beside a next link (a B+ tree's leaves)
+        }
         List<String> links = new ArrayList<>();
         for (String field : node.getFields().keySet()) {
             if (node.getTypeName().equals(node.getFieldType(field)) && !LinkedStructure.isBackLink(field)) {
@@ -239,7 +243,14 @@ public class StructureDetector {
                     stack.push(children.get(i));
                 }
             }
-            trees.add(new MultiwayTreeStructure(nodes, arrays, root, shape.firstLink(), shape.secondLink(), shape.third()));
+            MultiwayTreeStructure tree = new MultiwayTreeStructure(nodes, arrays, root, shape.firstLink(), shape.secondLink(), shape.third());
+            ObjectNode any = nodes.values().iterator().next();
+            for (String field : any.getFields().keySet()) { // a B+ tree's leaves link to the next leaf
+                if (any.getTypeName().equals(any.getFieldType(field)) && !LinkedStructure.isBackLink(field)) {
+                    tree.setLeafLink(field);
+                }
+            }
+            trees.add(tree);
         }
         return trees;
     }

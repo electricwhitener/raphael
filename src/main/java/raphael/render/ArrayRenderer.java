@@ -59,6 +59,11 @@ public class ArrayRenderer extends StructureRenderer {
         int markerRoom = context.markerRows(array.getId()) * Style.MARKER_H;
         width = Math.max(width, context.longestLength(array.getId()) * cellW); // room to grow into
         int height = Style.LABEL_SPACE + Style.CELL_H + Style.CAPTION_H + markerRoom;
+        if (context.isForest(array.getId())) {
+            Dimension forest = addForest(scene, array, x, top + height - Style.LABEL_SPACE + Style.HEAP_GAP);
+            width = Math.max(width, forest.width);
+            height += Style.HEAP_GAP + forest.height;
+        }
         if (context.isHeap(array.getId())) {
             Dimension tree = addHeapTree(scene, array, x, top + height - Style.LABEL_SPACE + Style.HEAP_GAP);
             width = Math.max(width, tree.width);
@@ -104,6 +109,76 @@ public class ArrayRenderer extends StructureRenderer {
         }
         // a top past the last cell (a full stack) or at -1 (an empty one) sits a row outside the column
         return new Dimension((int) (markerW + cellW + indexW + 4), (int) (Style.LABEL_SPACE + (length + 1) * Style.CELL_H));
+    }
+
+    // A parent array (union-find) as the forest it stands for: a cell that is its own parent is a
+    // root, and every other cell hangs under its parent. Each tree's leaves take the next slots
+    // along, and a parent sits over its children, so path compression shows as nodes moving up.
+    private Dimension addForest(Scene scene, ArrayNode array, double x, double top) {
+        int n = array.getElements().size();
+        int[] parent = new int[n];
+        for (int i = 0; i < n; i++) {
+            try {
+                parent[i] = Integer.parseInt(array.getElements().get(i).display());
+            } catch (NumberFormatException notAnIndex) {
+                parent[i] = i;
+            }
+            if (parent[i] < 0 || parent[i] >= n) {
+                parent[i] = i;
+            }
+        }
+        java.util.List<java.util.List<Integer>> children = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            children.add(new java.util.ArrayList<>());
+        }
+        for (int i = 0; i < n; i++) {
+            if (parent[i] != i) {
+                children.get(parent[i]).add(i);
+            }
+        }
+        double size = Style.CIRCLE;
+        double slot = size + Style.TREE_X_GAP;
+        double[] at = new double[n];
+        int[] depth = new int[n];
+        double[] next = {0};
+        int deepest = 0;
+        boolean[] placed = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            if (parent[i] == i) {
+                deepest = Math.max(deepest, place(i, 0, children, at, depth, next, slot, placed));
+            }
+        }
+        String id = key(array.getId());
+        for (int i = 0; i < n; i++) {
+            if (!placed[i]) {
+                continue; // in a loop of parents (a bug in the program): not part of any tree
+            }
+            scene.add(new SceneNode("forest:" + id + "[" + i + "]", SceneNode.Kind.CIRCLE, x + at[i], top + depth[i] * Style.HEAP_LEVEL_H,
+                    size, size, String.valueOf(i), null));
+            if (parent[i] != i) {
+                scene.add(new SceneEdge("forest:" + id + "~" + i, "forest:" + id + "[" + parent[i] + "]", "forest:" + id + "[" + i + "]",
+                        SceneEdge.Kind.TREE));
+            }
+        }
+        return new Dimension((int) Math.max(next[0], slot), (int) (deepest * Style.HEAP_LEVEL_H + size));
+    }
+
+    private static int place(int node, int level, java.util.List<java.util.List<Integer>> children, double[] at, int[] depth,
+                             double[] next, double slot, boolean[] placed) {
+        placed[node] = true;
+        depth[node] = level;
+        int deepest = level;
+        java.util.List<Integer> kids = children.get(node);
+        if (kids.isEmpty()) {
+            at[node] = next[0];
+            next[0] += slot;
+            return level;
+        }
+        for (int kid : kids) {
+            deepest = Math.max(deepest, place(kid, level + 1, children, at, depth, next, slot, placed));
+        }
+        at[node] = (at[kids.get(0)] + at[kids.get(kids.size() - 1)]) / 2;
+        return deepest;
     }
 
     // The same cells as the tree they stand for: cell i's children are cells 2i+1 and 2i+2, so

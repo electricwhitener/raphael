@@ -139,6 +139,18 @@ public class RenderContext {
         return graphStates.getOrDefault(gridId, GraphState.NONE);
     }
 
+    // ---- forests: a parent array (union-find), drawn as the trees it stands for ----
+
+    private final java.util.Set<Long> forests = new java.util.HashSet<>();
+
+    public void markForest(long arrayId) {
+        forests.add(arrayId);
+    }
+
+    public boolean isForest(long arrayId) {
+        return forests.contains(arrayId);
+    }
+
     // ---- stacks: an array indexed by top, drawn upright ----
 
     private final java.util.Set<Long> stacks = new java.util.HashSet<>();

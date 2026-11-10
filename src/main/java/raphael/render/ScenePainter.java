@@ -182,6 +182,18 @@ public class ScenePainter {
                     ex - (ex - sx) * 0.25, ey - (ey - sy) * 0.25, ex, ey), below);
         }
         double sameRow = clamp(1 - (Math.abs(to.centerY() - from.centerY()) - 10) / 20);
+        if (kind == SceneEdge.Kind.PREV_ARROW) {
+            // A prev arrow normally points left, to the node before: straight. One pointing right
+            // wraps round (a circular list's head.prev, to the tail), so it goes over the row,
+            // while the tail's next comes back under it.
+            double wraps = sameRow * clamp((to.centerX() - from.centerX() + 10) / 20);
+            if (wraps <= 0) {
+                return straight;
+            }
+            double high = Math.min(from.y(), to.y()) - 30;
+            Curve over = new Curve(sx, sy, sx, high, to.centerX(), high, to.centerX(), to.y());
+            return straight.towards(over, wraps);
+        }
         double backwards = clamp((from.centerX() - to.centerX() + 10) / 20);
         double bend = sameRow * backwards;
         if (bend <= 0) {

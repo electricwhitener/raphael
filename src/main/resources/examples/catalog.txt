@@ -149,6 +149,7 @@ trees/AVLInsert | AVL insert | Heights kept in each node, and the LL, RR, LR and
 trees/RedBlackLLRB | Red-black tree (left-leaning) | Rotate left, rotate right, flip colours, on the way back up.
 trees/RedBlackCLRS | Red-black tree (CLRS) | Insert red, then fix cases 1, 2 and 3 going up, with parent links.
 trees/BTreeInsert | B-tree insert | Full nodes split, and the middle key moves up.
+trees/BPlusTree | B+ tree | Every key in a leaf, leaves linked in order, and a range read along them.
 
 # Heaps and hashing
 hashing/MinHeap | Min-heap | Sift up on insert, sift down on removing the smallest.
@@ -163,6 +164,7 @@ graphs/DFSStack | DFS with a stack | The same search with an explicit stack inst
 graphs/ShortestPath | Shortest path (BFS) | Distances from the start, one edge at a time.
 graphs/Dijkstra | Dijkstra | Shortest paths when edges have weights.
 graphs/TopologicalSort | Topological sort | An order where every task comes after the ones it needs.
+graphs/UnionFind | Union-find | Sets as trees in a parent array, with path compression and union by rank.
 
 ## Practice
 

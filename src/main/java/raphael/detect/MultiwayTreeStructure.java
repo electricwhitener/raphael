@@ -36,6 +36,17 @@ public class MultiwayTreeStructure extends LinkedStructure {
         this.countField = countField;
     }
 
+    private String leafLink; // a B+ tree's link from each leaf to the next, or null
+
+    public void setLeafLink(String field) {
+        this.leafLink = field;
+    }
+
+    // The node this one links to as the next leaf (B+ tree), or -1.
+    public long getLeafNext(long id) {
+        return leafLink == null ? -1 : follow(id, leafLink);
+    }
+
     public long getRoot() {
         return root;
     }

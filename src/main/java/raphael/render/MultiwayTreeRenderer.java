@@ -92,7 +92,7 @@ public class MultiwayTreeRenderer extends StructureRenderer {
         }
         if (children.isEmpty()) {
             xs.put(id, cursor);
-            cursor += width + Style.SUBTREE_GAP;
+            cursor += width + Style.SUBTREE_GAP + (tree.getLeafNext(id) != -1 ? Style.SLOT_W + 22 : 0); // room for the leaf link
             return subtree;
         }
         for (long child : children) {
@@ -141,6 +141,12 @@ public class MultiwayTreeRenderer extends StructureRenderer {
 
     private void drawNode(Scene scene, long id, double x, double y) {
         double width = nodeWidth(id);
+        long nextLeaf = tree.getLeafNext(id);
+        if (nextLeaf != -1) { // B+ tree: a slot at the leaf's right end, pointing at the next leaf
+            String slot = key(id) + ".leafnext";
+            scene.add(new SceneNode(slot, SceneNode.Kind.SLOT, x + width, y, Style.SLOT_W, Style.CELL_H, "", null));
+            scene.add(new SceneEdge(slot + "→", slot, key(nextLeaf), SceneEdge.Kind.ARROW));
+        }
         // An invisible outline of the node, for labels (like "root") and parent arrows to point at.
         scene.add(new SceneNode(key(id), SceneNode.Kind.FRAME, x, y, width, Style.CELL_H, "", null));
         ArrayNode keys = tree.getKeysArray(id);

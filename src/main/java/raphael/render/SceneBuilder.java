@@ -85,6 +85,20 @@ public class SceneBuilder {
 
     private final Set<String> stackNames; // arrays the code indexes with top: a stack
 
+    // An int array whose every value is an index into itself.
+    private static boolean isParentArray(ArrayNode array) {
+        if (!array.getElementType().equals("int") || array.getElements().isEmpty()) {
+            return false;
+        }
+        for (Value value : array.getElements()) {
+            Integer v = intOf(value);
+            if (v == null || v < 0 || v >= array.getElements().size()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ---- graphs ----
 
     private static final Set<String> GRAPH_NAMES = Set.of("adj", "graph", "g", "adjacency", "neighbours", "neighbors",
@@ -205,6 +219,10 @@ public class SceneBuilder {
             Map<String, Value> visible = visibleVariables(snapshot);
             for (Map.Entry<String, Value> named : visible.entrySet()) {
                 ArrayNode array = arrayOf(snapshot, named.getValue());
+                String plain = named.getKey().substring(named.getKey().lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT);
+                if (array != null && (plain.equals("parent") || plain.equals("par")) && isParentArray(array)) {
+                    context.markForest(array.getId()); // union-find: a parent array of indexes
+                }
                 if (array != null && stackNames.contains(named.getKey()) && !array.getElementType().endsWith("[]")) {
                     context.markStack(array.getId());
                 }
