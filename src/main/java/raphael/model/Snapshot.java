@@ -21,6 +21,11 @@ public class Snapshot implements Serializable {
     private final String exception;            // null unless the program crashed at this step
     private final ThrownException thrown;      // an exception caught just before this step, or null
     private final Map<String, String> files;   // the text files in the program's folder: name → contents
+    private final List<Exit> exits;            // methods that returned since the step before, in order (null in old recordings)
+    private final List<FieldWrite> writes;     // fields written since the step before, at most WRITES_KEPT (null in old recordings)
+    private final int writesLeftOut;           // how many more writes there were
+
+    public static final int WRITES_KEPT = 50;
 
     public Snapshot(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> statics,
                     int outputLength, String exception) {
@@ -37,6 +42,16 @@ public class Snapshot implements Serializable {
     // map is passed in for every step where nothing changed, so it's stored once, not copied.
     public Snapshot(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> statics,
                     int outputLength, String exception, ThrownException thrown, Map<String, String> files) {
+        this(frames, heap, statics, outputLength, exception, thrown, files, List.of(), List.of(), 0);
+    }
+
+    // exits and writes: what happened between the step before and this one (see Exit, FieldWrite).
+    public Snapshot(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> statics,
+                    int outputLength, String exception, ThrownException thrown, Map<String, String> files,
+                    List<Exit> exits, List<FieldWrite> writes, int writesLeftOut) {
+        this.exits = List.copyOf(exits);
+        this.writes = List.copyOf(writes);
+        this.writesLeftOut = writesLeftOut;
         this.thrown = thrown;
         this.files = files;
         this.frames = List.copyOf(frames);
@@ -75,6 +90,20 @@ public class Snapshot implements Serializable {
 
     public int getOutputLength() {
         return outputLength;
+    }
+
+    // The methods that returned since the step before, oldest first; empty if none (or in an old recording).
+    public List<Exit> getExits() {
+        return exits == null ? List.of() : exits;
+    }
+
+    // The fields written since the step before; empty if none (or in an old recording).
+    public List<FieldWrite> getWrites() {
+        return writes == null ? List.of() : writes;
+    }
+
+    public int getWritesLeftOut() {
+        return writesLeftOut;
     }
 
     public ThrownException getThrown() {

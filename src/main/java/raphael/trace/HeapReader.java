@@ -118,6 +118,13 @@ public class HeapReader {
     // files: the files in the program's folder at this step (see RunFolder).
     public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception, ThrownException thrown,
                             java.util.Map<String, String> files) {
+        return capture(thread, outputLength, exception, thrown, files, List.of(), List.of(), 0);
+    }
+
+    // exits and writes: what happened since the step before (see JdiTracer.Run).
+    public Snapshot capture(ThreadReference thread, IntSupplier outputLength, String exception, ThrownException thrown,
+                            java.util.Map<String, String> files, List<raphael.model.Exit> exits,
+                            List<raphael.model.FieldWrite> writes, int writesLeftOut) {
         this.thread = thread;
         Deque<ObjectReference> toVisit = new ArrayDeque<>();
         List<FrameSnapshot> frames = readFrames(thread, toVisit);
@@ -130,7 +137,7 @@ public class HeapReader {
                 heap.put(object.uniqueID(), readObject(object, toVisit));
             }
         }
-        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception, thrown, files);
+        return new Snapshot(frames, heap, statics, outputLength.getAsInt(), exception, thrown, files, exits, writes, writesLeftOut);
     }
 
     private List<FrameSnapshot> readFrames(ThreadReference thread, Deque<ObjectReference> toVisit) {
@@ -374,6 +381,36 @@ public class HeapReader {
     }
 
     // Turns a JDI value into a Raphael Value. Objects we should draw are queued for the BFS.
+    // A value from an event that doesn't pause the program (a return, a field write): only what
+    // can't change is read (numbers, characters, strings, boxed numbers); any other object is
+    // kept as its id, which the next step's picture knows.
+    static Value plainValue(com.sun.jdi.Value value) {
+        if (value == null) {
+            return NullValue.INSTANCE;
+        }
+        if (value instanceof CharValue) {
+            return new PrimitiveValue(charLiteral(((CharValue) value).value()));
+        }
+        if (value instanceof com.sun.jdi.PrimitiveValue) {
+            return new PrimitiveValue(value.toString());
+        }
+        if (value instanceof StringReference) {
+            return new PrimitiveValue(quote(((StringReference) value).value()));
+        }
+        ObjectReference object = (ObjectReference) value;
+        try {
+            if (BOXED_TYPES.contains(object.referenceType().name())) {
+                com.sun.jdi.Field inside = object.referenceType().fieldByName("value");
+                if (inside != null) {
+                    return plainValue(object.getValue(inside));
+                }
+            }
+        } catch (com.sun.jdi.ObjectCollectedException e) {
+            return NullValue.INSTANCE; // gone already
+        }
+        return new ReferenceValue(object.uniqueID());
+    }
+
     private Value toValue(com.sun.jdi.Value value, Deque<ObjectReference> toVisit) {
         if (value == null) {
             return NullValue.INSTANCE;

@@ -100,6 +100,25 @@ class WorkbenchTest {
         assertTrue(host.changes > 0, "the window was told when the runs started and ended");
     }
 
+    // After a run, the editor marks the line about to run. (In 1.1.0 a program of one file had a
+    // file name in its frames that the editor didn't know, so no line was marked.)
+    @Test
+    void theEditorMarksTheRunningLine() throws Exception {
+        FakeHost host = new FakeHost();
+        Workbench[] program = new Workbench[1];
+        SwingUtilities.invokeAndWait(() -> {
+            program[0] = new Workbench(host);
+            program[0].showCode(COUNT_TO.formatted(2), null, "two");
+            program[0].run();
+        });
+        waitUntilDone(program);
+        SwingUtilities.invokeAndWait(() -> {
+            TraceModel model = program[0].getModel();
+            model.setStep(1);
+            assertEquals(model.getSnapshot().getLine(), program[0].getCode().markedLine());
+        });
+    }
+
     // Code that doesn't compile shows its errors in its own program, and nothing is recorded.
     @Test
     void aCompileErrorStaysInItsProgram() throws Exception {

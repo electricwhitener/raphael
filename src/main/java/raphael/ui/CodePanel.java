@@ -532,6 +532,11 @@ public class CodePanel extends JPanel implements TraceListener {
         }
     }
 
+    // The line marked as about to run (-1 for none), for the tests.
+    int markedLine() {
+        return lineNumbers.current;
+    }
+
     // The text box itself, for the tests.
     JTextArea getEditor() {
         return editor;

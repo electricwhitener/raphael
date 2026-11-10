@@ -93,4 +93,19 @@ class MultiFileTraceTest {
         assertTrue(trace.size() >= 3, "a step for each line: " + trace.size());
         assertEquals("raphael/demo/Hello.java", trace.get(0).getFrames().get(0).getFile());
     }
+
+    // A program of one file has no file names in its frames, which is what the editor's one text
+    // and the syntax-tree facts use too (null). With a name there, the editor marked no line.
+    @Test
+    void aProgramOfOneFileHasNoFileNames() throws Exception {
+        CompileResult program = new SourceCompiler().compile("""
+                public class One {
+                    public static void main(String[] args) {
+                        int x = 1;
+                    }
+                }
+                """);
+        Trace trace = new JdiTracer().trace(program);
+        assertEquals(null, trace.get(0).getFrames().get(0).getFile());
+    }
 }

@@ -71,6 +71,7 @@ public class JdiTracer implements Tracer {
     private volatile List<Path> inputFiles = List.of();
     private static final int START_TIMEOUT_MS = 20_000; // a program that hasn't connected by then never will
     boolean remember = true; // tests turn this off to check that remembering objects changes nothing
+    boolean recordExits = true; // the timing check turns this off, to see what recording returns costs
     int lastObjectsRead;     // how many objects the last run read from the program, for tests
 
     // When Raphael quits, Java runs this hook on its way out. It ends every program Raphael
@@ -88,6 +89,8 @@ public class JdiTracer implements Tracer {
         try (RunFolder folder = new RunFolder(inputFiles)) {
             Launched launched = launch(program, runLimits, folder.path());
             current = new Run(launched.vm(), launched.process(), folder, runLimits, remember, program.sourceFiles());
+            current.recordExits = recordExits;
+            current.facts = program.facts();
             try {
                 return current.record(input);
             } finally {
@@ -239,6 +242,19 @@ public class JdiTracer implements Tracer {
         private String endMessage = "Program finished.";
         private ThreadReference firstThread; // the thread of the first step
         private ThrownException justCaught;  // shown on the next step, the first line of its catch
+        boolean recordExits = true;
+        raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
+        // Method-exit events make Java run the program without its fast compiled code, Java's
+        // own library included, while they're on. So they're off while the JVM starts, and off
+        // during a line of main that only calls Java's own methods (Collections.sort(list) would
+        // take seconds instead of a fraction of one); they're on for every other line. See exitsFor().
+        private com.sun.jdi.request.MethodExitRequest returns;
+        private boolean returnsOn;
+        // Since the step before: the student's methods that returned, and the fields written.
+        // Both come from events that don't pause the program, and go on the next step.
+        private final List<raphael.model.Exit> exits = new ArrayList<>();
+        private final List<raphael.model.FieldWrite> writes = new ArrayList<>();
+        private int writesLeftOut;
         private volatile boolean stopRequested;
         private volatile int steps;
 
@@ -274,6 +290,18 @@ public class JdiTracer implements Tracer {
             // one the student's code throws or catches is shown on the step its catch begins.
             ExceptionRequest exceptions = requests.createExceptionRequest(null, true, true);
             exceptions.enable();
+            // ...and each time one of the student's methods returns, with what it returned, so a
+            // return inside one line (return n * factorial(n - 1)) isn't lost. SUSPEND_NONE: the
+            // program doesn't stop for these. (Class filters would all have to match at once, so
+            // Java's own classes are left out with exclusion filters instead.)
+            if (recordExits && vm.canGetMethodReturnValues()) {
+                returns = requests.createMethodExitRequest();
+                for (String prefix : JDK_PACKAGES) {
+                    returns.addClassExclusionFilter(prefix + "*");
+                }
+                returns.addClassExclusionFilter(AGENT_CLASS + "*");
+                returns.setSuspendPolicy(EventRequest.SUSPEND_NONE); // switched on at the first line (exitsFor)
+            }
 
             try {
                 // The program starts paused, and the first event ("the VM started") releases it.
@@ -342,10 +370,86 @@ public class JdiTracer implements Tracer {
                     caught(exception);
                 }
             } else if (event instanceof ModificationWatchpointEvent) {
-                ObjectReference object = ((ModificationWatchpointEvent) event).object();
+                ModificationWatchpointEvent write = (ModificationWatchpointEvent) event;
+                ObjectReference object = write.object();
                 if (object != null) {
                     reader.fieldWritten(object);
                 }
+                fieldWritten(write);
+            } else if (event instanceof com.sun.jdi.event.MethodExitEvent) {
+                returned((com.sun.jdi.event.MethodExitEvent) event);
+            }
+        }
+
+        // Switches the method-exit events on or off for the line about to run: off for a line of
+        // main that only calls Java's own methods (Collections.sort(list)), on otherwise.
+        private void exitsFor(Snapshot step) {
+            if (returns == null || step.getFrames().isEmpty()) {
+                return;
+            }
+            raphael.model.FrameSnapshot top = step.getFrames().get(0);
+            boolean onlyJava = false;
+            java.util.List<raphael.analysis.CodeFacts.CallFact> calls = facts.callsAt(top.getFile(), top.getLine());
+            if (!calls.isEmpty()) {
+                onlyJava = true;
+                for (raphael.analysis.CodeFacts.CallFact call : calls) {
+                    if (call.declaringClass() == null || isStudentClass(call.declaringClass())) {
+                        onlyJava = false;
+                    }
+                }
+            }
+            // Only main's lines are switched off: inside any other method a return could happen on
+            // the line, and its exit must be heard (a constructor's hidden super() counts as a Java call).
+            boolean want = !onlyJava || !top.getMethodName().equals("main");
+            if (want != returnsOn) {
+                returnsOn = want;
+                returns.setEnabled(want);
+            }
+        }
+
+        private boolean isStudentClass(String simpleName) {
+            for (raphael.analysis.CodeFacts.MethodFact method : facts.methods()) {
+                if (method.className().equals(simpleName)) {
+                    return true;
+                }
+            }
+            return facts.superclasses().containsKey(simpleName) || facts.interfaces().containsKey(simpleName);
+        }
+
+        // One of the student's methods returned: kept for the next step, with its value.
+        private void returned(com.sun.jdi.event.MethodExitEvent event) {
+            Method method = event.method();
+            if (method.isBridge() || method.isSynthetic() || method.isStaticInitializer()) {
+                return; // javac's own helpers and lambdas' bodies, and a class's static set-up
+            }
+            String className = Names.simple(method.declaringType().name());
+            boolean constructor = method.isConstructor();
+            raphael.model.Value value = null;
+            if (!constructor && !method.returnTypeName().equals("void")) {
+                try {
+                    value = HeapReader.plainValue(event.returnValue());
+                } catch (UnsupportedOperationException | com.sun.jdi.ObjectCollectedException e) {
+                    value = null; // the value is gone; the return is still known
+                }
+            }
+            exits.add(new raphael.model.Exit(className, constructor ? className : method.name(), value));
+        }
+
+        // A field written: kept for the next step (the first WRITES_KEPT of them), with the method
+        // and line that wrote it. The program isn't paused, so only the event's own facts are used.
+        private void fieldWritten(ModificationWatchpointEvent event) {
+            if (writes.size() >= raphael.model.Snapshot.WRITES_KEPT) {
+                writesLeftOut++;
+                return;
+            }
+            try {
+                Location at = event.location();
+                long id = event.object() == null ? -1 : event.object().uniqueID();
+                String method = at.method().isConstructor() ? Names.simple(at.declaringType().name()) : at.method().name();
+                writes.add(new raphael.model.FieldWrite(id, Names.simple(event.field().declaringType().name()),
+                        event.field().name(), HeapReader.plainValue(event.valueToBe()), method, at.lineNumber()));
+            } catch (com.sun.jdi.ObjectCollectedException e) {
+                writesLeftOut++;
             }
         }
 
@@ -360,7 +464,7 @@ public class JdiTracer implements Tracer {
             // almost nothing; they arrive in order, before the next line's breakpoint.
             if (vm.canWatchFieldModification()) {
                 for (Field field : type.fields()) {
-                    if (!field.isStatic()) {
+                    if (!field.isStatic() || recordExits) { // static fields too, for who changed them
                         ModificationWatchpointRequest watch = requests.createModificationWatchpointRequest(field);
                         watch.setSuspendPolicy(EventRequest.SUSPEND_NONE);
                         watch.enable();
@@ -389,8 +493,12 @@ public class JdiTracer implements Tracer {
             } else if (!thread.equals(firstThread)) {
                 reader.stopRemembering(); // a second thread runs the student's code
             }
-            snapshots.add(reader.capture(thread, output::length, null, justCaught, folder.files()));
+            snapshots.add(reader.capture(thread, output::length, null, justCaught, folder.files(), exits, writes, writesLeftOut));
             justCaught = null;
+            exits.clear();
+            writes.clear();
+            writesLeftOut = 0;
+            exitsFor(snapshots.get(snapshots.size() - 1));
             steps = snapshots.size();
             if (snapshots.size() >= limits.maxSteps()) {
                 String method = recursingMethod(snapshots.get(snapshots.size() - 1));
