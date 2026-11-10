@@ -29,7 +29,18 @@ public final class Phrases {
         }
         if (value instanceof ReferenceValue) {
             HeapObject object = at == null ? null : at.getObject(((ReferenceValue) value).id());
-            return object == null ? "an object" : article(Names.simple(object.getTypeName()));
+            if (object == null) {
+                return "an object";
+            }
+            String named = article(Names.simple(object.getTypeName()));
+            if (object instanceof raphael.model.ObjectNode) { // "a Node (val 8)", so two of them can be told apart
+                for (Map.Entry<String, Value> field : ((raphael.model.ObjectNode) object).getFields().entrySet()) {
+                    if (field.getValue() instanceof raphael.model.PrimitiveValue) {
+                        return named + " (" + field.getKey() + " " + field.getValue().display() + ")";
+                    }
+                }
+            }
+            return named;
         }
         return value.display();
     }

@@ -39,10 +39,11 @@ class EncapsulationConcept extends Concept {
                 CodeFacts.FieldFact field = facts.field(write.className(), write.field());
                 if (field != null && field.isPrivate() && !field.isStatic() && explained.add(write.className() + "." + write.field())) {
                     boolean constructor = write.method().equals(write.className());
+                    boolean declared = field.initialized() && write.line() == field.line(); // private int target = 20;
+                    String who = declared ? "It starts as " + Phrases.value(write.value(), now) + ", the value given where it's declared."
+                            : (constructor ? "The constructor" : write.method() + "()") + " just set it to " + Phrases.value(write.value(), now) + ".";
                     into.add(new Moment(s, "private-write", write.field() + " is private",
-                            write.field() + " is private: only " + write.className() + "'s own methods can change it. "
-                                    + (constructor ? "Its constructor" : write.method() + "()") + " just set it to "
-                                    + Phrases.value(write.value(), now) + ".",
+                            write.field() + " is private: only " + write.className() + "'s own methods can change it. " + who,
                             true, file, write.line()));
                 }
             }

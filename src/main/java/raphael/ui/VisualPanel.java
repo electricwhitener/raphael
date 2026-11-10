@@ -359,6 +359,19 @@ public class VisualPanel extends JPanel implements TraceListener {
                 lines.add(new NoteLine(line, "facts"));
             }
         }
+        if (card.explanation() != null && shortened && card.moment()) {
+            // Too little room for the whole sentence, but a moment without its sentence says nothing:
+            // its first line stays, shortened.
+            List<String> all = wrap(card.explanation(), body, inside);
+            String first = all.get(0);
+            if (all.size() > 1) {
+                while (!first.isEmpty() && body.stringWidth(first + " …") > inside) {
+                    first = first.substring(0, first.length() - 1);
+                }
+                first = first.stripTrailing() + " …";
+            }
+            lines.add(new NoteLine(first, "body"));
+        }
         if (card.explanation() != null && !shortened) {
             for (String line : wrap(card.explanation(), body, inside)) {
                 lines.add(new NoteLine(line, "body"));

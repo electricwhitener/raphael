@@ -127,7 +127,8 @@ public class FactScanner extends TreePathScanner<Void, Void> {
                     VariableTree field = (VariableTree) member;
                     Set<Modifier> flags = field.getModifiers().getFlags();
                     facts.add(new CodeFacts.FieldFact(name, field.getName().toString(), field.getType().toString(),
-                            flags.contains(Modifier.PRIVATE), flags.contains(Modifier.STATIC)));
+                            flags.contains(Modifier.PRIVATE), flags.contains(Modifier.STATIC), line(field),
+                            field.getInitializer() != null));
                 }
             }
             return super.visitClass(tree, nothing);
@@ -176,12 +177,15 @@ public class FactScanner extends TreePathScanner<Void, Void> {
             Element owner = called.getEnclosingElement();
             String declaringClass = owner instanceof TypeElement ? ((TypeElement) owner).getSimpleName().toString() : null;
             String declaredType = null;
+            String receiver = null;
             ExpressionTree select = tree.getMethodSelect();
             if (select instanceof MemberSelectTree) {
-                TypeMirror type = trees.getTypeMirror(new TreePath(getCurrentPath(), ((MemberSelectTree) select).getExpression()));
+                ExpressionTree on = ((MemberSelectTree) select).getExpression();
+                TypeMirror type = trees.getTypeMirror(new TreePath(getCurrentPath(), on));
                 declaredType = type == null || type.getKind() == TypeKind.ERROR ? null : simple(type.toString());
+                receiver = textOf(on);
             }
-            facts.add(new CodeFacts.CallFact(file, line(tree), called.getSimpleName().toString(), declaredType, declaringClass));
+            facts.add(new CodeFacts.CallFact(file, line(tree), called.getSimpleName().toString(), declaredType, declaringClass, receiver));
             if (owner instanceof TypeElement && FILE_CLASSES.contains(((TypeElement) owner).getQualifiedName().toString())) {
                 facts.markUsesFiles();
             }
@@ -278,9 +282,10 @@ public class FactScanner extends TreePathScanner<Void, Void> {
     @Override
     public Void visitReturn(ReturnTree tree, Void nothing) {
         MethodState in = methods.peek();
-        if (tree.getExpression() != null && in != null) {
-            boolean callsItself = callsMethod(tree.getExpression(), in.element);
-            facts.add(new CodeFacts.ReturnFact(file, line(tree), classes.peek(), in.name, textOf(tree.getExpression()), callsItself));
+        if (in != null) {
+            boolean callsItself = tree.getExpression() != null && callsMethod(tree.getExpression(), in.element);
+            facts.add(new CodeFacts.ReturnFact(file, line(tree), classes.peek(), in.name,
+                    tree.getExpression() == null ? null : textOf(tree.getExpression()), callsItself));
         }
         return super.visitReturn(tree, nothing);
     }

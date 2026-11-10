@@ -26,6 +26,7 @@ class RecursionConcept extends Concept {
     protected void find(Trace trace, CodeFacts facts, List<Moment> into) {
         Set<String> started = new HashSet<>();
         boolean firstReturns = true;
+        int baseCases = 0; // only the first two base cases of a run pause; the rest are listed
         for (int s = 1; s < trace.size(); s++) {
             Snapshot before = trace.get(s - 1);
             Snapshot now = trace.get(s);
@@ -36,7 +37,9 @@ class RecursionConcept extends Concept {
             CodeFacts.MethodFact method = facts.methodAt(top.getFile(), top.getLine());
             if (method != null && method.recursive() && method.name().equals(top.getMethodName())) {
                 firstSelfCall(s, now, top, method, started, into);
-                baseCase(s, now, top, method, facts, into);
+                if (baseCase(trace, s, now, top, method, facts, into, baseCases < 2)) {
+                    baseCases++;
+                }
             }
             String unwinding = returns(before, now, facts);
             if (unwinding != null) {
@@ -44,6 +47,23 @@ class RecursionConcept extends Concept {
                 firstReturns = false;
             }
         }
+        noBaseCase(trace, into);
+    }
+
+    // A run stopped at the step limit by a method calling itself again and again: its base case
+    // is missing (or never reached).
+    private void noBaseCase(Trace trace, List<Moment> into) {
+        if (trace.getEndReason() != raphael.model.EndReason.STEP_LIMIT || !trace.getEndMessage().contains("calling itself")) {
+            return;
+        }
+        int last = trace.size() - 1;
+        Snapshot end = trace.get(last);
+        FrameSnapshot top = end.getFrames().isEmpty() ? null : end.getFrames().get(0);
+        String method = top == null ? "the method" : top.getMethodName() + "()";
+        into.add(new Moment(last, "no-base-case", "No base case reached",
+                method + " called itself " + (end.getFrames().size() - 1) + "+ times and never stopped: no call reached a base case "
+                        + "(a return that doesn't call itself again). Look for the if that should stop it, and whether each call gets closer to it.",
+                true, top == null ? null : top.getFile(), end.getLine()));
     }
 
     // The first time a method is on the stack twice: it has called itself.
@@ -59,30 +79,55 @@ class RecursionConcept extends Concept {
         started.add(method.name());
         into.add(new Moment(step, "calls-itself", method.name() + " calls itself",
                 Phrases.call(top, method.parameters(), now) + " starts, while " + Phrases.call(caller, method.parameters(), now)
-                        + " waits for its answer. Each call has its own " + Phrases.list(method.parameters()) + ".",
+                        + (method.returnsValue() ? " waits for its answer." : " waits for it to finish.")
+                        + (method.parameters().isEmpty() ? "" : " Each call has its own " + Phrases.list(method.parameters()) + "."),
                 true, top.getFile(), top.getLine()));
     }
 
-    // A return in the recursive method that doesn't call it again: the base case.
-    private void baseCase(int step, Snapshot now, FrameSnapshot top, CodeFacts.MethodFact method, CodeFacts facts,
-                          List<Moment> into) {
+    // A return in the recursive method that doesn't call it again, in a call that never called
+    // itself either: the base case. (A return node; after the call went down the tree is not one.)
+    // True if one was found. pauses: whether this one is a key moment.
+    private boolean baseCase(Trace trace, int step, Snapshot now, FrameSnapshot top, CodeFacts.MethodFact method,
+                             CodeFacts facts, List<Moment> into, boolean pauses) {
         CodeFacts.ReturnFact back = facts.returnAt(top.getFile(), top.getLine());
-        if (back == null || back.recursive()) {
-            return;
+        if (back == null || back.recursive() || recursedEarlier(trace, step, method.name())) {
+            return false;
         }
-        String result = Phrases.withValues(back.expression(), method.name(), "", top.getLocals());
         int depth = 0;
         for (FrameSnapshot frame : now.getFrames()) {
             if (frame.getMethodName().equals(method.name())) {
                 depth++;
             }
         }
+        String gives;
+        if (back.expression() == null) {
+            gives = "it stops here without calling itself.";
+        } else {
+            String result = Phrases.withValues(back.expression(), method.name(), "", top.getLocals());
+            gives = "it returns " + (result == null ? back.expression() : result) + " without calling itself.";
+        }
         into.add(new Moment(step, "base-case", "Base case",
-                Phrases.call(top, method.parameters(), now) + " is a base case: it returns "
-                        + (result == null ? back.expression() : result) + " without calling itself. "
-                        + (depth > 1 ? (depth - 1) + (depth == 2 ? " call is" : " calls are") + " still waiting for an answer."
-                                : "No call is waiting for it."),
-                true, top.getFile(), top.getLine()));
+                Phrases.call(top, method.parameters(), now) + " is a base case: " + gives + " "
+                        + (depth > 1 ? (depth - 1) + (depth == 2 ? " call is" : " calls are") + " still waiting for "
+                        + (method.returnsValue() ? "an answer." : "it to finish.") : "No call is waiting for it."),
+                pauses, top.getFile(), top.getLine()));
+        return true;
+    }
+
+    // Whether the call running at this step has already called itself (a deeper call of the same
+    // method appeared since it started), found by looking back through the run.
+    private static boolean recursedEarlier(Trace trace, int step, String method) {
+        int depth = trace.get(step).getFrames().size();
+        for (int s = step - 1; s >= 0; s--) {
+            int size = trace.get(s).getFrames().size();
+            if (size < depth) {
+                return false; // back before this call started
+            }
+            if (size > depth && trace.get(s).getFrames().get(0).getMethodName().equals(method)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // The recursive calls that returned since the step before, oldest first, each with its value;
@@ -105,7 +150,7 @@ class RecursionConcept extends Concept {
             String value = Phrases.value(exit.returned(), now);
             String how = null;
             CodeFacts.ReturnFact back = facts.returnAt(frame.getFile(), frame.getLine());
-            if (back != null && back.recursive() && lastValue != null && exit.method().equals(method)
+            if (back != null && back.recursive() && back.expression() != null && lastValue != null && exit.method().equals(method)
                     && callsIn(back.expression(), exit.method()) == 1) {
                 how = Phrases.withValues(back.expression(), exit.method(), lastValue, frame.getLocals());
             }

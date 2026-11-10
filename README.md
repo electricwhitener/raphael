@@ -309,6 +309,10 @@ Safety:
 | `EndReason` | Finished, step limit, exception, timeout or stopped | enum |
 | `Names` | Shortens type names: `Main$Node` → `Node`, a lambda's hidden class → `lambda` | `simple(name)` |
 | `ErrorExplainer` (explain/) | Turns an exception into advice; one subclass per kind (null, index, divide by zero, bad number…) | `explain(type, message)`, `hasAdvice(type)`, `describe()` |
+| `CodeFacts`, `FactScanner` (analysis/) | What the code says, from javac's syntax tree: recursive methods, base-case returns, private fields and setters, calls with their declared types, try/catch, `// moment:` comments | `FactScanner.scan()`, `isRecursive()`, `returnAt()`, `callsAt()`, `setter()` |
+| `Concept` and its subclasses (explain/) | One idea each (recursion, exceptions, files, encapsulation, inheritance, polymorphism, static, the author's moments), turned into key moments from the run and the facts | `moments()`, `relevant()`, `find()` |
+| `MomentFinder`, `Moment`, `Phrases` (explain/) | Every concept's moments in step order, with at most two pauses per kind on a line; the words in one place | `find(trace, facts)`, `Phrases.withValues()` |
+| `MomentsPanel`, `TraceTablePanel` (ui/) | The Key moments list and the trace table (a row per step, a column per variable), beside the console | `traceChanged()`, `stepChanged()` |
 | **detect/** | | |
 | `StructureDetector` | Decides what each object is (array, grid, list, tree or box) from its fields' types and names | `detect(snapshot)`, `shapeOf()`, `buildTrees()`, `buildGrid()` |
 | `IndexUsage` | Reads the code: which variables index which arrays (also `x.keys[i]` and `keys[j + T]`), and which cells a line reads or writes | `rowVariables()`, `columnVariables()`, `accessesOnLine()`, `accessesIn()` |
@@ -392,6 +396,8 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
 | Records and enums | `Icons.Glyph` (an enum whose constants each override `draw()`), `SettingsDialog.Theme`, `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
+| Design pattern: Visitor | `FactScanner` extends javac's `TreePathScanner` | javac walks its syntax tree and calls the `visitXxx` method for each kind of node; the scanner only says what to do with each kind. |
+| Design pattern: Template Method | `Concept.moments()` | The same steps for every concept (does it apply? then find), with each subclass filling them in. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
 | Design pattern: Builder | `Dialogs.question(...).body(...).buttons(...).ask()` | Builds a dialog step by step, so its many optional parts don't need one method with a dozen parameters. |
 | Design pattern: Decorator | `FileDrop` wraps the editor's `TransferHandler`; `RunFile` stacks `ObjectOutputStream` → `GZIPOutputStream` → `BufferedOutputStream` | Each wrapper adds one job and passes the rest on to what it wraps. |

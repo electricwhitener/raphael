@@ -190,16 +190,19 @@ public class Workbench extends JPanel {
         bottom.setBackground(Style.BACKGROUND);
         bottom.setBorder(Section.hairline(1, 0, 0, 0));
         addBottomPanel(bottom, callStack, 0.25);
-        addBottomPanel(bottom, locals, 0.45); // values can be long, so variables get the most room
+        addBottomPanel(bottom, locals, 0.35); // values can be long
         console.hideHeading(); // the tab says what it is
         bottomTabs.addTab("Console", console);
         bottomTabs.addTab("Key moments", momentsPanel);
         bottomTabs.addTab("Trace table", traceTable);
         bottomTabs.putClientProperty("JTabbedPane.tabType", "underlined");
+        bottomTabs.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT); // one row, even when narrow
+        bottomTabs.putClientProperty("JTabbedPane.tabInsets", new java.awt.Insets(0, Style.SPACE_2, 0, Style.SPACE_2));
         bottomTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
         bottomTabs.setFocusable(false);
         bottomTabs.setBorder(Section.hairline(0, 1, 0, 0));
-        addBottomPanel(bottom, bottomTabs, 0.30);
+        addBottomPanel(bottom, bottomTabs, 0.40); // the console, the key moments and the trace table
+        controls.setOnPausedAtMoment(() -> say("paused at a key moment · space goes on · Run menu: pause at key moments", Style.INK_SOFT));
         addBottomPanel(bottom, files, 0.30);
         files.setVisible(false);
         bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
@@ -320,7 +323,7 @@ public class Workbench extends JPanel {
     // "Key moments (5)", so it's clear there's something to see there.
     private void titleMomentsTab() {
         int count = model.getMoments().size();
-        bottomTabs.setTitleAt(1, count == 0 ? "Key moments" : "Key moments (" + count + ")");
+        bottomTabs.setTitleAt(1, count == 0 ? "Key moments" : "Key moments " + count);
     }
 
     // A program nobody has typed in, run or saved: a new program as it came, or an example just

@@ -42,7 +42,7 @@ class FilesConcept extends Concept {
                     boolean flushed = was.get(name).isEmpty() && (s - createdAt.getOrDefault(name, s) > 2 || closedOrFlushed(before, facts));
                     into.add(new Moment(s, "file-written", "Written to " + name,
                             (flushed ? "The text reaches " + name + " only now: a writer keeps what it's given in a buffer, "
-                                    + "and writes it to the file when it's closed or flushed. " : "")
+                                    + "and writes it to the file " + whatWrote(before, facts) + ". " : "")
                                     + "Added: " + shorten(added) + ".",
                             flushed, file, line));
                 }
@@ -73,6 +73,21 @@ class FilesConcept extends Concept {
             }
         }
         return false;
+    }
+
+    // What made the writer's text reach the file: flush() or close() on the line that just ran,
+    // or the end of a try-with-resources, which closes it.
+    private static String whatWrote(Snapshot before, CodeFacts facts) {
+        String file = before.getFrames().isEmpty() ? null : before.getFrames().get(0).getFile();
+        for (CodeFacts.CallFact call : facts.callsAt(file, before.getLine())) {
+            if (call.method().equals("flush")) {
+                return "when it's flushed, as flush() on line " + before.getLine() + " just did";
+            }
+            if (call.method().equals("close")) {
+                return "when it's closed, as close() on line " + before.getLine() + " just did";
+            }
+        }
+        return "when it's closed, which the end of the try (with resources) just did";
     }
 
     // FileNotFoundException's message is "name (No such file or directory)": just the name.

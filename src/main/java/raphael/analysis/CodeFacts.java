@@ -23,7 +23,9 @@ public class CodeFacts {
                              boolean recursive, boolean returnsValue, List<String> parameters) {
     }
 
-    public record FieldFact(String className, String name, String type, boolean isPrivate, boolean isStatic) {
+    // line: where it's declared; initialized: whether it's given a value there (int count = 0).
+    public record FieldFact(String className, String name, String type, boolean isPrivate, boolean isStatic,
+                            int line, boolean initialized) {
     }
 
     // A method that sets one field from its parameter. guardLine: the line of a check (an if)
@@ -33,7 +35,8 @@ public class CodeFacts {
 
     // A call. declaredType is the declared type of what it's called on ("Shape" in s.area()),
     // or null for a call with nothing in front; declaringClass is the class whose method it names.
-    public record CallFact(String file, int line, String method, String declaredType, String declaringClass) {
+    // receiver: what it's called on, as written ("s" in s.area()), or null.
+    public record CallFact(String file, int line, String method, String declaredType, String declaringClass, String receiver) {
     }
 
     public record CatchFact(int line, List<String> types) {
@@ -43,8 +46,8 @@ public class CodeFacts {
     public record TryFact(String file, int tryLine, int endLine, List<CatchFact> catches, int finallyLine) {
     }
 
-    // A return statement: its expression as written ("n * factorial(n - 1)"), and whether it calls
-    // the method it's in (a return without that call, in a recursive method, is a base case).
+    // A return statement: its expression as written ("n * factorial(n - 1)"; null for a plain
+    // "return;"), and whether it calls the method it's in.
     public record ReturnFact(String file, int line, String className, String method, String expression, boolean recursive) {
     }
 

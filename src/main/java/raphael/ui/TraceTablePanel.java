@@ -48,7 +48,8 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
                                                            int row, int column) {
                 super.getTableCellRendererComponent(t, value, selected, false, row, column);
                 boolean changed = column >= FIXED && rows.changed(row, column);
-                setBackground(selected ? Style.ACCENT_TINT : changed ? Style.CHANGE_TINT : Style.BACKGROUND);
+                setBackground(changed ? Style.CHANGE_TINT : selected ? Style.ACCENT_TINT : Style.BACKGROUND); // a change shows on the selected row too
+                setHorizontalAlignment(column < 2 ? RIGHT : LEFT);
                 setForeground(column < FIXED ? Style.MUTED : Style.INK);
                 setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, 0, Style.SPACE_2));
                 return this;

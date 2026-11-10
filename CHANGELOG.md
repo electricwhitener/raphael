@@ -2,6 +2,20 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**Key moments**
+- Raphael explains what your program is doing at its key moments, with the run's own values, and playing pauses there:
+  - a recursion calling itself, its base case, and every return on the way back ("factorial(n = 3) returns 3 * 2 = 6");
+  - which catch took an exception and why;
+  - a file created, written, or missing, and text that only reaches a file when the writer is closed;
+  - a private field changed by its own method, and a setter that refused a value;
+  - a child object that is also its parent's kind, and which override runs through a parent-type variable;
+  - static fields shared by every object.
+- Write `// moment: text with {variable}` on a line to add a key moment of your own.
+- The slider marks each moment; Alt+PgDn and Alt+PgUp go to the next and previous one; Run → Pause at key moments switches pausing off.
+- New tabs beside the console: Key moments (a list) and Trace table (a row per step, a column per variable).
+
 ## 1.1.1 (2026-11-10)
 
 - Fix: in a program of one file, the line about to run wasn't marked in the code while stepping, and clicking a line number did nothing.

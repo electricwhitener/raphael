@@ -34,6 +34,12 @@ public class ControlsBar extends JPanel implements TraceListener {
     // Playing pauses by itself at each key moment (see explain/Moment), unless switched off.
     private static boolean pauseAtMoments = raphael.App.SETTINGS.getBoolean("pauseAtMoments", true);
 
+    private Runnable onPausedAtMoment = () -> { }; // the program says so in the status bar
+
+    public void setOnPausedAtMoment(Runnable onPausedAtMoment) {
+        this.onPausedAtMoment = onPausedAtMoment;
+    }
+
     public static boolean pausesAtMoments() {
         return pauseAtMoments;
     }
@@ -56,8 +62,11 @@ public class ControlsBar extends JPanel implements TraceListener {
             int width = getWidth() - getInsets().left - getInsets().right - 2 * thumb;
             for (raphael.explain.Moment moment : model.getMoments()) {
                 int x = left + (int) Math.round(width * (moment.step() / (double) getMaximum()));
+                boolean here = moment.step() == model.getStep();
+                int w = moment.pauses() || here ? 3 : 2;      // a key moment is wider and taller than a note,
+                int h = here ? 8 : moment.pauses() ? 6 : 4;   // so the colour isn't the only difference
                 g.setColor(moment.pauses() ? Style.ACCENT : Style.MUTED);
-                g.fillRect(x - 1, getHeight() - 5, 2, 4);
+                g.fillRect(x - w / 2, getHeight() - h - 1, w, h);
             }
         }
     };
@@ -104,6 +113,7 @@ public class ControlsBar extends JPanel implements TraceListener {
                 timerMoving = false;
                 if (pauseAtMoments && model.pausesAt(model.getStep())) {
                     stopPlaying(); // a key moment: the card explains it; Space goes on
+                    onPausedAtMoment.run();
                 }
             }
         });

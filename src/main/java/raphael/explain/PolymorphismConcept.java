@@ -22,6 +22,7 @@ class PolymorphismConcept extends Concept {
     @Override
     protected void find(Trace trace, CodeFacts facts, List<Moment> into) {
         int shown = 0;
+        java.util.Set<String> pairs = new java.util.HashSet<>(); // declared type → object's type, once each
         for (int s = 1; s < trace.size(); s++) {
             Snapshot now = trace.get(s);
             if (now.getFrames().size() < 2 || now.getFrames().size() <= trace.get(s - 1).getFrames().size()) {
@@ -44,12 +45,15 @@ class PolymorphismConcept extends Concept {
                     continue;
                 }
                 String ran = top.getClassName();
-                String text = "This variable is declared " + declared + ", but the object in it is " + Phrases.article(holds) + ". "
+                String what = call.receiver() != null && call.receiver().matches("[\\w.\\[\\]]{1,30}") ? call.receiver() : "This variable";
+                boolean first = shown == 0;
+                boolean newPair = pairs.add(declared + ">" + holds);
+                String text = what + " is declared " + declared + ", but the object in it is " + Phrases.article(holds) + ". "
                         + (ran.equals(holds) ? "So " + holds + "'s own " + call.method() + "() runs."
                         : holds + " has no " + call.method() + "() of its own, so the one it inherits from " + ran + " runs.")
-                        + " Which method runs is decided by the object, while the program runs, not by the variable's type.";
-                into.add(new Moment(s, "polymorphism", ran + "." + call.method() + "() runs", text, ++shown <= 2,
-                        caller.getFile(), caller.getLine())); // the first two pause; the rest are noted
+                        + (first ? " Which method runs is decided by the object, while the program runs, not by the variable's type." : "");
+                into.add(new Moment(s, "polymorphism", ran + "." + call.method() + "() runs", text, newPair && ++shown <= 3,
+                        caller.getFile(), caller.getLine())); // each pair of types pauses once, up to three in a run
                 break;
             }
         }
