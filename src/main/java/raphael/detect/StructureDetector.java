@@ -55,6 +55,27 @@ public class StructureDetector {
                 byClass.computeIfAbsent(object.getTypeName(), k -> new ArrayList<>()).add((ObjectNode) object);
             }
         }
+        // Hash tables with chaining first: an array of list nodes takes the chains hanging from it.
+        for (HeapObject object : heap.values()) {
+            if (object instanceof ArrayNode && object.getTypeName().endsWith("[]")) {
+                String nodeType = object.getTypeName().substring(0, object.getTypeName().length() - 2);
+                List<ObjectNode> nodes = byClass.get(nodeType);
+                if (nodes == null || shapeOf(nodes.get(0)).shape() != Shape.LIST) {
+                    continue;
+                }
+                String next = shapeOf(nodes.get(0)).firstLink();
+                Map<Long, ObjectNode> all = byId(nodes);
+                Set<Long> chained = HashTableStructure.reachable((ArrayNode) object, all, next);
+                Map<Long, ObjectNode> mine = new LinkedHashMap<>();
+                for (long id : chained) {
+                    mine.put(id, all.get(id));
+                }
+                found.add(new HashTableStructure((ArrayNode) object, mine, next));
+                used.add(object.getId());
+                nodes.removeIf(node -> chained.contains(node.getId()));
+            }
+        }
+        byClass.values().removeIf(List::isEmpty);
         for (List<ObjectNode> objects : byClass.values()) {
             ClassShape shape = shapeOf(objects.get(0));
             if (shape.shape() == Shape.LIST) {

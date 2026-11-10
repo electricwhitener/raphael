@@ -2,12 +2,15 @@ package raphael.render;
 
 import java.awt.Dimension;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.function.BiFunction;
 import java.util.List;
 import java.util.Map;
 import raphael.detect.ArrayStructure;
 import raphael.detect.BinaryTreeStructure;
 import raphael.detect.GenericStructure;
 import raphael.detect.GridStructure;
+import raphael.detect.HashTableStructure;
 import raphael.detect.LinkedListStructure;
 import raphael.detect.MultiwayTreeStructure;
 import raphael.detect.Structure;
@@ -19,29 +22,34 @@ import raphael.model.Value;
 // Turns one Structure into shapes in a Scene, with its top-left corner at (x, y).
 // OOP: abstract class + polymorphism. Each subclass lays out its own kind of structure, and
 // SceneBuilder just calls render() without knowing which one it has.
-// Factory pattern: forStructure() picks the right subclass, so no one else has to.
+// Factory pattern: forStructure() picks the right subclass from a registry, so no one else has to.
 public abstract class StructureRenderer {
 
     // Adds this structure's shapes to the scene and returns the size it used.
     public abstract Dimension render(Scene scene, double x, double y);
 
+    // Which renderer draws which kind of structure. A new kind of structure needs one line here.
+    // Registry pattern: a lookup table instead of a chain of instanceof tests, so adding a kind of
+    // structure doesn't mean editing a chain, and a forgotten one is a clear error, not a wrong cast.
+    private static final Map<Class<? extends Structure>, BiFunction<Structure, RenderContext, StructureRenderer>> RENDERERS =
+            new LinkedHashMap<>();
+
+    static {
+        RENDERERS.put(GridStructure.class, (s, c) -> new GridRenderer((GridStructure) s, c));
+        RENDERERS.put(ArrayStructure.class, (s, c) -> new ArrayRenderer((ArrayStructure) s, c));
+        RENDERERS.put(LinkedListStructure.class, (s, c) -> new LinkedListRenderer((LinkedListStructure) s, c));
+        RENDERERS.put(BinaryTreeStructure.class, (s, c) -> new BinaryTreeRenderer((BinaryTreeStructure) s, c));
+        RENDERERS.put(MultiwayTreeStructure.class, (s, c) -> new MultiwayTreeRenderer((MultiwayTreeStructure) s, c));
+        RENDERERS.put(HashTableStructure.class, (s, c) -> new HashTableRenderer((HashTableStructure) s, c));
+        RENDERERS.put(GenericStructure.class, (s, c) -> new BoxRenderer((GenericStructure) s, c));
+    }
+
     public static StructureRenderer forStructure(Structure structure, RenderContext context) {
-        if (structure instanceof GridStructure) {
-            return new GridRenderer((GridStructure) structure, context);
+        BiFunction<Structure, RenderContext, StructureRenderer> make = RENDERERS.get(structure.getClass());
+        if (make == null) {
+            throw new IllegalArgumentException("No renderer for " + structure.getKind());
         }
-        if (structure instanceof ArrayStructure) {
-            return new ArrayRenderer((ArrayStructure) structure, context);
-        }
-        if (structure instanceof LinkedListStructure) {
-            return new LinkedListRenderer((LinkedListStructure) structure, context);
-        }
-        if (structure instanceof BinaryTreeStructure) {
-            return new BinaryTreeRenderer((BinaryTreeStructure) structure, context);
-        }
-        if (structure instanceof MultiwayTreeStructure) {
-            return new MultiwayTreeRenderer((MultiwayTreeStructure) structure, context);
-        }
-        return new BoxRenderer((GenericStructure) structure, context);
+        return make.apply(structure, context);
     }
 
     // The key of an object's main shape, e.g. "#12".
