@@ -32,7 +32,13 @@ public class ControlsBar extends JPanel implements TraceListener {
             "Finish call (step out): run until this method returns  (Alt+↑)");
     private final JButton play = button(Icons.Glyph.PLAY, "Play", "Play or pause  (Space)");
     private final JSlider slider = new JSlider(0, 0, 0);
-    private final JLabel stepLabel = new JLabel("step – of –");
+    // "step 5 of 47", in the softer ink (it's a readout, not a control); asked each time it paints, for dark mode.
+    private final JLabel stepLabel = new JLabel("step – of –") {
+        @Override
+        public java.awt.Color getForeground() {
+            return Style.INK_SOFT;
+        }
+    };
     private final JComboBox<String> speed = new JComboBox<>(SPEEDS);
     private final Timer playTimer;
     private boolean movingSlider; // true while we move the slider ourselves

@@ -56,6 +56,17 @@ public class CommandPalette extends JDialog {
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new EntryRenderer());
         list.setFocusable(false);
+        list.setFixedCellHeight(Style.PALETTE_ROW_H);
+        list.setBackground(Style.BAR);
+        list.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) { // the row under the mouse is the chosen one, as in VS Code
+                int index = list.locationToIndex(e.getPoint());
+                if (index >= 0 && index != list.getSelectedIndex()) {
+                    list.setSelectedIndex(index);
+                }
+            }
+        });
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -67,13 +78,14 @@ public class CommandPalette extends JDialog {
             }
         });
         JPanel content = new JPanel(new BorderLayout(0, Style.SPACE_2));
-        content.setBackground(Style.BACKGROUND);
+        content.setBackground(Style.BAR); // a sheet lifted off the window behind it
         content.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Style.CONTROL_BORDER),
                 BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
         content.add(search, BorderLayout.NORTH);
         JScrollPane scroll = new JScrollPane(list);
         scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.setPreferredSize(new Dimension(560, 320));
+        scroll.getViewport().setBackground(Style.BAR);
+        scroll.setPreferredSize(new Dimension(Style.PALETTE_W, 320));
         content.add(scroll, BorderLayout.CENTER);
         setContentPane(content);
         search.getDocument().addDocumentListener(new DocumentListener() {
@@ -169,6 +181,16 @@ public class CommandPalette extends JDialog {
 
     private void filter() {
         String typed = search.getText();
+        if (typed.isBlank()) { // nothing typed yet: everything, in the menus' own order
+            shown.clear();
+            for (Entry entry : entries.subList(0, Math.min(entries.size(), 200))) {
+                shown.addElement(entry);
+            }
+            if (!shown.isEmpty()) {
+                list.setSelectedIndex(0);
+            }
+            return;
+        }
         List<Entry> matches = new ArrayList<>();
         List<Integer> scores = new ArrayList<>();
         for (Entry entry : entries) {
@@ -236,13 +258,17 @@ public class CommandPalette extends JDialog {
     // One line: the label on the left, the detail (keys, a path) muted on the right.
     private static final class EntryRenderer implements ListCellRenderer<Entry> {
         private final JPanel row = new JPanel(new BorderLayout(Style.SPACE_3, 0));
+        private final JLabel category = new JLabel(); // "File", muted, so each command starts in the same place
         private final JLabel label = new JLabel();
         private final JLabel detail = new JLabel();
 
         EntryRenderer() {
-            row.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_2, Style.SPACE_1, Style.SPACE_2));
+            row.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, 0, Style.SPACE_2));
+            category.setFont(Style.sans(false, 12f));
+            category.setPreferredSize(new Dimension(56, 1));
             label.setFont(Style.sans(false, 13f));
             detail.setFont(Style.sans(false, 12f));
+            row.add(category, BorderLayout.WEST);
             row.add(label, BorderLayout.CENTER);
             row.add(detail, BorderLayout.EAST);
         }
@@ -250,9 +276,15 @@ public class CommandPalette extends JDialog {
         @Override
         public Component getListCellRendererComponent(JList<? extends Entry> list, Entry entry, int index,
                                                       boolean selected, boolean focused) {
-            label.setText(entry.label());
+            String text = entry.label();
+            int colon = text.indexOf(": ");
+            boolean command = colon > 0 && colon < 12; // "File: Open…" (a menu command), not a file name
+            category.setVisible(command);
+            category.setText(command ? text.substring(0, colon) : "");
+            label.setText(command ? text.substring(colon + 2) : text);
             detail.setText(entry.detail());
-            row.setBackground(selected ? Style.ACCENT_TINT : Style.BACKGROUND);
+            row.setBackground(selected ? Style.ACCENT_TINT : Style.BAR);
+            category.setForeground(Style.MUTED);
             label.setForeground(Style.INK);
             detail.setForeground(Style.MUTED);
             return row;

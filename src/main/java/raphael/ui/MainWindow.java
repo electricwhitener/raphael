@@ -129,6 +129,7 @@ public class MainWindow extends JFrame {
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final JButton position = new JButton(); // "Ln 12, Col 5"; a click opens Go to Line
+    private final JPanel positionDivider = new JPanel(); // a thin line between the legend and Ln, Col
     private final Legend legend = new Legend();
     // "Raphael 1.1.0 is available ↗": stays in the status bar, and opens the download page.
     private final JButton updateNotice = new JButton();
@@ -214,14 +215,17 @@ public class MainWindow extends JFrame {
         recordingChip.setToolTipText("These steps were recorded earlier. Press Run to record this code again.");
         recordingChip.setVisible(false);
         position.putClientProperty("JButton.buttonType", "borderless");
-        position.setFont(Style.UI_FONT.deriveFont(12f));
+        position.setFont(Style.CODE_FONT.deriveFont(12f)); // monospace, so the numbers don't jitter as the cursor moves
         position.setRequestFocusEnabled(false);
         position.setToolTipText(Shortcuts.label("Go to line  (Ctrl+G)"));
         position.addActionListener(e -> goToLine());
-        statusRight.add(position);
+        position.getAccessibleContext().setAccessibleName("Line and column. Go to line.");
+        positionDivider.setPreferredSize(new Dimension(1, 16));
         statusRight.add(recordingChip);
         statusRight.add(updateNotice);
         statusRight.add(legend);
+        statusRight.add(positionDivider);
+        statusRight.add(position); // last, always in the same place
         statusBar.add(statusRight, BorderLayout.EAST);
         add(statusBar, BorderLayout.SOUTH);
         addComponentListener(new ComponentAdapter() {
@@ -329,6 +333,8 @@ public class MainWindow extends JFrame {
         toolBar.setBackground(Style.BAR); // the bars frame the work area in a slightly different shade
         updateNotice.setForeground(Style.ACCENT);
         statusBar.setBackground(Style.BAR);
+        positionDivider.setBackground(Style.HAIRLINE);
+        position.setForeground(Style.INK_SOFT);
         repaint();
     }
 
@@ -432,6 +438,18 @@ public class MainWindow extends JFrame {
             }
         }
         CommandPalette.showEntries(this, "Type part of a file or example name", entries);
+        focusWorkArea();
+    }
+
+    // After a palette or dialog closes, the keyboard goes back to the program (not to the first
+    // button in the window, which is where Swing would put it).
+    private void focusWorkArea() {
+        java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (current != null && (owner == null || !SwingUtilities.isDescendingFrom(owner, current))) {
+            current.focusEditor();
+        } else if (current == null) {
+            welcome.focusExamples();
+        }
     }
 
     // Ln, Col on the right of the status bar, for the program in front.
@@ -740,7 +758,10 @@ public class MainWindow extends JFrame {
         run.add(item("First step  (Home)", null, () -> onModel(TraceModel::first)));
         run.add(item("Last step  (End)", null, () -> onModel(TraceModel::last)));
         JMenu view = menu("View", KeyEvent.VK_V);
-        view.add(item("Command Palette…", "shift control P", () -> CommandPalette.showCommands(this, getJMenuBar())));
+        view.add(item("Command Palette…", "shift control P", () -> {
+            CommandPalette.showCommands(this, getJMenuBar());
+            focusWorkArea();
+        }));
         view.add(item("Quick Open…", "control P", this::quickOpen));
         view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
@@ -988,6 +1009,7 @@ public class MainWindow extends JFrame {
     private void showLegendIfRoom() {
         boolean room = getWidth() >= 1100;
         legend.setVisible(current != null && current.wantsLegend() && room);
+        positionDivider.setVisible(legend.isVisible() && current != null);
         String chip = current == null ? null : current.recordingChip();
         if (chip != null) {
             recordingChip.setText(chip);
@@ -1199,7 +1221,9 @@ public class MainWindow extends JFrame {
     }
 
     private void loadExample(ExampleCatalog.Example example) {
-        newTab(true).showCode(ExampleCatalog.source(example), null, example.name() + ".java (example)");
+        Workbench program = newTab(true);
+        program.showCode(ExampleCatalog.source(example), null, example.name() + ".java (example)");
+        program.setTabTitle(example.title()); // "Bubble sort"; the tooltip says it's an example
         say(example.title() + ": " + example.blurb().replaceAll("\\.$", "")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
     }
@@ -1306,6 +1330,12 @@ public class MainWindow extends JFrame {
             showStatus(welcomeSaid, Style.INK_SOFT);
         } else {
             host.stateChanged(current);
+            java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            if (owner == null || !SwingUtilities.isDescendingFrom(owner, current)) {
+                // The keyboard goes to the code, not to the first button (the Home logo). Asked now,
+                // not later, so a request that comes after (the find bar's) still wins.
+                current.focusEditor();
+            }
         }
     }
 
@@ -1351,7 +1381,7 @@ public class MainWindow extends JFrame {
             }
             program.stop();
             closedTabs.push(new Closed(program.getCurrentFile(), program.getCode().getCode(), program.getDocumentName(),
-                    program.isDirty()));
+                    program.getTabTitle(), program.isDirty()));
             while (closedTabs.size() > 20) {
                 closedTabs.removeLast();
             }
@@ -1398,6 +1428,9 @@ public class MainWindow extends JFrame {
         }
         Workbench program = newTab();
         program.showCode(closed.code(), null, closed.name());
+        if (!closed.title().equals(closed.name())) {
+            program.setTabTitle(closed.title()); // an example comes back with its title
+        }
         if (closed.unsaved()) {
             program.getCode().markUnsaved();
             host.stateChanged(program);
@@ -1437,7 +1470,7 @@ public class MainWindow extends JFrame {
         tabs.putClientProperty("JTabbedPane.tabCloseCallback",
                 (java.util.function.IntConsumer) index -> closeTab(index));
         tabs.putClientProperty("JTabbedPane.showTabSeparators", true);
-        tabs.putClientProperty("JTabbedPane.tabHeight", 32);
+        tabs.putClientProperty("JTabbedPane.tabHeight", Style.TAB_H);
         tabs.putClientProperty("JTabbedPane.maximumTabWidth", 240);
         tabs.putClientProperty("JTabbedPane.tabsPopupPolicy", "asNeeded");
         tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
@@ -1860,7 +1893,7 @@ public class MainWindow extends JFrame {
     }
 
     // A tab that was closed, enough to open it again.
-    private record Closed(File file, String code, String name, boolean unsaved) {
+    private record Closed(File file, String code, String name, String title, boolean unsaved) {
     }
 
     // How the open program talks back to the window.
@@ -1870,10 +1903,14 @@ public class MainWindow extends JFrame {
         public void stateChanged(Workbench workbench) {
             int index = tabs.indexOfComponent(workbench);
             if (index >= 0) {
-                tabs.setTitleAt(index, (workbench.isDirty() ? "● " : "") + workbench.getDocumentName());
+                tabs.setTitleAt(index, (workbench.isDirty() ? "● " : "") + workbench.getTabTitle());
                 File file = workbench.getCurrentFile();
-                tabs.setToolTipTextAt(index, file != null ? file.getAbsolutePath()
-                        : workbench.isRunning() ? "recording…" : "not saved yet");
+                String tip = file != null ? file.getAbsolutePath()
+                        : workbench.getFolder() != null ? workbench.getFolder().getAbsolutePath()
+                        : workbench.getDocumentName().endsWith("(example)")
+                        ? "Example: " + workbench.getDocumentName().replace(" (example)", "") + ". Save As… keeps a copy."
+                        : "not saved yet";
+                tabs.setToolTipTextAt(index, workbench.isRunning() ? "recording…" : tip);
             }
             if (workbench != current) {
                 return; // a program that isn't in front: its state shows when it is

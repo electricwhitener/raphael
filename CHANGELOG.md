@@ -4,6 +4,19 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**Works like an IDE**
+- Tabs: each program has its own tab and its own run, so you can switch while one is recording. Ctrl+Tab switches, Ctrl+W closes, Ctrl+Shift+T reopens, and a right-click on a tab closes the others or shows the file's folder.
+- The Welcome page is a tab, and the logo at the left of the toolbar takes you home.
+- File → Open Folder: a folder of `.java` files, packages included, runs as one program, with a tab for each file. While stepping, the code follows the program from file to file.
+- File → New Window.
+- A find and replace bar (Ctrl+F, Ctrl+H) with match case, whole word and regular expressions; Go to Line (Ctrl+G) and Ln, Col in the status bar.
+- A command palette (Ctrl+Shift+P) and Quick Open (Ctrl+P) for files and examples.
+- Brackets and quotes close themselves, the pair at the cursor is outlined, and Shift+Alt+Down duplicates a line.
+- A compile error in the console takes you to its line.
+- Fix: two programs started at the same moment could fail with "Not listening".
+- Fix: a program in a package named `raphael` wasn't traced.
+
+
 **A new logo**: Raphael's own character, on a rounded tile that suits light and dark alike.
 
 **Files and saving**

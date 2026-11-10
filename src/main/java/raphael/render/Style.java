@@ -61,6 +61,11 @@ public final class Style {
     public static final int NOTE_LINE_H = 18;
     public static final int NOTE_GAP = SPACE_3;
     public static final int STATUS_H = 28;   // the status bar
+    public static final int TAB_H = 32;      // the program tabs under the toolbar
+    public static final int FILE_TAB_H = 28; // the file tabs of a program of several files, one level lower
+    public static final int CONTROL_H = 28;  // small controls: the find bar's fields and buttons
+    public static final int PALETTE_ROW_H = 28; // a line of the command palette
+    public static final int PALETTE_W = 560;
     public static final int ARC = 8;         // corners of buttons and fields
     public static final int FOCUS_WIDTH = 2; // the ring around the focused control
 

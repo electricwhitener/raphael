@@ -43,9 +43,9 @@ public class FindBar extends JPanel {
     private final JTextField find = new JTextField(18);
     private final JTextField replace = new JTextField(18);
     private final JLabel count = new JLabel();
-    private final JToggleButton matchCase = toggle("Aa", "Match case");
-    private final JToggleButton wholeWord = toggle("W", "Whole word");
-    private final JToggleButton regex = toggle(".*", "Regular expression");
+    private final JToggleButton matchCase = toggle("Aa", "Match case", "Alt+C");
+    private final JToggleButton wholeWord = toggle("W", "Whole word", "Alt+W");
+    private final JToggleButton regex = toggle(".*", "Regular expression", "Alt+R");
     private final JPanel replaceRow = new JPanel(new FlowLayout(FlowLayout.LEFT, Style.SPACE_1, 0));
     private final List<Object> marks = new ArrayList<>();
     private final DefaultHighlighter.DefaultHighlightPainter painter =
@@ -61,34 +61,62 @@ public class FindBar extends JPanel {
         this.editor = editor;
         this.edits = edits;
         setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_2, Style.SPACE_1, Style.SPACE_2)));
-        JPanel findRow = new JPanel(new FlowLayout(FlowLayout.LEFT, Style.SPACE_1, 0));
-        findRow.setOpaque(false);
-        replaceRow.setOpaque(false);
+                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
         find.putClientProperty("JTextField.placeholderText", "Find");
         replace.putClientProperty("JTextField.placeholderText", "Replace");
         count.setFont(Style.sans(false, 12f));
         count.setForeground(Style.MUTED);
-        count.setPreferredSize(new Dimension(84, count.getFontMetrics(count.getFont()).getHeight())); // as tall when empty
-        JButton previous = small("↑", "Previous match  (Shift+Enter)", () -> next(true));
-        JButton following = small("↓", "Next match  (Enter)", () -> next(false));
-        JButton close = small("×", "Close  (Esc)", this::close);
-        findRow.add(find);
-        findRow.add(matchCase);
-        findRow.add(wholeWord);
-        findRow.add(regex);
-        findRow.add(count);
-        findRow.add(previous);
-        findRow.add(following);
-        replaceRow.add(replace);
-        replaceRow.add(small("Replace", "Replace this match", this::replaceOne));
-        replaceRow.add(small("All", "Replace every match", this::replaceAll));
-        JPanel rows = new JPanel(new BorderLayout(0, Style.SPACE_1));
-        rows.setOpaque(false);
-        rows.add(findRow, BorderLayout.NORTH);
-        rows.add(replaceRow, BorderLayout.SOUTH);
-        add(rows, BorderLayout.CENTER);
-        add(close, BorderLayout.EAST);
+        count.setPreferredSize(new Dimension(72, count.getFontMetrics(count.getFont()).getHeight())); // as tall when empty
+        JButton previous = icon(Icons.Glyph.CHEVRON_UP, "Previous match  (Shift+Enter)", () -> next(true));
+        JButton following = icon(Icons.Glyph.CHEVRON_DOWN, "Next match  (Enter)", () -> next(false));
+        JButton close = icon(Icons.Glyph.CLOSE, "Close  (Esc)", this::close);
+        // One grid for both rows, so they line up:
+        //   [Find ____________] [Aa] [W] [.*]  7 of 11   [↑] [↓] [×]
+        //   [Replace _________] [Replace] [All]
+        JPanel grid = new JPanel(new java.awt.GridBagLayout());
+        grid.setOpaque(false);
+        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
+        c.gridy = 0;
+        c.anchor = java.awt.GridBagConstraints.WEST;
+        c.insets = new java.awt.Insets(0, 0, 0, Style.SPACE_1);
+        for (JTextField field : new JTextField[] {find, replace}) {
+            field.setPreferredSize(new Dimension(220, Style.CONTROL_H));
+            field.setMinimumSize(new Dimension(120, Style.CONTROL_H));
+        }
+        c.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        c.weightx = 1;
+        grid.add(find, c);
+        c.fill = java.awt.GridBagConstraints.NONE;
+        c.weightx = 0;
+        for (JComponent part : new JComponent[] {matchCase, wholeWord, regex}) {
+            grid.add(part, c);
+        }
+        c.insets = new java.awt.Insets(0, Style.SPACE_2, 0, Style.SPACE_1);
+        grid.add(count, c);
+        c.insets = new java.awt.Insets(0, 0, 0, Style.SPACE_1);
+        grid.add(previous, c);
+        grid.add(following, c);
+        c.insets = new java.awt.Insets(0, 0, 0, 0);
+        grid.add(close, c);
+        c.gridy = 1;
+        c.insets = new java.awt.Insets(Style.SPACE_1, 0, 0, Style.SPACE_1);
+        c.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        c.weightx = 1;
+        replaceRow.removeAll();
+        grid.add(replace, c);
+        c.fill = java.awt.GridBagConstraints.NONE;
+        c.weightx = 0;
+        c.gridwidth = 7;
+        replaceRow.setOpaque(false);
+        replaceRow.add(button("Replace", "Replace this match  (Enter in Replace)", this::replaceOne));
+        replaceRow.add(button("All", "Replace every match", this::replaceAll));
+        grid.add(replaceRow, c);
+        add(grid, BorderLayout.CENTER);
+        for (JComponent field : new JComponent[] {find, replace}) {
+            key(field, "alt C", matchCase::doClick); // the options, without the mouse
+            key(field, "alt W", wholeWord::doClick);
+            key(field, "alt R", regex::doClick);
+        }
         for (JToggleButton option : new JToggleButton[] {matchCase, wholeWord, regex}) {
             option.addActionListener(e -> refresh());
         }
@@ -123,6 +151,7 @@ public class FindBar extends JPanel {
             find.setText(selected);
         }
         replaceRow.setVisible(withReplace);
+        replace.setVisible(withReplace);
         setVisible(true);
         revalidate();
         find.requestFocusInWindow();
@@ -284,13 +313,54 @@ public class FindBar extends JPanel {
         marks.clear();
     }
 
-    private static JToggleButton toggle(String text, String tip) {
-        JToggleButton button = new JToggleButton(text);
-        button.setToolTipText(tip);
+    // A square option button. When it's on it's filled grey with an outline, drawn here, so it
+    // shows whatever the look does with toolbar toggles.
+    private static JToggleButton toggle(String text, String tip, String keys) {
+        JToggleButton button = new JToggleButton(text) {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                if (isSelected()) {
+                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(Style.PRESSED);
+                    g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, Style.ARC, Style.ARC);
+                    g2.setColor(Style.CONTROL_BORDER);
+                    g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, Style.ARC, Style.ARC);
+                    g2.dispose();
+                }
+                setForeground(isSelected() ? Style.INK : Style.INK_SOFT);
+                super.paintComponent(g);
+            }
+        };
+        button.setToolTipText(Shortcuts.label(tip + "  (" + keys + ")"));
         button.getAccessibleContext().setAccessibleName(tip);
         button.putClientProperty("JButton.buttonType", "toolBarButton");
-        button.setFont(Style.CODE_FONT.deriveFont(12f));
+        button.setFont(Style.CODE_FONT.deriveFont(java.awt.Font.BOLD, 12f));
+        Dimension size = new Dimension(Style.CONTROL_H, Style.CONTROL_H);
+        button.setPreferredSize(size);
+        button.setMinimumSize(size);
         button.setFocusable(false);
+        return button;
+    }
+
+    // A square button with an icon (previous, next, close).
+    private static JButton icon(Icons.Glyph glyph, String tip, Runnable action) {
+        JButton button = small("", tip, action);
+        button.setIcon(Icons.of(glyph, Icons.Role.TOOL));
+        Dimension size = new Dimension(Style.CONTROL_H, Style.CONTROL_H);
+        button.setPreferredSize(size);
+        button.setMinimumSize(size);
+        return button;
+    }
+
+    // An ordinary bordered button (Replace, All), so it doesn't look like plain text.
+    private static JButton button(String text, String tip, Runnable action) {
+        JButton button = new JButton(text);
+        button.setToolTipText(Shortcuts.label(tip));
+        button.putClientProperty("JComponent.minimumHeight", Style.CONTROL_H);
+        button.setMargin(new java.awt.Insets(0, Style.SPACE_3, 0, Style.SPACE_3));
+        button.setFocusable(false);
+        button.addActionListener(e -> action.run());
         return button;
     }
 

@@ -117,6 +117,7 @@ public class Workbench extends JPanel {
     private final javax.swing.JTabbedPane fileTabs = new javax.swing.JTabbedPane();
     private boolean fillingTabs;   // true while the file tabs are being made, so their events are ignored
     private String documentName = "new program";
+    private String tabTitle;       // what the tab says, if not the document's name (an example: its title)
     private boolean running;
     private Timer progress;
     private volatile int recordedSteps; // set by the background run, read on Swing's thread
@@ -157,7 +158,8 @@ public class Workbench extends JPanel {
         fileTabs.setVisible(false);
         fileTabs.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
         fileTabs.putClientProperty("JTabbedPane.tabType", "underlined");
-        fileTabs.putClientProperty("JTabbedPane.tabHeight", 28);
+        fileTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
+        fileTabs.setBackground(Style.BACKGROUND); // the file row sits on the code's colour, under the program strip
         fileTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
         fileTabs.setFocusable(false);
         fileTabs.addChangeListener(e -> {
@@ -282,6 +284,16 @@ public class Workbench extends JPanel {
         return documentName;
     }
 
+    // The tab's title: an example's own title ("Bubble sort"), otherwise the document's name.
+    public String getTabTitle() {
+        return tabTitle != null ? tabTitle : documentName;
+    }
+
+    public void setTabTitle(String title) {
+        tabTitle = title;
+        host.stateChanged(this);
+    }
+
     public boolean isDirty() {
         return code.isDirty();
     }
@@ -318,6 +330,7 @@ public class Workbench extends JPanel {
         top.setDividerLocation(dividerForCode());
         currentFile = file;
         documentName = name;
+        tabTitle = null;
         host.stateChanged(this);
     }
 
@@ -738,6 +751,7 @@ public class Workbench extends JPanel {
             currentFile = file;
             code.markSaved();
             documentName = file.getName();
+            tabTitle = null; // saved: now it's a file, named like one
             host.remember(file);
             say("[saved] " + file.getName(), Style.INK_SOFT);
             return true;

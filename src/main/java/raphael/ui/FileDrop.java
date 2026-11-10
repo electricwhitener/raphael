@@ -38,8 +38,14 @@ public class FileDrop extends TransferHandler {
         if (support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
             try {
                 List<?> files = (List<?>) support.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
-                if (!files.isEmpty() && files.get(0) instanceof File) {
-                    onFile.accept((File) files.get(0));
+                boolean any = false;
+                for (Object file : files) { // several files dropped at once: each opens (in its own tab)
+                    if (file instanceof File) {
+                        onFile.accept((File) file);
+                        any = true;
+                    }
+                }
+                if (any) {
                     return true;
                 }
             } catch (java.awt.datatransfer.UnsupportedFlavorException | java.io.IOException e) {

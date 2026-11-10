@@ -57,7 +57,7 @@ class FindBarTest {
 
     private static javax.swing.JToggleButton option(FindBar bar, String name) {
         for (java.awt.Component part : allIn(bar)) {
-            if (part instanceof javax.swing.JToggleButton && name.equals(((javax.swing.JToggleButton) part).getToolTipText())) {
+            if (part instanceof javax.swing.JToggleButton && name.equals(part.getAccessibleContext().getAccessibleName())) {
                 return (javax.swing.JToggleButton) part;
             }
         }

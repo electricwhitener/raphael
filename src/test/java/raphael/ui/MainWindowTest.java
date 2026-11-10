@@ -46,7 +46,7 @@ class MainWindowTest {
         window.newProgram();
         assertEquals(java.util.List.of("Welcome", "Untitled-1", "Untitled-2"), window.tabTitles());
         window.loadExample("BubbleSort"); // Untitled-2 was never typed in, so the example takes its place
-        assertEquals(java.util.List.of("Welcome", "Untitled-1", "BubbleSort.java (example)"), window.tabTitles());
+        assertEquals(java.util.List.of("Welcome", "Untitled-1", "Bubble sort"), window.tabTitles());
         javax.swing.text.Document typed = window.active().getCode().getEditor().getDocument();
         try {
             typed.insertString(0, "// my change\n", null); // as if typed
@@ -56,9 +56,9 @@ class MainWindowTest {
         window.loadExample("BSTInsert"); // the changed program stays, and the example gets a tab of its own
         assertEquals(4, window.tabTitles().size());
         window.closeProgram(); // BSTInsert, unchanged, closes without asking
-        assertEquals(java.util.List.of("Welcome", "Untitled-1", "● BubbleSort.java (example)"), window.tabTitles());
+        assertEquals(java.util.List.of("Welcome", "Untitled-1", "● Bubble sort"), window.tabTitles());
         window.reopenClosedTab();
-        assertEquals("BSTInsert.java (example)", window.tabTitles().get(3));
+        assertEquals("BST insert", window.tabTitles().get(3), "reopened with its title");
         window.dispose();
     }
 

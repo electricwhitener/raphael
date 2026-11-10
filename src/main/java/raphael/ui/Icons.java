@@ -159,6 +159,19 @@ public final class Icons {
             void draw(Graphics2D g) {
                 g.draw(path(false, 4, 6, 8, 10, 12, 6));
             }
+        },
+        CHEVRON_UP {
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(path(false, 4, 10, 8, 6, 12, 10));
+            }
+        },
+        CLOSE { // a cross
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(new Line2D.Float(4.5f, 4.5f, 11.5f, 11.5f));
+                g.draw(new Line2D.Float(11.5f, 4.5f, 4.5f, 11.5f));
+            }
         };
 
         // Draws the glyph in a 16 × 16 box at (0, 0), in the graphics' current colour.

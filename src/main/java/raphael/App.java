@@ -77,7 +77,22 @@ public class App {
                 Map.entry("TitlePane.inactiveBackground", hex(Style.BAR)),
                 Map.entry("TitlePane.foreground", hex(Style.INK)),
                 Map.entry("TitlePane.inactiveForeground", hex(Style.MUTED)),
-                Map.entry("MenuBar.background", hex(Style.BAR))));
+                Map.entry("MenuBar.background", hex(Style.BAR)),
+                // The program tabs are part of the window's frame, like the toolbar: the strip on
+                // BAR, the selected tab raised to the code's colour with an ink underline (blue
+                // means "about to happen", so it isn't used for "selected"), the others muted.
+                Map.entry("TabbedPane.background", hex(Style.BAR)),
+                Map.entry("TabbedPane.selectedBackground", hex(Style.BACKGROUND)),
+                Map.entry("TabbedPane.foreground", hex(Style.MUTED)),
+                Map.entry("TabbedPane.selectedForeground", hex(Style.INK)),
+                Map.entry("TabbedPane.underlineColor", hex(Style.INK)),
+                Map.entry("TabbedPane.inactiveUnderlineColor", hex(Style.MUTED)),
+                Map.entry("TabbedPane.hoverColor", hex(Style.HOVER)),
+                Map.entry("TabbedPane.tabSeparatorColor", hex(Style.HAIRLINE)),
+                Map.entry("TabbedPane.contentAreaColor", hex(Style.HAIRLINE)),
+                Map.entry("TabbedPane.tabSelectionHeight", "2"),
+                // A switched-on toolbar toggle (the find bar's Aa, W and .*) is filled grey.
+                Map.entry("ToggleButton.toolbar.selectedBackground", hex(Style.PRESSED))));
         if (Style.defaultUiFont() != null) { // Linux: the bundled Inter; elsewhere FlatLaf's system font
             UIManager.put("defaultFont", Style.defaultUiFont());
         }
