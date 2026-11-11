@@ -26,7 +26,14 @@ jobs:
       # WinLibs toolchain Raphael will bundle (the image's own gdb has no Python), cached between runs.
       - name: gdb (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y -q gdb
+        # Ubuntu's mirrors are sometimes unreachable from GitHub's machines for a while: retry, then fail
+        # (not skip the C tests).
+        run: |
+          for attempt in 1 2 3; do
+            sudo apt-get update -q && sudo apt-get install -y -q gdb && exit 0
+            echo "apt failed (attempt $attempt); waiting"; sleep 30
+          done
+          exit 1
       - name: WinLibs cache (Windows)
         if: runner.os == 'Windows'
         id: winlibs
