@@ -54,6 +54,7 @@ public class App {
         SwingUtilities.invokeLater(() -> {
             MainWindow window = Windows.openNew();
             Windows.installAppMenu(); // the Mac's Quit, About and Settings, and double-clicked files
+            window.restoreSession(raphael.io.Session.load(SETTINGS)); // the tabs open when Raphael last quit
             window.offerDraft();
             // A file to open: given by the system when a .raphael file is double-clicked, or
             // typed after the command (Raphael scores.java).

@@ -4,6 +4,12 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**Working with folders and files**
+- An Explorer in the side bar, beside the examples, for a program of several files: the folder's files as a tree, as in VS Code. A click shows a file; the file the run is in is the one lit.
+- Raphael opens the tabs you had when you quit (saved files, folders and examples) the next time it starts.
+- A file changed by another program (another editor, git) is read again when you come back to Raphael. If you have unsaved changes to it here, Raphael asks first.
+- A new example, "A program in several files": an interface and two shapes in a package folder, used by Main.
+
 **A more modern interface**
 - Everything you can click now lights up under the mouse: the examples side bar's rows, the welcome page's categories, the boxes in the toolbar, the line numbers you can click, the slider. Run gets darker under the mouse; it used to turn pale grey and look switched off.
 - A chosen row or cell is grey with a dark bar, not solid blue: blue means "about to happen", and Run is the one blue button. The language switches show the chosen language as a raised white pill.

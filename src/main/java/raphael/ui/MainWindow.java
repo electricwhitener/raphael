@@ -174,7 +174,16 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             keepExample(example);
         }
     });
-    private javax.swing.JSplitPane sideSplit; // the examples side bar | the tabs
+    private javax.swing.JSplitPane sideSplit; // the side bar | the tabs
+    // The side bar: the examples, and for a program of several files the Explorer beside them,
+    // as two tabs (the strip is hidden while there's only the one).
+    private final javax.swing.JTabbedPane sideBar = new javax.swing.JTabbedPane();
+    private final ExplorerPanel explorerPanel = new ExplorerPanel(path -> {
+        if (current != null) {
+            current.getCode().showFile(path);
+        }
+    });
+    private Workbench explorerFor; // the program the Explorer last showed, to open on it once
     private final JMenu recentMenu = new JMenu("Open recent");
     private JMenuItem saveRecordingItem;
     private JButton saveButton;
@@ -201,6 +210,12 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         return thread;
     });
     private final Timer autosave = new Timer(AUTOSAVE_MS, e -> autosave());
+    // While the window is in front, the program in front looks for its files changed on disk.
+    private final Timer diskCheck = new Timer(2000, e -> {
+        if (current != null && isActive()) {
+            current.checkDisk();
+        }
+    });
 
     public MainWindow() {
         super("Raphael");
@@ -212,6 +227,13 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             public void windowClosing(WindowEvent e) {
                 if (okToLoseAll()) {
                     Windows.closed(MainWindow.this); // the last window closed ends Raphael
+                }
+            }
+
+            @Override
+            public void windowActivated(WindowEvent e) { // back from another program, which may have changed a file
+                if (current != null) {
+                    SwingUtilities.invokeLater(current::checkDisk); // after the window is painted, in case it asks
                 }
             }
         });
@@ -242,20 +264,26 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         welcome.setTransferHandler(new FileDrop(null, this::openDropped));
         welcome.showRecent(recentFiles());
         buildTabs();
-        sideSplit = new javax.swing.JSplitPane(javax.swing.JSplitPane.HORIZONTAL_SPLIT, examplesPanel, tabs);
+        sideBar.addTab("Examples", examplesPanel);
+        sideBar.putClientProperty("JTabbedPane.tabType", "underlined");
+        sideBar.putClientProperty("JTabbedPane.tabHeight", Style.STRIP_H);
+        sideBar.putClientProperty("JTabbedPane.hasFullBorder", false);
+        sideBar.putClientProperty("JTabbedPane.hideTabAreaWithOneTab", true);
+        sideBar.setFocusable(false);
+        sideSplit = new javax.swing.JSplitPane(javax.swing.JSplitPane.HORIZONTAL_SPLIT, sideBar, tabs);
         sideSplit.setBorder(BorderFactory.createEmptyBorder());
         sideSplit.setDividerSize(5);
         sideSplit.setContinuousLayout(true);
         sideSplit.setDividerLocation(sideBarWidth());
         sideSplit.addPropertyChangeListener(javax.swing.JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
-            if (examplesPanel.isVisible() && sideSplit.getDividerLocation() > Zoom.px(120)) {
+            if (sideBar.isVisible() && sideSplit.getDividerLocation() > Zoom.px(120)) {
                 // kept at 100% zoom, so it grows and shrinks with the zoom
                 App.SETTINGS.putInt("examplesWidth", Math.round(sideSplit.getDividerLocation() / Zoom.factor()));
             }
         });
         // Hidden until a program is in front (placeSideBar): the window opens on the Welcome tab.
-        examplesPanel.setVisible(false);
-        Zoom.minimum(examplesPanel, 180, 0);
+        sideBar.setVisible(false);
+        Zoom.minimum(sideBar, 180, 0);
         sideSplit.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null); // the arrow keys step the program
         add(sideSplit, BorderLayout.CENTER);
         placeSideBar();
@@ -316,6 +344,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         applyTextSize();
         showWelcome();
         autosave.start();
+        diskCheck.start();
         addWindowFocusListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowGainedFocus(WindowEvent e) {
@@ -653,7 +682,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         save.addActionListener(e -> save());
         javax.swing.JToggleButton examples = new javax.swing.JToggleButton("Examples", Icons.of(Icons.Glyph.SIDE_BAR, Icons.Role.TOOL));
         examples.setIconTextGap(Style.SPACE_2); // an icon, as every other toolbar control has: it reads as a button
-        examples.setSelected(examplesPanel.isVisible());
+        examples.setSelected(sideBar.isVisible());
         examplesButton = examples;
         examples.setToolTipText(Shortcuts.label("Show or hide the examples  (Ctrl+B)"));
         examples.setRequestFocusEnabled(false);
@@ -1219,6 +1248,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     @Override
     public void dispose() {
         javax.swing.MenuSelectionManager.defaultManager().removeChangeListener(menuWatcher);
+        diskCheck.stop();
         super.dispose();
     }
 
@@ -1449,6 +1479,77 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         newProgram(lastNewLanguage());
     }
 
+    // ---- the session: the tabs to open again at the next start ----
+
+    // This window's tabs that can be opened again: saved files and folders, and examples. A
+    // program never saved isn't one (its draft is kept while Raphael runs, and asked about on quit).
+    List<raphael.io.Session.Tab> sessionTabs() {
+        List<raphael.io.Session.Tab> found = new java.util.ArrayList<>();
+        for (Workbench program : programs()) {
+            raphael.io.Session.Tab tab = program.getFolder() != null
+                    ? new raphael.io.Session.Tab(raphael.io.Session.Kind.FOLDER, program.getFolder().getAbsolutePath())
+                    : program.getCurrentFile() != null
+                    ? new raphael.io.Session.Tab(raphael.io.Session.Kind.FILE, program.getCurrentFile().getAbsolutePath())
+                    : program.getExample() != null
+                    ? new raphael.io.Session.Tab(raphael.io.Session.Kind.EXAMPLE, program.getExample().key()) : null;
+            if (tab != null && !found.contains(tab)) {
+                found.add(tab);
+            }
+        }
+        return found;
+    }
+
+    // The index in sessionTabs() of the program in front, or -1 (the Welcome tab, or a program not in the list).
+    int sessionFront() {
+        List<raphael.io.Session.Tab> found = sessionTabs();
+        List<Workbench> all = programs();
+        int index = 0;
+        for (Workbench program : all) {
+            boolean listed = program.getFolder() != null || program.getCurrentFile() != null || program.getExample() != null;
+            if (program == current) {
+                return listed && index < found.size() ? index : -1;
+            }
+            index += listed ? 1 : 0;
+        }
+        return -1;
+    }
+
+    // Opens the tabs of the last session again, quietly leaving out a file, folder or example
+    // that's gone, then brings the one that was in front to the front.
+    public void restoreSession(raphael.io.Session.Saved saved) {
+        Workbench front = null;
+        for (int i = 0; i < saved.tabs().size(); i++) {
+            raphael.io.Session.Tab tab = saved.tabs().get(i);
+            Workbench before = current;
+            switch (tab.kind()) {
+                case FILE -> {
+                    File file = new File(tab.where());
+                    if (file.isFile()) {
+                        openFile(file);
+                    }
+                }
+                case FOLDER -> {
+                    File folder = new File(tab.where());
+                    if (folder.isDirectory()) {
+                        openFolder(folder);
+                    }
+                }
+                case EXAMPLE -> {
+                    ExampleCatalog.Example example = ExampleCatalog.byKey(tab.where());
+                    if (example != null) {
+                        showExample(example, false).setPreview(false); // a tab of its own: the next example doesn't replace it
+                    }
+                }
+            }
+            if (i == saved.front() && current != before) {
+                front = current;
+            }
+        }
+        if (front != null) {
+            tabs.setSelectedComponent(front);
+        }
+    }
+
     // Ctrl+N: the New button's menu of languages, the last one chosen lit, so Enter takes it.
     // Opened just after: a menu item (and its shortcut) closes every open menu once its action has run.
     private void askNewProgram() {
@@ -1605,23 +1706,51 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
 
     // ---- the examples side bar ----
 
+    // The Explorer tab, while the program in front has several files: their tree, the file in the
+    // editor chosen. It comes to the front once when such a program does, as VS Code opens on a folder's files.
+    private void showExplorer() {
+        List<String> paths = current == null ? List.of() : current.getCode().getPaths();
+        boolean many = paths.size() > 1 || (paths.size() == 1 && paths.get(0) != null);
+        int at = sideBar.indexOfComponent(explorerPanel);
+        if (!many) {
+            if (at >= 0) {
+                sideBar.removeTabAt(at);
+            }
+            explorerFor = null;
+            return;
+        }
+        File folder = current.getFolder();
+        String name = folder != null ? folder.getName() : current.getExample() != null ? current.getExample().name() : current.getTabTitle();
+        explorerPanel.show(name, paths, current.getCode().getShownPath()); // the folder's name, as a file explorer shows it
+        if (at < 0) {
+            sideBar.addTab("Explorer", explorerPanel);
+        }
+        if (explorerFor != current) {
+            explorerFor = current;
+            sideBar.setSelectedComponent(explorerPanel);
+        }
+    }
+
     // Shows the side bar if it's hidden, else hides it (Ctrl+B, the toolbar's Examples, View → Examples).
     // Not on the Welcome tab, which has its own example browser.
     void toggleExamples() {
-        if (current != null) {
-            showExamplesPanel(!examplesPanel.isVisible());
+        if (current != null && sideBar.isVisible() && sideBar.getSelectedComponent() != examplesPanel) {
+            sideBar.setSelectedComponent(examplesPanel); // the Explorer was in front: the examples come forward
+            examplesPanel.focusSearch();
+        } else if (current != null) {
+            showExamplesPanel(!sideBar.isVisible());
         }
     }
 
     boolean examplesShowing() {
-        return examplesPanel.isVisible();
+        return sideBar.isVisible();
     }
 
     // Whether the user wants the side bar (remembered); it shows while a program is in front.
     void showExamplesPanel(boolean show) {
         App.SETTINGS.putBoolean("examplesShown", show);
         placeSideBar();
-        if (show && current != null) {
+        if (show && current != null && sideBar.getSelectedComponent() == examplesPanel) {
             examplesPanel.focusSearch();
         } else if (current != null) {
             current.focusEditor();
@@ -1636,8 +1765,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         }
         boolean wanted = App.SETTINGS.getBoolean("examplesShown", true) && raphael.lang.Languages.chosen();
         boolean show = wanted && current != null;
-        if (examplesPanel.isVisible() != show) {
-            examplesPanel.setVisible(show);
+        if (sideBar.isVisible() != show) {
+            sideBar.setVisible(show);
             if (show) {
                 sideSplit.setDividerLocation(sideBarWidth());
             }
@@ -1717,9 +1846,13 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     // Puts an example in a tab: the one in front if it's untouched (or the preview being reused), else a new one.
     private Workbench showExample(ExampleCatalog.Example example, boolean reuseFront) {
         Workbench program = reuseFront ? current : newTab(true);
-        String source = ExampleCatalog.source(example);
         program.setLanguage(example.language());
-        program.showCode(source, null, example.name() + example.language().endings().get(0) + " (example)");
+        List<raphael.model.SourceFile> files = ExampleCatalog.files(example);
+        if (files != null) { // a folder of files: in file tabs and the Explorer, with no folder on disk yet (Save asks where)
+            program.showFiles(files, files.get(0).path(), null, example.name() + " (example)");
+        } else {
+            program.showCode(ExampleCatalog.source(example), null, example.name() + example.language().endings().get(0) + " (example)");
+        }
         program.setExample(example);
         program.setTabTitle(example.title()); // "Bubble sort"; the tooltip says it's an example
         host.stateChanged(program);
@@ -1837,6 +1970,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         } else {
             host.stateChanged(current);
             examplesPanel.select(current.getExample()); // the side bar shows which example this is
+            showExplorer();
             java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             if (owner == null || !SwingUtilities.isDescendingFrom(owner, current)) {
                 // The keyboard goes to the code, not to the first button (the Home logo). Asked now,
@@ -2494,12 +2628,20 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             if (workbench != current) {
                 return; // a program that isn't in front: its state shows when it is
             }
+            showExplorer();
             updateTitle();
             styleRunButton();
             showBusy(workbench.isRunning());
             showStatus(workbench.statusText(), workbench.statusColor());
             showLegendIfRoom();
             showPosition();
+        }
+
+        @Override
+        public void fileShown(Workbench workbench) {
+            if (workbench == current) {
+                explorerPanel.choose(workbench.getCode().getShownPath());
+            }
         }
 
         @Override

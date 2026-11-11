@@ -83,6 +83,10 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         // A right-click on a panel's heading: the layout's choices there (closed panels to bring back).
         default void showLayoutMenu(java.awt.Component on, int x, int y) {
         }
+
+        // Another of the program's files is in the editor (a tab clicked, or the run went into it).
+        default void fileShown(Workbench workbench) {
+        }
     }
 
     private static final Logger LOG = Logger.getLogger(Workbench.class.getName());
@@ -123,6 +127,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
     private String recordingText = "";
     private File currentFile;
     private File folder;           // a program of several files: the folder they're in; otherwise null
+    private final java.util.Map<String, Long> diskTimes = new java.util.HashMap<>(); // each file's time on disk, as last read or saved
     // A program of several files has a tab for each one above its code.
     private final javax.swing.JTabbedPane fileTabs = new javax.swing.JTabbedPane();
     private final javax.swing.JTabbedPane viewTabs = new javax.swing.JTabbedPane(); // Picture, Calls
@@ -183,6 +188,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             }
         });
         code.setOnFileShown(path -> {
+            host.fileShown(this);
             int index = code.getPaths().indexOf(path);
             if (index >= 0 && index < fileTabs.getTabCount() && fileTabs.getSelectedIndex() != index) {
                 fillingTabs = true;
@@ -549,6 +555,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         currentFile = file;
         documentName = name;
         tabTitle = null;
+        rememberDiskTimes();
         host.stateChanged(this);
     }
 
@@ -569,6 +576,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         fileTabs.setVisible(true);
         fillingTabs = false;
         code.setFiles(files, first);
+        rememberDiskTimes();
         titleFileTabs();
         placeTopDivider();
         host.stateChanged(this);
@@ -1012,9 +1020,66 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             }
         }
         titleFileTabs();
+        rememberDiskTimes();
         host.remember(folder);
         say("[saved] " + folder.getName(), Style.INK_SOFT);
         return true;
+    }
+
+    // ---- files changed on disk by another program ----
+
+    // Where a file of this program is on disk (path null for a program of one file), or null if it isn't saved anywhere.
+    private File diskFile(String path) {
+        return path == null ? currentFile : folder == null ? null : new File(folder, path);
+    }
+
+    private void rememberDiskTimes() {
+        diskTimes.clear();
+        for (String path : code.getPaths()) {
+            File file = diskFile(path);
+            if (file != null && file.isFile()) {
+                diskTimes.put(path, file.lastModified());
+            }
+        }
+    }
+
+    // The window asks when it comes to the front, and every few seconds while it's there. A file
+    // another program changed (an editor, git) is read again: at once if it has no changes here,
+    // else only if the user says so. Each change is asked about once.
+    public void checkDisk() {
+        if (running) {
+            return; // the run records the code as it was; checked again after
+        }
+        for (String path : code.getPaths()) {
+            File file = diskFile(path);
+            Long known = diskTimes.get(path);
+            if (file == null || known == null || !file.isFile() || file.lastModified() == known) {
+                continue;
+            }
+            diskTimes.put(path, file.lastModified());
+            String text;
+            try {
+                text = SafeFiles.readCode(file.toPath());
+            } catch (IOException e) {
+                continue; // being written just now, or no longer code: the next change is another chance
+            }
+            if (text.replace("\r\n", "\n").equals(code.textOf(path))) {
+                continue; // touched, not changed (or saved here)
+            }
+            if (code.isDirty(path)) {
+                String answer = Dialogs.question(this, file.getName() + " changed on disk")
+                        .body("Another program changed it since it was opened here, and you have changes here that aren't saved.")
+                        .buttons("Reload it", null, "Keep mine")
+                        .ask();
+                if (!"Reload it".equals(answer)) {
+                    continue; // the next save writes this version over the other
+                }
+            }
+            code.reloadText(path, text);
+            titleFileTabs();
+            say("reloaded " + file.getName() + ": it changed on disk", Style.INK_SOFT);
+            host.stateChanged(this);
+        }
     }
 
     // The folder's own text files (not its code), which the program may read; up to 10 MB each.
@@ -1047,6 +1112,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             SafeFiles.write(file.toPath(), code.getCode());
             currentFile = file;
             code.markSaved();
+            rememberDiskTimes();
             documentName = file.getName();
             tabTitle = null; // saved: now it's a file, named like one
             host.remember(file);

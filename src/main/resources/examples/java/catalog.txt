@@ -39,6 +39,7 @@ oop/Lambdas | Lambdas | An anonymous class and a lambda, both handed to sort().
 oop/Composition | Composition | An object built from other objects: a car has an engine.
 oop/Generics | Generics | One Box class that holds any type, checked by the compiler.
 oop/BankAccounts | All together: bank accounts | An interface, an abstract class, inheritance, polymorphism and an exception.
+oop/Shapes | A program in several files | An interface and two shapes in a package folder, used by Main: open the Explorer to see them.
 
 ## Exceptions
 oop/TryCatchFinally | try, catch, finally | The catch runs only on an error; finally runs either way.

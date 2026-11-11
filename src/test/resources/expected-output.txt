@@ -53,6 +53,11 @@ hello, 42, Mia is 19
 > 2 earns 0.0
 > amount must be positive
 
+## oop/Shapes
+circle: 3.14
+square: 4.00
+total: 7.14
+
 ## oop/TryCatchFinally
 10 / 2 = 5
 done with 10 / 2

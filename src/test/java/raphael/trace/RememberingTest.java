@@ -70,7 +70,8 @@ class RememberingTest {
     static Stream<String> programs() throws Exception {
         List<String> names = new ArrayList<>(List.of("tricky"));
         for (ExampleCatalog.Example example : ExampleCatalog.all()) {
-            if (example.language() == raphael.lang.Languages.JAVA && !example.name().equals("MissingBaseCase")) {
+            if (example.language() == raphael.lang.Languages.JAVA && !example.name().equals("MissingBaseCase")
+                    && ExampleCatalog.files(example) == null) { // a folder example is several files: ExamplesTest runs it
                 names.add("/examples/java/" + example.path() + ".java"); // MissingBaseCase: 2,000 steps of one call, twice
             }
         }

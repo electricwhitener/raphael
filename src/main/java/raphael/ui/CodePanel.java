@@ -215,6 +215,35 @@ public class CodePanel extends JPanel implements TraceListener {
         this.onFileShown = onFileShown;
     }
 
+    // The text of one file now (path null for a program of one file), or null if it hasn't that file.
+    public String textOf(String path) {
+        FileText text = texts.get(path);
+        return text == null ? null : editorText(text);
+    }
+
+    // A file changed on disk by another program: its new text, still counted as saved, the caret
+    // kept where it was as far as the text allows. Undo starts afresh (it would undo the reload).
+    public void reloadText(String path, String code) {
+        FileText text = texts.get(path);
+        if (text == null) {
+            return;
+        }
+        int caret = text == shown ? editor.getCaretPosition() : text.caret;
+        try {
+            text.document.remove(0, text.document.getLength());
+            text.document.insertString(0, code.replace("\r\n", "\n"), null);
+        } catch (javax.swing.text.BadLocationException e) {
+            throw new IllegalStateException(e); // offsets inside the document
+        }
+        text.dirty = false;
+        text.undo.discardAllEdits();
+        text.caret = Math.min(caret, text.document.getLength());
+        if (text == shown) {
+            editor.setCaretPosition(text.caret);
+        }
+        loaded(); // the run on screen was of the old code
+    }
+
     public boolean isDirty(String path) {
         FileText text = texts.get(path);
         return text != null && text.dirty;

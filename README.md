@@ -306,10 +306,11 @@ Safety:
 | `AppLog` | The log file: java.util.logging, 3 files of 1 MB, one line per message | `setup()`, `folder()`, `LineFormatter.format()` |
 | `SafeFiles` | Saving that never leaves a half-written file; reading that refuses huge or binary files; plain reasons for file errors | `write()`, `readCode()`, `describe()` |
 | `DraftStore` | The autosaved draft | `save()`, `load()`, `clear()` |
+| `Session` | The tabs open at quit (saved files, folders, examples, and the one in front), opened again at the next start | `save()`, `load()`, the records `Tab` and `Saved` |
 | `RunFile` | Saves and opens recordings (`.raphael`): serialization through stacked streams, a header, and a filter that reads only Raphael's own classes | `write()`, `read()` |
 | `RunFileException` | A recording that can't be opened, with the reason in plain words | — |
 | `StepLog` | The run as a CSV table, one row per step | `write()`, `row()` |
-| `ExampleCatalog` | Each language's example programs, read from `examples/<language>/catalog.txt` (title, category, subcategory, cases) | `groups(language)`, `all()`, `find()`, `source()`, `input()` |
+| `ExampleCatalog` | Each language's example programs, read from `examples/<language>/catalog.txt` (title, category, subcategory, cases); an example can be a folder of files, listed in its `files.txt` | `groups(language)`, `all()`, `find()`, `byKey()`, `source()`, `files()`, `input()` |
 | `UpdateCheck` | Asks GitHub, at most once a day, whether a newer Raphael exists | `newer()`, `isNewer()`, `currentVersion()` |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
@@ -372,6 +373,8 @@ Safety:
 | `Languages`, `RegexLexer`, `Token` (lang/) | The registry of languages and the one being learned; one configurable lexer that colours every language | `byId()`, `forFile()`, `recognise()`, `preferred()`, `tokens()` |
 | `Segmented` | A row of equal cells with one chosen (the language switches), painted so the chosen cell is always the accent colour | `choose()`, `describe()` |
 | `ExamplesPanel` | The examples side bar: a language switch, search, and the tree of title, category, subcategory and cases; one click previews, a double click keeps | `showLanguage()`, `select()`, `focusSearch()`, the interface `Actions` |
+| `ExplorerPanel` | The Explorer, beside the examples in the side bar for a program of several files: the folder's files as a tree; a click shows a file | `show()`, `choose()` |
+| `RowTree` | The side bar's tree (a `JTree` subclass): rows grey under the mouse and grey with a bar when chosen, a click opens a folder | `paintComponent()`, `updateUI()` |
 | `VisualPanel` | Shows the animated picture: centred and scaled to fit, plus zoom | `stepChanged()`, `paintComponent()`, `fitToRun()`, `zoomBy()`, `setMessage()`, `cardFor()`, `note()` |
 | `ControlsBar` | Step buttons, skip call and finish call, slider, play and speed; a step made by hand pauses playing | `stepChanged()`, `togglePlay()`, `play()` |
 | `CallStackPanel`, `LocalsPanel` | Running methods; variables (changed ones tinted) | `stepChanged()` |
@@ -395,7 +398,7 @@ Safety:
 | `ErrorReporter` | The safety net: logs any problem nothing caught and tells the user | `install()`, `report()`, `details()` |
 | `SettingsDialog` | The settings window: run limits, text size, and a System / Light / Dark theme switch | `ask()`, `read()` |
 | `SourceFile` (model) | One file of a program: its path in the program's folder and its text | record |
-| **resources/examples/** | The 103 example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
+| **resources/examples/** | The example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
 | **resources/fonts/** | The IBM Plex Mono and Inter font files and their licences | — |
 
 ## OOP concepts
@@ -409,7 +412,7 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Encapsulation | `TraceModel` (`setStep` keeps the step valid), `Spring`, `Snapshot`, `Trace`, `HeapObject`, `Animator` | Fields are private, read through getters, and changed only through methods that check them, so nothing can be put in an impossible state. |
 | Abstraction | `Tracer`, `RaphaelException`, `HeapObject`, `Structure`, `LinkedStructure`, `StructureRenderer` | The window asks a `Tracer` for a `Trace` without knowing whether it comes from JDI (Java) or a debugger running C (`CTracer`); abstract classes like `Structure` can't be created themselves, only their concrete kinds. |
 | Interfaces | `Tracer` (`stop()`, `stepsSoFar()`, `setLimits()`, `setLiveInput()` and `outputSoFar()` are default methods), `Value`, `SceneSource` (the Calls, Objects and Files views, each drawing a step its own way), `TraceListener` (with a default method), `Workbench.Host` (a program talks back to its window only through it, and `MainWindow.Host`, an inner class, implements it) | `JdiTracer` implements `Tracer`; the three value kinds implement `Value`; all six panels implement `TraceListener`. |
-| Composition | `MainWindow` holds a `Workbench` per tab, and each `Workbench` is made of panels; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
+| Composition | `MainWindow` holds a `Workbench` per tab, and each `Workbench` is made of panels; the side bar holds `ExamplesPanel` and `ExplorerPanel`, each built around a `RowTree`; `EditorKeys` holds a text area; `Animator` holds `Spring`s | One object is built from others and hands them work, instead of inheriting from them. |
 | Inheritance | the twelve `ErrorExplainer` subclasses extend it (`Signal` explains C's crashes); `MemoryConcept` and `InputConcept` extend `Concept`; `CodePanel.ColoredView` extends Swing's `PlainView`; `ObjectNode`/`ArrayNode` extend `HeapObject`; the six renderers extend `StructureRenderer`; the panels extend `JPanel`; `MainWindow` extends `JFrame`; `OutputDrainer` extends `Thread`; `RaphaelException` extends `Exception`, and `TraceException`, `CompileSetupException` and `RunFileException` extend it; `AppLog.LineFormatter` extends Java's `Formatter`; `SettingsDialog` extends `JDialog`; `SceneList` extends `AbstractList`, so it's a `List<Scene>` to everyone else | Subclasses reuse the parent's fields and methods and add their own. |
 | Multilevel inheritance | `Structure` → `LinkedStructure` → `LinkedListStructure` / `BinaryTreeStructure` / `MultiwayTreeStructure` | Lists and trees share node handling in the middle class; each adds its own links. |
 | Polymorphism (overriding) | `ErrorExplainer.describe()`, `render()`, `describe(snapshot)`, `shortName()`, `display()`, `drawUnselectedText()`, `getKind()`, `stepChanged()`, `paintComponent()`, `OutputDrainer.run()`, `LineFormatter.format()` | The same call does the right thing for each kind of object: `SceneBuilder` calls `render()` without knowing which renderer it has, and `TraceModel` calls `stepChanged()` without knowing which panel it is, and `VisualPanel` calls `sceneAt()` without knowing which view it has. |
@@ -488,8 +491,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `LexerTest`: each kind of colour, words inside comments and strings, unfinished text while typing, very long strings.
 - `LanguagesTest`: recognising pasted C, C++, Python and Java; file endings and names; templates.
 - `ExamplesPanelTest`: the tree holds every case, and search filters it.
+- `ExplorerPanelTest`: a folder's files under their folders, folders first; a click asks for the file, and following the editor isn't a click.
+- `SessionTest`: the tabs come back in order with the one in front; a damaged value is read as far as it makes sense.
 - `ControlsBarTest`: a step made by hand pauses playing.
-- `MainWindowTest`: no panel around the picture takes the shortcut keys for itself.
+- `MainWindowTest`: no panel around the picture takes the shortcut keys for itself; the session comes back, leaving out a file that's gone.
+- `WorkbenchTest`: a saved file changed on disk is read again; one only touched stays as it is.
 - `ShortcutsTest`: Ctrl becomes Cmd and Alt becomes Option on a Mac, in the keys and in the text; the keys screen stays in two columns.
 - `SystemThemeTest`: the dark-mode answers of Windows, macOS and Linux are read correctly, and asking never fails.
 - `ErrorReporterTest`: an exception nothing caught, on another thread, ends up in the log; the details have the versions and the stack trace.

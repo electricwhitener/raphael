@@ -294,4 +294,34 @@ class MainWindowTest {
         }
         return null;
     }
+
+    // The tabs open at quit come back at the next start, in order, with the same one in front;
+    // a file that's gone since is left out.
+    @Test
+    void theSessionComesBack(@org.junit.jupiter.api.io.TempDir java.nio.file.Path folder) throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        java.io.File sum = folder.resolve("Sum.java").toFile();
+        java.nio.file.Files.writeString(sum.toPath(), "public class Sum {\n    public static void main(String[] a) {\n    }\n}\n");
+        java.io.File gone = folder.resolve("Gone.java").toFile();
+        java.nio.file.Files.writeString(gone.toPath(), "public class Gone {\n}\n");
+        MainWindow window = new MainWindow();
+        window.loadExample("BubbleSort");
+        window.openFromSystem(gone);
+        window.openFromSystem(sum);
+        window.loadExample("InsertAtHead");
+        java.util.List<String> titles = window.tabTitles();
+        java.util.List<raphael.io.Session.Tab> tabs = window.sessionTabs();
+        assertEquals(4, tabs.size(), tabs.toString());
+        raphael.io.Session.Saved saved = new raphael.io.Session.Saved(tabs, 2); // Sum.java was in front
+        window.dispose();
+        assertTrue(gone.delete());
+
+        MainWindow again = new MainWindow();
+        again.restoreSession(saved);
+        java.util.List<String> expected = new java.util.ArrayList<>(titles);
+        expected.removeIf(title -> title.contains("Gone"));
+        assertEquals(expected, again.tabTitles());
+        assertEquals(sum.getAbsoluteFile(), again.active().getCurrentFile().getAbsoluteFile());
+        again.dispose();
+    }
 }

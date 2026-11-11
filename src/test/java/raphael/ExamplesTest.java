@@ -33,10 +33,11 @@ class ExamplesTest {
     private Trace run(String name) throws Exception {
         ExampleCatalog.Example example = ExampleCatalog.find(name);
         String source = ExampleCatalog.source(example);
-        CompileResult program = example.language().compile(source);
+        java.util.List<raphael.model.SourceFile> files = ExampleCatalog.files(example); // a folder example: several files
+        CompileResult program = files != null ? example.language().compileFolder(files, null) : example.language().compile(source);
         assertTrue(program.success(), () -> name + " didn't compile: " + program.errors());
         Trace trace = example.language().newTracer().trace(program, ExampleCatalog.input(source));
-        assertEquals(trace.size(), new SceneBuilder(source).build(trace).size());
+        assertEquals(trace.size(), (files != null ? new SceneBuilder(files) : new SceneBuilder(source)).build(trace).size());
         assertTrue(trace.size() > 0, name + " recorded no steps");
         return trace;
     }
@@ -88,8 +89,14 @@ class ExamplesTest {
         Set<String> files = new HashSet<>();
         try (Stream<Path> walk = Files.walk(folder)) { // every code file, as "java/sorting/BubbleSort"
             walk.filter(p -> raphael.lang.Languages.forFile(p.getFileName().toString()) != null).forEach(p -> {
-                String relative = folder.relativize(p).toString().replace('\\', '/');
-                files.add(relative.substring(0, relative.lastIndexOf('.')));
+                Path example = p; // a file of a folder example (a files.txt above it) counts as that folder
+                for (Path up = p.getParent(); !up.equals(folder); up = up.getParent()) {
+                    if (Files.isRegularFile(up.resolve("files.txt"))) {
+                        example = up.resolve("x");
+                    }
+                }
+                String relative = folder.relativize(example).toString().replace('\\', '/');
+                files.add(relative.substring(0, relative.lastIndexOf(example == p ? '.' : '/')));
             });
         }
         Set<String> listed = new HashSet<>();

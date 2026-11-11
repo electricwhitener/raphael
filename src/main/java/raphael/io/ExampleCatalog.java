@@ -71,6 +71,16 @@ public final class ExampleCatalog {
     }
 
     // The Java example with this name ("BubbleSort"), else any language's, or null.
+    // The example with this key (Example.key()), or null if there's none now.
+    public static Example byKey(String key) {
+        for (Example example : all()) {
+            if (example.key().equals(key)) {
+                return example;
+            }
+        }
+        return null;
+    }
+
     public static Example find(String name) {
         Example other = null;
         for (Example example : all()) {
@@ -99,7 +109,38 @@ public final class ExampleCatalog {
     }
 
     public static String source(Example example) {
+        List<raphael.model.SourceFile> files = files(example);
+        if (files != null) { // a folder: the file with main, which is what runs
+            return files.get(0).text();
+        }
         String file = FOLDER + example.language().id() + "/" + example.path() + example.language().endings().get(0);
+        return text(file, example);
+    }
+
+    // An example that's a folder of files (a files.txt in it lists them, as a jar can't list a
+    // folder): its files, the first one the file with main. Null for an example of one file.
+    public static List<raphael.model.SourceFile> files(Example example) {
+        String folder = FOLDER + example.language().id() + "/" + example.path() + "/";
+        String list;
+        try (InputStream in = ExampleCatalog.class.getResourceAsStream(folder + "files.txt")) {
+            if (in == null) {
+                return null;
+            }
+            list = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        List<raphael.model.SourceFile> files = new ArrayList<>();
+        for (String line : list.replace("\r\n", "\n").split("\n")) {
+            String path = line.strip();
+            if (!path.isEmpty() && !path.startsWith("#")) {
+                files.add(new raphael.model.SourceFile(path, text(folder + path, example)));
+            }
+        }
+        return files;
+    }
+
+    private static String text(String file, Example example) {
         try (InputStream in = ExampleCatalog.class.getResourceAsStream(file)) {
             if (in == null) {
                 throw new IllegalStateException("The example " + example.path() + " is in the catalog but not in Raphael");

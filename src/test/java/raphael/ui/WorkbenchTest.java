@@ -152,4 +152,29 @@ class WorkbenchTest {
         }
         assertFalse(running.get(), "the runs finished within a minute");
     }
+
+    // A saved file another program changed is read again, still saved; one only touched (the same
+    // text, a new time) stays as it is.
+    @Test
+    void aFileChangedOnDiskIsReadAgain(@org.junit.jupiter.api.io.TempDir java.nio.file.Path folder) throws Exception {
+        File file = folder.resolve("Count.java").toFile();
+        String three = COUNT_TO.formatted(3);
+        java.nio.file.Files.writeString(file.toPath(), three);
+        Workbench[] program = new Workbench[1];
+        SwingUtilities.invokeAndWait(() -> {
+            program[0] = new Workbench(new FakeHost());
+            program[0].showCode(three, file, file.getName());
+        });
+        java.nio.file.Files.writeString(file.toPath(), three);
+        assertTrue(file.setLastModified(file.lastModified() + 5000)); // touched, not changed
+        SwingUtilities.invokeAndWait(() -> program[0].checkDisk());
+        assertEquals(three, program[0].getCode().getCode());
+
+        String six = COUNT_TO.formatted(6);
+        java.nio.file.Files.writeString(file.toPath(), six);
+        assertTrue(file.setLastModified(file.lastModified() + 10000)); // the file system's clock may be coarse
+        SwingUtilities.invokeAndWait(() -> program[0].checkDisk());
+        assertEquals(six, program[0].getCode().getCode());
+        assertFalse(program[0].isDirty(), "the reloaded text is what's saved");
+    }
 }

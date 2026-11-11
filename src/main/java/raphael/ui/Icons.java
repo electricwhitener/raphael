@@ -38,6 +38,20 @@ public final class Icons {
                 g.draw(new Line2D.Float(6, 8, 10, 8));
             }
         },
+        FILE { // a page with a folded corner and two lines of text: a file in the Explorer
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(path(true, 3.5, 2, 9.5, 2, 12.5, 5, 12.5, 14, 3.5, 14));
+                g.draw(new Line2D.Float(6, 8.5f, 10, 8.5f));
+                g.draw(new Line2D.Float(6, 11, 10, 11));
+            }
+        },
+        FOLDER { // a closed folder: a folder in the Explorer
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(path(true, 2, 4, 6, 4, 7.5, 5.5, 14, 5.5, 14, 12.5, 2, 12.5));
+            }
+        },
         OPEN {
             @Override
             void draw(Graphics2D g) {

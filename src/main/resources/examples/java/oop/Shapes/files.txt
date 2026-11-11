@@ -1,0 +1,5 @@
+# The files of this example, a program of several files (a jar can't list a folder).
+Main.java
+shapes/Shape.java
+shapes/Circle.java
+shapes/Square.java

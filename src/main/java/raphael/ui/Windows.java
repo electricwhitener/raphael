@@ -55,6 +55,9 @@ public final class Windows {
 
     // A window was closed (its unsaved work already asked about). The last one ends Raphael.
     static void closed(MainWindow window) {
+        if (OPEN.size() == 1 && OPEN.contains(window)) { // the last window: its tabs open again next time
+            raphael.io.Session.save(raphael.App.SETTINGS, window.sessionTabs(), window.sessionFront());
+        }
         OPEN.remove(window);
         window.forgetDrafts();
         window.dispose();
@@ -74,11 +77,30 @@ public final class Windows {
                 return false;
             }
         }
+        saveSession();
         for (MainWindow window : all()) {
             window.forgetDrafts();
         }
         exit();
         return true;
+    }
+
+    // Quit: every window's tabs, one after another, to open in one window next time; the front
+    // window's front tab stays in front.
+    private static void saveSession() {
+        List<raphael.io.Session.Tab> tabs = new java.util.ArrayList<>();
+        int front = -1;
+        for (MainWindow window : all()) {
+            if (window == Windows.front && window.sessionFront() >= 0) {
+                front = tabs.size() + window.sessionFront();
+            }
+            for (raphael.io.Session.Tab tab : window.sessionTabs()) {
+                if (!tabs.contains(tab)) {
+                    tabs.add(tab);
+                }
+            }
+        }
+        raphael.io.Session.save(raphael.App.SETTINGS, tabs, front);
     }
 
     // Forgets every window without ending anything, for the tests.
