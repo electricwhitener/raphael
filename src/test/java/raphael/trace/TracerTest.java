@@ -487,7 +487,8 @@ class TracerTest {
         if (program != null) {
             // Polled: onExit() on a process that isn't our own child checks less and less often
             // on macOS, and can report an ended program seconds late (the same reason ParentWatch polls).
-            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
+            // 15 s: GitHub's macOS machines are sometimes slow enough to miss 6 s (2026-11-11).
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
             while (program.isAlive() && System.nanoTime() < until) {
                 Thread.sleep(100);
             }

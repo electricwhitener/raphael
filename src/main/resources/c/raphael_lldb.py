@@ -170,7 +170,9 @@ def type_name(t):
     if tc == lldb.eTypeClassArray:
         return type_name(c.GetArrayElementType()) + "[]"
     if tc == lldb.eTypeClassPointer:
-        pointee = c.GetPointeeType()
+        pointee = t.GetUnqualifiedType().GetPointeeType()
+        if not pointee.IsValid():
+            pointee = c.GetPointeeType()
         if canonical(pointee).GetTypeClass() in STRUCTS:
             return type_name(pointee)
         return t.GetName()
@@ -260,7 +262,9 @@ class Step:
             address = v.GetValueAsUnsigned()
             if address == 0:
                 return {"n": 1}
-            pointee = c.GetPointeeType()
+            pointee = t.GetUnqualifiedType().GetPointeeType()  # FILE, not __sFILE: the type as written
+            if not pointee.IsValid():
+                pointee = c.GetPointeeType()
             pc = canonical(pointee)
             if pc.GetTypeClass() in STRUCTS:
                 block = STEP_BLOCKS[0].starting_at(address)
@@ -587,7 +591,27 @@ def crash_signal(thread):
     return None
 
 
+last_step = [None]
+
+
+def finish_returns():
+    if last_step[0] is not None:
+        again = dict(last_step[0])
+        again["exits"] = exits[:]
+        again["out"] = output_size()
+        send(again)
+        del exits[:]
+
+
 def finish(reason, **more):
+    if exits and last_step[0] is not None and reason == "finished":
+        # Returns that happened in main's last line, with no step after them to land on: the last
+        # step again, with them.
+        again = dict(last_step[0])
+        again["exits"] = exits[:]
+        again["out"] = output_size()
+        send(again)
+        del exits[:]
     message = {"kind": "end", "reason": reason}
     message.update(more)
     send(message)
@@ -640,6 +664,8 @@ def run(debugger):
             if student_depth_anywhere(thread):
                 thread.StepOut()  # inside the C library: leave it
             else:
+                if exits:
+                    finish_returns()
                 Run.process.Continue()  # main has returned: let the program end
             continue
         at_start = frame.GetPC() == entry.GetStartAddress().GetLoadAddress(Run.target)
@@ -670,6 +696,7 @@ def run(debugger):
                 if files is not None:
                     message["files"] = files
                 send(message)
+                last_step[0] = message
                 del exits[:]
                 steps += 1
                 if steps >= MAX_STEPS:

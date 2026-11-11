@@ -340,7 +340,11 @@ class CTracerTest {
                     return 10 / zero;
                 }
                 """, "");
-        assertEquals("Arithmetic error: zero was 0 when the line divided by it (line 3)", divide.getEndMessage());
+        if (System.getProperty("os.arch").matches("aarch64|arm64")) {
+            assertEquals(EndReason.FINISHED, divide.getEndReason()); // ARM processors don't stop on 10 / 0: it gives 0
+        } else {
+            assertEquals("Arithmetic error: zero was 0 when the line divided by it (line 3)", divide.getEndMessage());
+        }
         Trace assertion = trace("""
                 #include <assert.h>
 
