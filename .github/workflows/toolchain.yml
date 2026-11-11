@@ -44,3 +44,42 @@ jobs:
         with:
           name: windows-steps
           path: .claude/tools/cspike/steps.jsonl
+
+  # macOS has no gdb: Raphael traces C there with lldb, from Apple's Command Line Tools.
+  macos-lldb:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versions, and Python inside lldb
+        run: |
+          cc --version | head -1
+          lldb --version | head -1
+          lldb --batch --no-lldbinit -o "script import sys; print('lldb has Python', sys.version)"
+      - name: Trace the spike's linked list
+        working-directory: .claude/tools/cspike
+        run: |
+          mkdir -p src run
+          cp list.c src/list.c
+          cc -O1 -c ../../../src/main/resources/c/raphael_rt.c -o rt.o
+          (cd src && cc -g -O0 -fno-inline -std=gnu17 -include ../../../../src/main/resources/c/raphael_rt.h list.c ../rt.o -o ../list)
+          RAPHAEL_EXE=$PWD/list RAPHAEL_SRC=$PWD/src RAPHAEL_RUN=$PWD/run RAPHAEL_STDOUT=$PWD/out.txt \
+            lldb --batch --no-lldbinit -o "command script import $GITHUB_WORKSPACE/src/main/resources/c/raphael_lldb.py" > raw.txt 2>&1 || true
+          grep '@@R ' raw.txt | sed 's/.*@@R //' | python3 -c "
+          import json, sys
+          lines = [json.loads(l) for l in sys.stdin]
+          steps = [m for m in lines if m['kind'] == 'step']
+          print('end:', lines[-1] if lines else None)
+          summary = {'steps': len(steps), 'ms_per_step': 0}
+          with open('steps.jsonl', 'w') as f:
+              for m in steps: f.write(json.dumps(m) + '\n')
+              f.write(json.dumps(summary) + '\n')
+          "
+          echo "program printed: $(cat out.txt)"
+          python3 check.py steps.jsonl || (tail -40 raw.txt; exit 1)
+      - name: Keep the steps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-steps
+          path: .claude/tools/cspike/raw.txt
