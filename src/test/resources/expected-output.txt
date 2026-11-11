@@ -1,69 +1,69 @@
-## java/ClassesAndObjects
+## oop/ClassesAndObjects
 a = (4, 2)
 b = (5, 5)
 
-## java/References
+## oop/References
 99
 true
 false
 99
 
-## java/Constructors
+## oop/Constructors
 red black 6x6
 
-## java/StaticMembers
+## oop/StaticMembers
 Chen is student 3 of 3
 
-## java/PassByValue
+## oop/PassByValue
 n = 5, counter = 1
 
-## java/Encapsulation
+## oop/Encapsulation
 90 is out of range, kept 24
 target: 24
 
-## java/Inheritance
+## oop/Inheritance
 Rex says Woof, Tom says Meow
 
-## java/Polymorphism
+## oop/Polymorphism
 total area: 19.70
 
-## java/Abstraction
+## oop/Abstraction
 Ana: 3000.0
 Raj: 1200.0
 
-## java/Interfaces
+## oop/Interfaces
 flaps, then lands
 roars, then lands
 paddles
 
-## java/Composition
+## oop/Composition
 engine running: true
 
-## java/Overloading
+## oop/Overloading
 add(int, int) = 2
 add(int, int, int) = 6
 add(double, double) = 0.5
 add(String, String) = overload
 
-## java/Generics
+## oop/Generics
 hello, 42, Mia is 19
 
-## java/BankAccounts
+## oop/BankAccounts
 > 1 earns 5.5
 > 2 earns 0.0
 > amount must be positive
 
-## java/TryCatchFinally
+## oop/TryCatchFinally
 10 / 2 = 5
 done with 10 / 2
 can't divide 7 by zero
 done with 7 / 0
 
-## java/CustomException
+## oop/CustomException
 payment refused: short by 20
 left: 20
 
-## java/Exceptions
+## oop/Exceptions
 popped 20
 popped 10
 stopped: pop on an empty stack
@@ -369,39 +369,39 @@ JAVA avaj false true
 ## basics/ReadingInput
 average age: 20
 
-## java/ObjectEquality
+## oop/ObjectEquality
 (2, 3) false true true
 
-## java/ImmutableClass
+## oop/ImmutableClass
 100 then 118
 
-## java/ConstructorChaining
+## oop/ConstructorChaining
 Animal: Bolt
 Dog: Woof
 Puppy: 9 weeks
 Bolt says Woof
 
-## java/DefaultMethods
+## oop/DefaultMethods
 Hello, Sam
 Sat Sri Akal, Simran
 
-## java/Lambdas
+## oop/Lambdas
 [fig, kiwi, banana] [kiwi, fig, banana]
 
-## java/MultipleCatches
+## oop/MultipleCatches
 stored at 2
 not a number: two
 no slot 7
 
-## java/ThrowAndThrows
+## oop/ThrowAndThrows
 caught: age can't be negative
 caught: password too short
 
-## java/Propagation
+## oop/Propagation
 6
 main caught it: / by zero
 
-## java/TryWithResources
+## oop/TryWithResources
 open front
 open back
 inside

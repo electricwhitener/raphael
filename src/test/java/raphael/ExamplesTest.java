@@ -42,7 +42,8 @@ class ExamplesTest {
     }
 
     static Stream<String> examples() {
-        return ExampleCatalog.all().stream().map(ExampleCatalog.Example::name);
+        return ExampleCatalog.all().stream() // the languages Raphael runs (Java, until Stage 14)
+                .filter(example -> example.language().cantRun() == null).map(ExampleCatalog.Example::name);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -85,15 +86,18 @@ class ExamplesTest {
     void theCatalogListsEveryExampleOnce() throws Exception {
         Path folder = Path.of(ExamplesTest.class.getResource("/examples").toURI());
         Set<String> files = new HashSet<>();
-        try (Stream<Path> walk = Files.walk(folder)) {
-            walk.filter(p -> p.toString().endsWith(".java"))
-                    .forEach(p -> files.add(folder.relativize(p).toString().replace('\\', '/').replace(".java", "")));
+        try (Stream<Path> walk = Files.walk(folder)) { // every code file, as "java/sorting/BubbleSort"
+            walk.filter(p -> raphael.lang.Languages.forFile(p.getFileName().toString()) != null).forEach(p -> {
+                String relative = folder.relativize(p).toString().replace('\\', '/');
+                files.add(relative.substring(0, relative.lastIndexOf('.')));
+            });
         }
         Set<String> listed = new HashSet<>();
         Set<String> names = new HashSet<>();
         for (ExampleCatalog.Example example : ExampleCatalog.all()) {
-            assertTrue(listed.add(example.path()), example.path() + " is listed twice");
-            assertTrue(names.add(example.name()), "two examples are called " + example.name());
+            String where = example.language().id() + "/" + example.path();
+            assertTrue(listed.add(where), where + " is listed twice");
+            assertTrue(names.add(example.language().id() + ":" + example.name()), "two examples are called " + example.name());
             assertTrue(!example.title().isEmpty() && !example.blurb().isEmpty(), example.path() + " needs a title and a blurb");
         }
         assertEquals(files, listed);

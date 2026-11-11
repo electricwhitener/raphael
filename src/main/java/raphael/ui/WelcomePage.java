@@ -54,7 +54,7 @@ public class WelcomePage extends JPanel {
 
     // The actions behind the page's buttons, given by the window.
     public record Actions(Runnable newProgram, Runnable open, Runnable paste, Consumer<ExampleCatalog.Example> example,
-                          Consumer<File> recent) {
+                          Consumer<File> recent, Consumer<raphael.lang.Language> learning) {
     }
 
     public WelcomePage(Actions actions) {
@@ -68,6 +68,8 @@ public class WelcomePage extends JPanel {
         JPanel start = new JPanel();
         start.setOpaque(false);
         start.setLayout(new BoxLayout(start, BoxLayout.Y_AXIS));
+        start.add(learning(actions.learning()));
+        start.add(Box.createVerticalStrut(Style.SPACE_6));
         start.add(heading("Start"));
         start.add(action(Icons.Glyph.NEW, "New program", "Ctrl+N", actions.newProgram()));
         start.add(action(Icons.Glyph.OPEN, "Open file…", "Ctrl+O", actions.open()));
@@ -84,7 +86,7 @@ public class WelcomePage extends JPanel {
         showRecent(List.of());
 
         // Right: the examples. The groups on the left, the chosen group's examples beside them.
-        groups = new JList<>(ExampleCatalog.groups().toArray(new ExampleCatalog.Group[0])) {
+        groups = new JList<>(ExampleCatalog.groups(examplesLanguage()).toArray(new ExampleCatalog.Group[0])) {
             @Override
             public Color getBackground() {
                 return Style.BAR;
@@ -284,6 +286,52 @@ public class WelcomePage extends JPanel {
         header.add(words);
         header.add(Box.createHorizontalGlue());
         return header;
+    }
+
+    // "I'm learning": the four languages, one chosen. Until the user has chosen, it asks.
+    private JComponent learning(Consumer<raphael.lang.Language> chosen) {
+        JPanel box = new JPanel();
+        box.setOpaque(false);
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+        box.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel question = heading(raphael.lang.Languages.chosen() ? "I'm learning" : "Which language are you learning?");
+        if (!raphael.lang.Languages.chosen()) {
+            question.setForeground(Style.ACCENT);
+        }
+        box.add(question);
+        JPanel row = new JPanel(new java.awt.GridLayout(1, 0, Style.SPACE_1, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
+        for (raphael.lang.Language language : raphael.lang.Languages.all()) {
+            javax.swing.JToggleButton button = new javax.swing.JToggleButton(language.name());
+            button.setSelected(raphael.lang.Languages.chosen() && raphael.lang.Languages.preferred() == language);
+            button.setToolTipText("New programs and the examples start in " + language.name());
+            button.addActionListener(e -> {
+                raphael.lang.Languages.setPreferred(language);
+                question.setText("I'm learning");
+                question.setForeground(null); // the heading's own colour again
+                showExamplesOf(language);
+                chosen.accept(language);
+            });
+            group.add(button);
+            row.add(button);
+        }
+        row.setMaximumSize(new Dimension(START_WIDTH, Style.CONTROL_H + 4));
+        box.add(row);
+        return box;
+    }
+
+    // The examples shown here: the language being learned if it has some yet, else Java's.
+    private static raphael.lang.Language examplesLanguage() {
+        raphael.lang.Language language = raphael.lang.Languages.preferred();
+        return ExampleCatalog.groups(language).isEmpty() ? raphael.lang.Languages.JAVA : language;
+    }
+
+    private void showExamplesOf(raphael.lang.Language language) {
+        raphael.lang.Language shown = ExampleCatalog.groups(language).isEmpty() ? raphael.lang.Languages.JAVA : language;
+        groups.setListData(ExampleCatalog.groups(shown).toArray(new ExampleCatalog.Group[0]));
+        groups.setSelectedIndex(0);
     }
 
     private static JLabel heading(String text) {

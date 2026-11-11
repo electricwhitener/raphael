@@ -1,6 +1,8 @@
-## Java
+// The Java examples. "# title", "## category", an optional "### subcategory", then one case
+// a line: path | title | blurb. A case before any ### belongs to the category itself.
 
-# Basics
+# Java
+## Basics
 basics/VariablesAndTypes | Variables and types | int, double, char, boolean, String, a final, and a cast.
 basics/Operators | Operators | Integer division, %, i++ against ++i, and overflow.
 basics/IfAndSwitch | if and switch | The first true branch runs; switch jumps to its case.
@@ -10,39 +12,44 @@ basics/ArraysBasics | Arrays | A row of numbered boxes from 0, and a 2D array of
 basics/StringsBasics | Strings | Strings never change, StringBuilder does, and == against equals().
 basics/ReadingInput | Reading input | A Scanner on System.in, and the line end nextInt() leaves behind.
 
-# Classes and objects
-java/ClassesAndObjects | Classes and objects | A class is a blueprint; each new makes another object with its own fields.
-java/References | References | Two variables can point at the same object, and null points at none.
-java/Constructors | Constructors | Overloaded constructors, and this(…) calling another one.
-java/StaticMembers | Static and instance | A static field is shared by every object; an instance field belongs to one.
-java/PassByValue | Pass by value | Java copies arguments: a method can change an object, but not your variable.
-java/ObjectEquality | toString and equals | When two objects count as equal, and how one prints.
-java/ImmutableClass | An immutable class | Final fields and no setters: a change makes a new object.
-java/ConstructorChaining | Constructor chaining | super(…) runs the parent's constructor first, all the way up.
+## Classes and objects
+oop/ClassesAndObjects | Classes and objects | A class is a blueprint; each new makes another object with its own fields.
+oop/References | References | Two variables can point at the same object, and null points at none.
+oop/Constructors | Constructors | Overloaded constructors, and this(…) calling another one.
+oop/StaticMembers | Static and instance | A static field is shared by every object; an instance field belongs to one.
+oop/PassByValue | Pass by value | Java copies arguments: a method can change an object, but not your variable.
+oop/ObjectEquality | toString and equals | When two objects count as equal, and how one prints.
 
-# OOP principles
-java/Encapsulation | Encapsulation | Private fields, changed only through methods that check the values.
-java/Inheritance | Inheritance | A subclass gets its parent's fields and methods, and calls super(…).
-java/Polymorphism | Polymorphism | One call, area(), runs a different method for each kind of shape.
-java/Abstraction | Abstract classes | An abstract method each subclass must write for itself.
-java/Interfaces | Interfaces | A class can promise several abilities by implementing interfaces.
-java/DefaultMethods | Default methods | An interface method with a body, used or overridden.
-java/Lambdas | Lambdas | An anonymous class and a lambda, both handed to sort().
-java/Composition | Composition | An object built from other objects: a car has an engine.
-java/Overloading | Overloading | Methods with one name and different parameters.
-java/Generics | Generics | One Box class that holds any type, checked by the compiler.
-java/BankAccounts | All together: bank accounts | An interface, an abstract class, inheritance, polymorphism and an exception.
+## OOP principles
+### Encapsulation
+oop/Encapsulation | Encapsulation | Private fields, changed only through methods that check the values.
+oop/ImmutableClass | An immutable class | Final fields and no setters: a change makes a new object.
+### Inheritance
+oop/Inheritance | Inheritance | A subclass gets its parent's fields and methods, and calls super(…).
+oop/ConstructorChaining | Constructor chaining | super(…) runs the parent's constructor first, all the way up.
+### Polymorphism
+oop/Polymorphism | Polymorphism | One call, area(), runs a different method for each kind of shape.
+oop/Overloading | Overloading | Methods with one name and different parameters.
+### Abstraction
+oop/Abstraction | Abstract classes | An abstract method each subclass must write for itself.
+oop/Interfaces | Interfaces | A class can promise several abilities by implementing interfaces.
+oop/DefaultMethods | Default methods | An interface method with a body, used or overridden.
+### Putting it together
+oop/Lambdas | Lambdas | An anonymous class and a lambda, both handed to sort().
+oop/Composition | Composition | An object built from other objects: a car has an engine.
+oop/Generics | Generics | One Box class that holds any type, checked by the compiler.
+oop/BankAccounts | All together: bank accounts | An interface, an abstract class, inheritance, polymorphism and an exception.
 
-# Exceptions
-java/TryCatchFinally | try, catch, finally | The catch runs only on an error; finally runs either way.
-java/MultipleCatches | Several catches | The first catch whose type matches takes the exception.
-java/ThrowAndThrows | throw and throws | Checked exceptions must be declared; unchecked ones needn't be.
-java/Propagation | Up the call stack | An exception leaves each method until a catch takes it.
-java/TryWithResources | try-with-resources | What try (…) opens is closed for you, newest first.
-java/CustomException | Your own exception | A checked exception class of your own, thrown and caught.
-java/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a cause, and finally.
+## Exceptions
+oop/TryCatchFinally | try, catch, finally | The catch runs only on an error; finally runs either way.
+oop/MultipleCatches | Several catches | The first catch whose type matches takes the exception.
+oop/ThrowAndThrows | throw and throws | Checked exceptions must be declared; unchecked ones needn't be.
+oop/Propagation | Up the call stack | An exception leaves each method until a catch takes it.
+oop/TryWithResources | try-with-resources | What try (…) opens is closed for you, newest first.
+oop/CustomException | Your own exception | A checked exception class of your own, thrown and caught.
+oop/Exceptions | Exceptions in a stack | Throwing, catching, rethrowing with a cause, and finally.
 
-# Files
+## Files
 files/WriteAndRead | Write and read a file | try-with-resources, PrintWriter and BufferedReader, and when the file really fills up.
 files/MissingFile | A missing file | FileNotFoundException is checked: catch it, make the file, try again.
 files/AppendLog | Append to a file | FileWriter in append mode, flush(), and Files.readAllLines.
@@ -51,16 +58,16 @@ files/CsvParse | Read a CSV file | Split each line at its commas into fields.
 files/WordCount | Count words in a file | Files.readAllLines, split, and a map of counts.
 files/CopyFile | Copy a file | Read a line, write a line, and the copy's buffer.
 
-# Strings and collections
+## Strings and collections
 strings/Palindrome | Palindrome check | Two indexes walk in from both ends of a string.
 strings/LetterCount | Counting letters | A char is a number: c - 'a' picks the counter for each letter.
 strings/ArrayListBasics | ArrayList | A list that grows: add, get, set and remove.
 strings/HashMapCount | HashMap | Counting words with a map from each word to its count.
 strings/Enums | Enums | A fixed set of named values, used in a switch.
 
-## Algorithms
 
-# Sorting
+# Algorithms
+## Sorting
 sorting/BubbleSort | Bubble sort | Swaps neighbours until the biggest values bubble to the end.
 sorting/SelectionSort | Selection sort | Finds the smallest value left and swaps it to the front.
 sorting/InsertionSort | Insertion sort | Slides each value left until it's in order.
@@ -73,12 +80,12 @@ sorting/RadixSort | Radix sort | Sorts by the last digit, then the tens, then th
 sorting/BucketSort | Bucket sort | Drops values into buckets by range, sorts each, joins them.
 sorting/SortingObjects | Sorting objects | Comparable and a Comparator decide the order of objects.
 
-# Searching
+## Searching
 searching/LinearSearch | Linear search | Checks each value in turn.
 searching/BinarySearch | Binary search | Halves a sorted array at every step.
 searching/TwoPointers | Two pointers | Finds a pair with a given sum, from both ends of a sorted array.
 
-# Recursion and backtracking
+## Recursion and backtracking
 recursion/Factorial | Factorial | A method that calls itself, and the base case that stops it.
 recursion/SumArray | Sum of an array | The first value plus the sum of the rest.
 recursion/FastPower | Fast power | x^n from x^(n/2): about log n calls.
@@ -92,23 +99,24 @@ recursion/FloodFill | Flood fill | Fill a cell, then its four neighbours.
 recursion/Permutations | Permutations | Swap, recurse, swap back: every order of A, B and C.
 recursion/NQueens | N queens | Backtracking: place a queen, and undo it when it leads nowhere.
 
-# Dynamic programming
+## Dynamic programming
 dp/FibDP | Fibonacci table | Each answer is built from the two before it.
 dp/GridPaths | Grid paths | Ways to cross a grid, from the cells above and to the left.
 dp/CoinChange | Coin change | The fewest coins for each amount up to the target.
 dp/Knapsack | 0/1 knapsack | The best value for each item count and capacity.
 dp/LongestCommonSubsequence | Longest common subsequence | A table comparing two strings letter by letter.
 
-## Data structures
 
-# Arrays
+# Data structures
+## Arrays
 arrays/ReverseArray | Reverse an array | Swaps from both ends towards the middle.
 arrays/RotateArray | Rotate an array | Shifts every value one place, k times.
 arrays/PrefixSum | Prefix sums | Each cell holds the sum so far, so any range sum is one subtraction.
 arrays/MaxSubarray | Largest sum (Kadane) | The best sum ending at each index, in one pass.
 arrays/MatrixTranspose | Transpose a matrix | Rows become columns in a 2D array.
 
-# Linked lists
+## Linked lists
+### Singly linked list
 lists/Traverse | Walk and count | Follow next from the head until null.
 lists/InsertAtHead | Insert at the head | The new node points at the old head.
 lists/InsertAtTail | Insert at the tail | Walk to the last node and link the new one after it.
@@ -124,51 +132,68 @@ lists/FindMiddle | Find the middle | A slow and a fast pointer: when fast ends, 
 lists/DetectCycle | Detect a cycle | Floyd's tortoise and hare meet inside a loop.
 lists/MergeSorted | Merge two sorted lists | Take the smaller front node each time.
 lists/RemoveDuplicates | Remove duplicates | In a sorted list, skip nodes equal to the one before.
+### Doubly linked list
 lists/DoublyLinkedList | Doubly linked list | Each node points both ways: insert and delete in the middle.
+### Circular linked list
 lists/CircularList | Circular list | The last node points back to the first.
 
-# Stacks and queues
+## Stacks and queues
+### Stacks
 stacks/ArrayStack | Stack (array) | Push and pop at the top of an array.
 stacks/LinkedStack | Stack (linked) | Push and pop at the head of a linked list.
 stacks/BalancedBrackets | Balanced brackets | A stack checks that every bracket closes in order.
 stacks/PostfixEval | Postfix expressions | A stack works out 2 3 4 * + without brackets.
+### Queues
 stacks/ArrayQueue | Queue (circular array) | Front and back indexes wrap around the array.
 stacks/LinkedQueue | Queue (linked) | Add at the tail, remove at the head.
 
-# Trees
+## Trees
+### Binary search tree
 trees/BSTInsert | BST insert | Smaller values go left, bigger ones right.
 trees/BSTSearch | BST search | Each comparison rules out half the tree.
 trees/BSTDelete | BST delete | The three cases: a leaf, one child, two children.
+### Traversals
 trees/Inorder | Inorder traversal | Left, node, right: a BST comes out sorted.
 trees/Preorder | Preorder traversal | Node, left, right: the order to copy a tree.
 trees/Postorder | Postorder traversal | Left, right, node: children before their parent.
 trees/LevelOrder | Level order (BFS) | A queue visits the tree level by level.
 trees/TreeHeight | Height and size | Two recursive counts over the whole tree.
-trees/Trie | Trie | Words stored letter by letter, sharing their prefixes.
+### AVL tree
 trees/AVLInsert | AVL insert | Heights kept in each node, and the LL, RR, LR and RL rotations.
+### Red-black tree
 trees/RedBlackLLRB | Red-black tree (left-leaning) | Rotate left, rotate right, flip colours, on the way back up.
 trees/RedBlackCLRS | Red-black tree (CLRS) | Insert red, then fix cases 1, 2 and 3 going up, with parent links.
+### B-tree
 trees/BTreeInsert | B-tree insert | Full nodes split, and the middle key moves up.
+### B+ tree
 trees/BPlusTree | B+ tree | Every key in a leaf, leaves linked in order, and a range read along them.
+### Trie
+trees/Trie | Trie | Words stored letter by letter, sharing their prefixes.
 
-# Heaps and hashing
+## Heaps and hashing
+### Heaps
 hashing/MinHeap | Min-heap | Sift up on insert, sift down on removing the smallest.
+### Hashing
 hashing/HashChaining | Hash table (chaining) | Each bucket holds a linked list of the keys that land there.
 hashing/LinearProbing | Hash table (probing) | A taken slot sends the key to the next free one.
 
-# Graphs
+## Graphs
+### Representation
 graphs/AdjacencyMatrix | Adjacency matrix | An edge from i to j is a 1 in row i, column j.
+### Traversal
 graphs/BFS | Breadth-first search | A queue visits neighbours before their neighbours.
 graphs/DFS | Depth-first search | Recursion goes as deep as it can, then backs up.
 graphs/DFSStack | DFS with a stack | The same search with an explicit stack instead of recursion.
+### Shortest paths
 graphs/ShortestPath | Shortest path (BFS) | Distances from the start, one edge at a time.
 graphs/Dijkstra | Dijkstra | Shortest paths when edges have weights.
+### Ordering and sets
 graphs/TopologicalSort | Topological sort | An order where every task comes after the ones it needs.
 graphs/UnionFind | Union-find | Sets as trees in a parent array, with path compression and union by rank.
 
-## Practice
 
-# Find the bug
+# Practice
+## Find the bug
 bugs/BuggyList | Broken reverse | A list reverse that loses most of the list.
 bugs/OffByOne | Off by one | A loop that goes one step too far.
 bugs/MissingBaseCase | Missing base case | A recursion that never stops.

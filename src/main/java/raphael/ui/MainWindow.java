@@ -84,7 +84,7 @@ public class MainWindow extends JFrame {
               (In the editor, hold Alt with the arrow keys.)
 
             the editor
-              Ctrl+N, O, S       new, open, save
+              Ctrl+N, O, S       new (in the last language), open, save
               Ctrl+Shift+S       save as
               Ctrl+W             close the tab
               Ctrl+Shift+T       reopen a closed tab
@@ -95,6 +95,7 @@ public class MainWindow extends JFrame {
               Ctrl+G             go to line
               Ctrl+P             quick open: files and examples
               Ctrl+Shift+P       command palette: every command
+              Ctrl+B             show or hide the examples
               Shift+Alt+Down     duplicate line
               Ctrl+/             comment or uncomment lines
               Tab, Shift+Tab     move lines in, out
@@ -134,7 +135,18 @@ public class MainWindow extends JFrame {
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
-    private final JPopupMenu examplesMenu = new JPopupMenu();
+    private final ExamplesPanel examplesPanel = new ExamplesPanel(new ExamplesPanel.Actions() {
+        @Override
+        public void preview(ExampleCatalog.Example example) {
+            previewExample(example);
+        }
+
+        @Override
+        public void open(ExampleCatalog.Example example) {
+            keepExample(example);
+        }
+    });
+    private javax.swing.JSplitPane sideSplit; // the examples side bar | the tabs
     private final JMenu recentMenu = new JMenu("Open recent");
     private JMenuItem saveRecordingItem;
     private JButton saveButton;
@@ -189,11 +201,28 @@ public class MainWindow extends JFrame {
         // Drop a code file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
         welcome = new WelcomePage(new WelcomePage.Actions(this::newProgram, this::open, this::pasteProgram,
-                this::loadExample, this::openFile));
+                this::loadExample, this::openFile, language -> {
+                    App.SETTINGS.put("lastNewLanguage", language.id());
+                    examplesPanel.showLanguage(language);
+                    say("New programs and the examples are in " + language.name() + " now", Style.INK_SOFT);
+                }));
         welcome.setTransferHandler(new FileDrop(null, this::openDropped));
         welcome.showRecent(recentFiles());
         buildTabs();
-        add(tabs, BorderLayout.CENTER);
+        sideSplit = new javax.swing.JSplitPane(javax.swing.JSplitPane.HORIZONTAL_SPLIT, examplesPanel, tabs);
+        sideSplit.setBorder(BorderFactory.createEmptyBorder());
+        sideSplit.setDividerSize(5);
+        sideSplit.setContinuousLayout(true);
+        sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+        sideSplit.addPropertyChangeListener(javax.swing.JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            if (examplesPanel.isVisible() && sideSplit.getDividerLocation() > 120) {
+                App.SETTINGS.putInt("examplesWidth", sideSplit.getDividerLocation());
+            }
+        });
+        examplesPanel.setVisible(App.SETTINGS.getBoolean("examplesShown", true));
+        examplesPanel.setMinimumSize(new Dimension(180, 0));
+        sideSplit.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null); // the arrow keys step the program
+        add(sideSplit, BorderLayout.CENTER);
 
         status.setFont(Style.UI_FONT.deriveFont(12f));
         status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
@@ -312,7 +341,6 @@ public class MainWindow extends JFrame {
     // The theme changed: the colours this window sets itself, and its programs' marks.
     private void themeChanged() {
         boolean wasError = status.getForeground().equals(Style.ERROR);
-        SwingUtilities.updateComponentTreeUI(examplesMenu); // it isn't in the window until it's opened
         SwingUtilities.updateComponentTreeUI(idleControls); // out of the window while a program is open
         for (Workbench program : programs()) {
             program.themeChanged();
@@ -561,14 +589,12 @@ public class MainWindow extends JFrame {
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
         saveButton = save;
         save.addActionListener(e -> save());
-        JButton examples = new JButton("Examples", Icons.of(Icons.Glyph.CHEVRON_DOWN, Icons.Role.TOOL));
+        JButton examples = new JButton("Examples");
         examplesButton = examples;
-        examples.setHorizontalTextPosition(SwingConstants.LEADING); // the arrow after the word
-        examples.setToolTipText("Load an example program");
+        examples.setToolTipText(Shortcuts.label("Show or hide the examples  (Ctrl+B)"));
         examples.setRequestFocusEnabled(false);
         examples.putClientProperty("JButton.buttonType", "toolBarButton");
-        addExamples(examplesMenu);
-        examples.addActionListener(e -> examplesMenu.show(examples, 0, examples.getHeight()));
+        examples.addActionListener(e -> toggleExamples());
         themeButton.addActionListener(e -> toggleTheme());
         JButton settings = ControlsBar.button(Icons.Glyph.SETTINGS, "Settings", "Settings: steps, time, memory, text size, theme  (Ctrl+,)");
         settings.addActionListener(e -> showSettings());
@@ -784,6 +810,7 @@ public class MainWindow extends JFrame {
             focusWorkArea();
         }));
         view.add(item("Quick Open…", "control P", this::quickOpen));
+        view.add(item("Examples", "control B", this::toggleExamples));
         view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
         view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
@@ -1297,6 +1324,54 @@ public class MainWindow extends JFrame {
                 + (language.cantRun() != null ? " · " + language.cantRun() : Shortcuts.label(" · press run (ctrl+enter)")), Style.INK_SOFT);
     }
 
+    // ---- the examples side bar ----
+
+    // Shows the side bar if it's hidden, else hides it (Ctrl+B, the toolbar's Examples, View → Examples).
+    void toggleExamples() {
+        showExamplesPanel(!examplesPanel.isVisible());
+    }
+
+    void showExamplesPanel(boolean show) {
+        examplesPanel.setVisible(show);
+        App.SETTINGS.putBoolean("examplesShown", show);
+        if (show) {
+            sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+            examplesPanel.focusSearch();
+        } else if (current != null) {
+            current.focusEditor();
+        }
+        sideSplit.revalidate();
+    }
+
+    // One click on an example: it opens in the preview tab (italic title), which the next click
+    // reuses. A tab with the user's own code is never replaced.
+    void previewExample(ExampleCatalog.Example example) {
+        Workbench preview = null;
+        for (Workbench program : programs()) {
+            if (program.isPreview() && !program.isDirty()) {
+                preview = program;
+            }
+        }
+        if (preview != null && example.equals(preview.getExample())) {
+            tabs.setSelectedComponent(preview);
+            return;
+        }
+        if (preview != null) {
+            tabs.setSelectedComponent(preview);
+        }
+        Workbench program = showExample(example, preview != null);
+        program.setPreview(true);
+    }
+
+    // A double click (or Enter): the example opens to keep, in the preview tab if it's there.
+    void keepExample(ExampleCatalog.Example example) {
+        if (current != null && current.isPreview() && example.equals(current.getExample())) {
+            current.setPreview(false);
+            return;
+        }
+        showExample(example, false).setPreview(false);
+    }
+
     // The language New uses without asking (Ctrl+N): the last one chosen, else the one being learned.
     static raphael.lang.Language lastNewLanguage() {
         String id = App.SETTINGS.get("lastNewLanguage", null);
@@ -1319,13 +1394,23 @@ public class MainWindow extends JFrame {
     }
 
     private void loadExample(ExampleCatalog.Example example) {
-        Workbench program = newTab(true);
+        showExample(example, false);
+    }
+
+    // Puts an example in a tab: the one in front if it's untouched (or the preview being reused), else a new one.
+    private Workbench showExample(ExampleCatalog.Example example, boolean reuseFront) {
+        Workbench program = reuseFront ? current : newTab(true);
         String source = ExampleCatalog.source(example);
-        program.showCode(source, null, example.name() + ".java (example)");
+        program.setLanguage(example.language());
+        program.showCode(source, null, example.name() + example.language().endings().get(0) + " (example)");
+        program.setExample(example);
         program.setInput(ExampleCatalog.input(source)); // an example that reads input comes with some
         program.setTabTitle(example.title()); // "Bubble sort"; the tooltip says it's an example
+        host.stateChanged(program);
+        examplesPanel.select(example);
         say(example.title() + ": " + example.blurb().replaceAll("\\.$", "")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
+        return program;
     }
 
     // The examples, grouped: a heading for each section (Java, Algorithms…), then a submenu for
@@ -1404,7 +1489,8 @@ public class MainWindow extends JFrame {
         refont(program);
         program.textSizeChanged();
         int at = tabs.getSelectedIndex() + 1;
-        if (replaceUntouched && current != null && current.isUntouched()) {
+        // (an example the user chose to keep isn't replaced, even if it hasn't been run yet)
+        if (replaceUntouched && current != null && current.isUntouched() && (current.getExample() == null || current.isPreview())) {
             at = tabs.indexOfComponent(current);
             removeTab(current);
         }
@@ -1434,6 +1520,7 @@ public class MainWindow extends JFrame {
             showStatus(welcomeSaid, Style.INK_SOFT);
         } else {
             host.stateChanged(current);
+            examplesPanel.select(current.getExample()); // the side bar shows which example this is
             java.awt.Component owner = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             if (owner == null || !SwingUtilities.isDescendingFrom(owner, current)) {
                 // The keyboard goes to the code, not to the first button (the Home logo). Asked now,
@@ -2024,7 +2111,10 @@ public class MainWindow extends JFrame {
         public void stateChanged(Workbench workbench) {
             int index = tabs.indexOfComponent(workbench);
             if (index >= 0) {
-                tabs.setTitleAt(index, (workbench.isDirty() ? "● " : "") + workbench.getTabTitle());
+                String title = (workbench.isDirty() ? "● " : "") + workbench.getTabTitle();
+                // a preview tab's title is in italics, as in VS Code: the next example clicked replaces it
+                tabs.setTitleAt(index, workbench.isPreview() ? "<html><i>" + title.replace("&", "&amp;").replace("<", "&lt;")
+                        + "</i></html>" : title);
                 File file = workbench.getCurrentFile();
                 String tip = file != null ? file.getAbsolutePath()
                         : workbench.getFolder() != null ? workbench.getFolder().getAbsolutePath()
@@ -2078,7 +2168,7 @@ public class MainWindow extends JFrame {
 
         @Override
         public void showExamples() {
-            examplesMenu.show(examplesButton, 0, examplesButton.getHeight());
+            showExamplesPanel(true);
         }
 
         @Override

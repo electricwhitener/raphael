@@ -92,4 +92,34 @@ class MainWindowTest {
         }
         raphael.render.Style.useTheme(false);
     }
+
+    // One click on an example previews it in a tab the next click reuses (its title in italics);
+    // a double click keeps it, and the next preview gets a tab of its own.
+    @Test
+    void examplesPreviewThenKeep() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        window.previewExample(raphael.io.ExampleCatalog.find("BubbleSort"));
+        window.previewExample(raphael.io.ExampleCatalog.find("QuickSort"));
+        assertEquals(java.util.List.of("Welcome", "<html><i>Quick sort</i></html>"), window.tabTitles(), "the preview was reused");
+        window.keepExample(raphael.io.ExampleCatalog.find("QuickSort"));
+        assertFalse(window.active().isPreview());
+        window.previewExample(raphael.io.ExampleCatalog.find("MergeSort"));
+        assertEquals(java.util.List.of("Welcome", "Quick sort", "<html><i>Merge sort</i></html>"), window.tabTitles());
+        window.dispose();
+    }
+
+    // New in a language gives a tab in that language, from its template, and Ctrl+N repeats it.
+    @Test
+    void newProgramsHaveALanguage() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        window.newProgram(raphael.lang.Languages.C);
+        assertEquals(raphael.lang.Languages.C, window.active().getLanguage());
+        assertTrue(window.active().getCode().getCode().contains("#include <stdio.h>"));
+        window.newProgram(); // Ctrl+N: the last language again
+        assertEquals(raphael.lang.Languages.C, window.active().getLanguage());
+        window.newProgram(raphael.lang.Languages.JAVA); // leaves Java as the last one, for the other tests
+        window.dispose();
+    }
 }

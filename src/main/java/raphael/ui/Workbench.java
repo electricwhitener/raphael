@@ -244,6 +244,9 @@ public class Workbench extends JPanel {
 
         // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
+            if (code.isDirty()) {
+                setPreview(false); // edited: no longer just a preview
+            }
             boolean input = language.readsInput(allCode());
             console.showInput(input);
             if (input) {
@@ -561,6 +564,7 @@ public class Workbench extends JPanel {
             tracer.stop();
             return;
         }
+        setPreview(false); // running an example keeps its tab
         if (language.cantRun() != null) { // a language Raphael can edit but not run yet
             visual.setMessage("can't run " + language.name() + " yet", language.cantRun(), null, null);
             say("[" + language.name() + "] " + language.cantRun(), Style.INK_SOFT);
@@ -1000,6 +1004,31 @@ public class Workbench extends JPanel {
     // A file name for code that has none yet: its public class (or first class), then .java.
     static String suggestedName(String code) {
         return raphael.lang.Languages.JAVA.suggestedName(code);
+    }
+
+    // ---- examples and the preview tab ----
+
+    private raphael.io.ExampleCatalog.Example example; // the example on show, or null
+    private boolean preview;                           // a preview tab: the next example clicked replaces it
+
+    public raphael.io.ExampleCatalog.Example getExample() {
+        return example;
+    }
+
+    public void setExample(raphael.io.ExampleCatalog.Example example) {
+        this.example = example;
+    }
+
+    public boolean isPreview() {
+        return preview;
+    }
+
+    // A preview tab becomes an ordinary one (kept) when the user edits it, runs it, or asks to keep it.
+    public void setPreview(boolean preview) {
+        if (this.preview != preview) {
+            this.preview = preview;
+            host.stateChanged(this);
+        }
     }
 
     // ---- the language ----
