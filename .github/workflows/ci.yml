@@ -30,7 +30,7 @@ jobs:
         # (not skip the C tests).
         run: |
           for attempt in 1 2 3; do
-            sudo apt-get update -q && sudo apt-get install -y -q gdb && exit 0
+            timeout 150 sudo apt-get update -q && timeout 150 sudo apt-get install -y -q gdb && exit 0
             echo "apt failed (attempt $attempt); waiting"; sleep 30
           done
           exit 1
