@@ -115,7 +115,7 @@ public class CTracer implements Tracer {
             process.getOutputStream().close();
             StringBuffer gdbErrors = new StringBuffer();
             new OutputDrainer(process.getErrorStream(), gdbErrors, "gdb stderr").start();
-            Run run = new Run(program, process, stopFile, runLimits);
+            Run run = new Run(program, process, stopFile, stdout, runLimits);
             try {
                 run.read();
             } finally {
@@ -140,6 +140,8 @@ public class CTracer implements Tracer {
     // One run: gdb's lines as they arrive, turned into steps.
     private final class Run {
         private final Process process;
+        private final Path build;  // the build folder: the program's files are in its src
+        private final Path stdout; // what the program has printed
         private final Path stopFile;
         private final RunLimits limits;
         private final boolean namedFiles; // a program of several files: frames name their file
@@ -152,7 +154,9 @@ public class CTracer implements Tracer {
         private boolean forced; // the watchdog ended the run, not the script
         private boolean ended;
 
-        Run(CompileResult program, Process process, Path stopFile, RunLimits limits) {
+        Run(CompileResult program, Process process, Path stopFile, Path stdout, RunLimits limits) {
+            this.build = program.classDir();
+            this.stdout = stdout;
             this.process = process;
             this.stopFile = stopFile;
             this.limits = limits;
@@ -239,8 +243,12 @@ public class CTracer implements Tracer {
                         case "steps" -> end(EndReason.STEP_LIMIT,
                                 JdiTracer.stepLimitMessage(recorded.get(recorded.size() - 1).snapshot(0), limits.maxSteps()));
                         case "crash" -> {
-                            String text = crashText((String) message.get("signal"));
-                            Step last = step((Map<String, Object>) message.get("step"), text);
+                            String signal = (String) message.get("signal");
+                            Map<String, Object> at = (Map<String, Object>) message.get("step");
+                            Step plain = step(at, null);
+                            String detail = raphael.explain.CCrash.detail(signal, plain.snapshot(0), lineText(at), printedSoFar());
+                            String text = crashText(signal) + (detail == null ? "" : ": " + detail);
+                            Step last = step(at, text);
                             recorded.add(last);
                             end(EndReason.EXCEPTION, text + (last.line() > 0 ? " (line " + last.line() + ")" : ""));
                         }
@@ -252,6 +260,31 @@ public class CTracer implements Tracer {
                 }
             }
             return false;
+        }
+
+        // The text of the line a step stopped on, from the program's files.
+        @SuppressWarnings("unchecked")
+        private String lineText(Map<String, Object> step) {
+            List<Object> frames = (List<Object>) step.get("frames");
+            if (frames.isEmpty()) {
+                return null;
+            }
+            Map<String, Object> top = (Map<String, Object>) frames.get(0);
+            try {
+                List<String> lines = Files.readAllLines(build.resolve("src").resolve((String) top.get("file")));
+                int line = ((Number) top.get("line")).intValue();
+                return line >= 1 && line <= lines.size() ? lines.get(line - 1) : null;
+            } catch (IOException | RuntimeException e) {
+                return null;
+            }
+        }
+
+        private String printedSoFar() {
+            try {
+                return Files.exists(stdout) ? Files.readString(stdout, StandardCharsets.UTF_8) : "";
+            } catch (IOException | RuntimeException e) {
+                return "";
+            }
         }
 
         private void end(EndReason reason, String message) {
@@ -285,7 +318,8 @@ public class CTracer implements Tracer {
                     for (Object item : (List<Object>) object.get("items")) {
                         items.add(value(item));
                     }
-                    heap.put(id, new ArrayNode(id, type, (String) object.get("elem"), items, ((Number) object.get("len")).intValue()));
+                    heap.put(id, new ArrayNode(id, type, (String) object.get("elem"), items, ((Number) object.get("len")).intValue(),
+                            Boolean.TRUE.equals(object.get("freed"))));
                 } else {
                     Map<String, Value> fields = new LinkedHashMap<>();
                     for (Map.Entry<String, Object> field : ((Map<String, Object>) object.get("fields")).entrySet()) {
@@ -293,7 +327,7 @@ public class CTracer implements Tracer {
                     }
                     Map<String, String> types = new LinkedHashMap<>();
                     ((Map<String, Object>) object.get("ftypes")).forEach((name, t) -> types.put(name, (String) t));
-                    heap.put(id, new ObjectNode(id, type, fields, types));
+                    heap.put(id, new ObjectNode(id, type, fields, types, null, Boolean.TRUE.equals(object.get("freed"))));
                 }
             }
             List<FrameSnapshot> frames = new ArrayList<>();
@@ -365,8 +399,8 @@ public class CTracer implements Tracer {
         }
         return switch (signal) {
             case "SIGSEGV" -> "Segmentation fault";
-            case "SIGFPE" -> "Arithmetic error (SIGFPE)";
-            case "SIGABRT" -> "Aborted (SIGABRT)";
+            case "SIGFPE" -> "Arithmetic error";
+            case "SIGABRT" -> "Aborted";
             case "SIGBUS" -> "Bus error";
             case "SIGILL" -> "Illegal instruction";
             default -> "Crashed (" + signal + ")";

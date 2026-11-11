@@ -9,10 +9,21 @@ public abstract class HeapObject implements java.io.Serializable {
 
     private final long id;
     private final String typeName;
+    private final boolean freed; // C: memory free() gave back, drawn faded (false in recordings made before C)
 
     protected HeapObject(long id, String typeName) {
+        this(id, typeName, false);
+    }
+
+    protected HeapObject(long id, String typeName, boolean freed) {
         this.id = id;
         this.typeName = typeName;
+        this.freed = freed;
+    }
+
+    // Whether the program gave this memory back with free(): a pointer to it is dangling.
+    public boolean isFreed() {
+        return freed;
     }
 
     public long getId() {

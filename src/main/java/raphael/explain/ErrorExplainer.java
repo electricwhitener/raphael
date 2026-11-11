@@ -20,7 +20,7 @@ public abstract class ErrorExplainer {
     private static final List<ErrorExplainer> EXPLAINERS = List.of(
             new NullPointer(), new IndexOutOfBounds(), new DivideByZero(), new NumberFormat(), new BadInput(),
             new NoMoreInput(), new ClassCast(), new StackOverflow(), new ConcurrentModification(),
-            new OutOfMemory(), new Thrown());
+            new OutOfMemory(), new Signal(), new Thrown());
 
     // Whether this explainer knows the exception type ("NullPointerException").
     abstract boolean handles(String type);
@@ -251,6 +251,54 @@ public abstract class ErrorExplainer {
         String describe(String type, String message) {
             return "The program threw this on purpose, to say something was wrong"
                     + (message == null ? "." : ": \"" + message + "\".");
+        }
+    }
+
+    // A C program's crash. The message (from CCrash) already says what happened on the line; this
+    // says what it means and what to do about it.
+    static class Signal extends ErrorExplainer {
+        @Override
+        boolean handles(String type) {
+            return List.of("Segmentation fault", "Arithmetic error", "Aborted", "Bus error", "Illegal instruction").contains(type);
+        }
+
+        @Override
+        String describe(String type, String message) {
+            String m = message == null ? "" : message;
+            switch (type) {
+                case "Segmentation fault":
+                    if (m.contains("NULL")) {
+                        return "A NULL pointer points to nothing, so there's nothing at the end of its arrow to read or "
+                                + "change. Check it first: if (p != NULL).";
+                    }
+                    if (m.contains("free()")) {
+                        return "After free(), the memory isn't the program's any more, but the pointer still holds its "
+                                + "address: it dangles. Set a pointer to NULL once it's freed, and don't use it again.";
+                    }
+                    if (m.contains("never set")) {
+                        return "A pointer needs an address (from malloc, or &variable) before it can be used.";
+                    }
+                    if (m.contains("outside")) {
+                        return "C doesn't check an array's bounds, so the program reached memory past the array's end. "
+                                + "A loop with <= instead of < often does this.";
+                    }
+                    return "The program used memory it doesn't own: usually through a NULL or freed pointer, or past "
+                            + "the end of an array.";
+                case "Arithmetic error":
+                    return "Dividing a whole number by zero (or taking % 0) has no answer, so the program is stopped. "
+                            + "Check the divisor before dividing.";
+                case "Aborted":
+                    if (m.startsWith("assert")) {
+                        return "assert stops the program when its condition is false: something the code counted on "
+                                + "wasn't true here.";
+                    }
+                    if (m.contains("twice")) {
+                        return "Each block may be freed once. After free(p), set p = NULL: free(NULL) does nothing.";
+                    }
+                    return "The program stopped itself (abort), usually from assert or a check in the C library.";
+                default:
+                    return "The program did something the processor won't do, usually through a broken pointer.";
+            }
         }
     }
 

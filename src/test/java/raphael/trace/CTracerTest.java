@@ -264,9 +264,93 @@ class CTracerTest {
                 }
                 """, "");
         assertEquals(EndReason.EXCEPTION, trace.getEndReason());
-        assertEquals("Segmentation fault (line 6)", trace.getEndMessage());
-        assertEquals("Segmentation fault", trace.get(trace.size() - 1).getException());
+        assertEquals("Segmentation fault: p was NULL when the line used *p (line 6)", trace.getEndMessage());
+        assertEquals("Segmentation fault: p was NULL when the line used *p", trace.get(trace.size() - 1).getException());
         assertTrue(trace.getOutput().startsWith("before"));
+    }
+
+    // ---- memory ----
+
+    @Test
+    void mallocdMemoryIsAnArrayOfItsLengthAndUnsetCellsAreQuestionMarks() throws Exception {
+        Trace trace = trace("""
+                #include <stdlib.h>
+
+                int main(void) {
+                    int *a = malloc(4 * sizeof(int));
+                    a[0] = 7;
+                    int *p = a + 2;
+                    *p = 9;
+                    free(a);
+                    return 0;
+                }
+                """, "");
+        Snapshot beforeFree = trace.getSnapshots().stream().filter(s -> s.getLine() == 8).findFirst().orElseThrow();
+        java.util.Map<String, raphael.model.Value> locals = beforeFree.getFrames().get(0).getLocals();
+        raphael.model.ArrayNode a = (raphael.model.ArrayNode) beforeFree.getObject(((ReferenceValue) locals.get("a")).id());
+        assertEquals("int[]", a.getTypeName());
+        assertEquals(List.of("7", "?", "9", "?"), a.getElements().stream().map(raphael.model.Value::display).toList());
+        assertEquals("&a[2]", locals.get("p").display()); // a marker on a's cell 2
+        assertFalse(a.isFreed());
+        Snapshot afterFree = trace.get(trace.size() - 1);
+        assertTrue(afterFree.getObject(a.getId()).isFreed());
+    }
+
+    @Test
+    void aFreedNodeStaysDrawnAndUsingItIsCaught() throws Exception {
+        Trace trace = trace("""
+                #include <stdlib.h>
+                struct Node { int val; struct Node *next; };
+
+                int main(void) {
+                    struct Node *n = malloc(sizeof *n);
+                    n->val = 5;
+                    n->next = NULL;
+                    free(n);
+                    int stale = n->val;
+                    free(n);
+                    return stale;
+                }
+                """, "");
+        Snapshot afterFree = trace.getSnapshots().stream().filter(s -> s.getLine() == 9).findFirst().orElseThrow();
+        ObjectNode node = (ObjectNode) afterFree.getObject(((ReferenceValue) afterFree.getFrames().get(0).getLocals().get("n")).id());
+        assertTrue(node.isFreed());
+        assertEquals("5", node.getField("val").display()); // what it last held
+        assertEquals(EndReason.EXCEPTION, trace.getEndReason()); // the second free
+        assertEquals("Aborted: free() was called twice on the same block (line 10)", trace.getEndMessage());
+    }
+
+    @Test
+    void crashesAreExplainedFromTheLine() throws Exception {
+        Trace chain = trace("""
+                #include <stdlib.h>
+                struct Node { int val; struct Node *next; };
+
+                int main(void) {
+                    struct Node *head = malloc(sizeof *head);
+                    head->val = 1;
+                    head->next = NULL;
+                    return head->next->val;
+                }
+                """, "");
+        assertEquals("Segmentation fault: head->next was NULL when the line used head->next->val (line 8)", chain.getEndMessage());
+        Trace divide = trace("""
+                int main(void) {
+                    int zero = 0;
+                    return 10 / zero;
+                }
+                """, "");
+        assertEquals("Arithmetic error: zero was 0 when the line divided by it (line 3)", divide.getEndMessage());
+        Trace assertion = trace("""
+                #include <assert.h>
+
+                int main(void) {
+                    int n = -1;
+                    assert(n >= 0);
+                    return n;
+                }
+                """, "");
+        assertTrue(assertion.getEndMessage().startsWith("Aborted: assert(n >= 0) failed"), assertion.getEndMessage());
     }
 
     @Test

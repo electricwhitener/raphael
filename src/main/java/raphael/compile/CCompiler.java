@@ -44,7 +44,7 @@ public class CCompiler {
     // gcc's warning names at the end of a message: " [-Wimplicit-function-declaration]"
     private static final Pattern FLAG_NAME = Pattern.compile("\\s*\\[-W[^\\]]*\\]$");
 
-    private static Path runtime; // raphael_rt.o, compiled once per run of Raphael
+    private static Path[] runtime; // raphael_rt.h and raphael_rt.o, compiled once per run of Raphael
 
     // A program typed into the editor (or opened as one file).
     public CompileResult compile(String code) throws CompileSetupException {
@@ -79,12 +79,22 @@ public class CCompiler {
         if (gcc == null) {
             throw new CompileSetupException(Toolchains.howToInstall("gcc to compile C"));
         }
-        List<String> command = new ArrayList<>(List.of(gcc.toString()));
-        command.addAll(FLAGS);
-        command.addAll(sources);
-        command.add(runtime(gcc).toString());
-        command.addAll(List.of("-o", dir.resolve(EXE).toString()));
-        Output gccSaid = run(command, dir.resolve("src"));
+        // First the code on its own, so its errors are exactly gcc's (raphael_rt.h includes
+        // stdlib.h, which would hide a missing #include); then with the shim, into the program.
+        List<String> check = new ArrayList<>(List.of(gcc.toString(), "-fsyntax-only"));
+        check.addAll(FLAGS);
+        check.addAll(sources);
+        Output gccSaid = run(check, dir.resolve("src"));
+        if (gccSaid.exit() == 0) {
+            Path[] shim = runtime(gcc);
+            List<String> command = new ArrayList<>(List.of(gcc.toString()));
+            command.addAll(FLAGS);
+            command.addAll(List.of("-include", shim[0].toString()));
+            command.addAll(sources);
+            command.add(shim[1].toString());
+            command.addAll(List.of("-o", dir.resolve(EXE).toString()));
+            gccSaid = run(command, dir.resolve("src"));
+        }
         List<CompileResult.CompileError> errors = errors(gccSaid.text(), !sourceFiles.isEmpty());
         if (gccSaid.exit() != 0 && errors.isEmpty()) { // something gcc said that isn't in a known form
             errors.add(new CompileResult.CompileError(0, gccSaid.text().strip().lines().limit(6)
@@ -139,25 +149,29 @@ public class CCompiler {
                 : "undefined reference to " + name);
     }
 
-    // The shim, compiled once (without -g, so the debugger never steps into it).
-    private static synchronized Path runtime(Path gcc) throws CompileSetupException {
-        if (runtime != null && Files.exists(runtime)) {
+    // The shim: its header, and its code compiled once (without -g, so the debugger never steps
+    // into it; the tracer reads its table by the symbols' names).
+    private static synchronized Path[] runtime(Path gcc) throws CompileSetupException {
+        if (runtime != null && Files.exists(runtime[0]) && Files.exists(runtime[1])) {
             return runtime;
         }
         Path dir = tempFolder();
+        Path header = dir.resolve("raphael_rt.h");
         Path source = dir.resolve("raphael_rt.c");
-        try (InputStream in = CCompiler.class.getResourceAsStream("/c/raphael_rt.c")) {
-            write(source, new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException | NullPointerException e) {
-            throw new CompileSetupException("Raphael's C runtime file is missing from the app.", e);
+        for (Path file : new Path[] {header, source}) {
+            try (InputStream in = CCompiler.class.getResourceAsStream("/c/" + file.getFileName())) {
+                write(file, new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            } catch (IOException | NullPointerException e) {
+                throw new CompileSetupException("Raphael's C runtime file is missing from the app.", e);
+            }
         }
         Path object = dir.resolve("raphael_rt.o");
         Output said = run(List.of(gcc.toString(), "-O1", "-c", source.toString(), "-o", object.toString()), dir);
         if (said.exit() != 0) {
             throw new CompileSetupException("gcc couldn't compile Raphael's C runtime: " + said.text().strip());
         }
-        runtime = object;
-        return object;
+        runtime = new Path[] {header, object};
+        return runtime;
     }
 
     private record Output(int exit, String text) {

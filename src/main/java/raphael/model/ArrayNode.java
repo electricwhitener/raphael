@@ -15,7 +15,12 @@ public class ArrayNode extends HeapObject {
     private final int length;
 
     public ArrayNode(long id, String typeName, String elementType, List<Value> elements, int length) {
-        super(id, typeName);
+        this(id, typeName, elementType, elements, length, false);
+    }
+
+    // freed: a C block whose memory free() gave back.
+    public ArrayNode(long id, String typeName, String elementType, List<Value> elements, int length, boolean freed) {
+        super(id, typeName, freed);
         this.elementType = elementType;
         this.elements = List.copyOf(elements);
         this.length = length;
@@ -39,7 +44,7 @@ public class ArrayNode extends HeapObject {
         if (elementType.endsWith("[]")) {
             return shortName();
         }
-        StringBuilder text = new StringBuilder(shortName() + " [");
+        StringBuilder text = new StringBuilder((isFreed() ? "freed " : "") + shortName() + " [");
         for (int i = 0; i < elements.size(); i++) {
             if (i > 0) {
                 text.append(", ");

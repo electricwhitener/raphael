@@ -19,7 +19,13 @@ public class ObjectNode extends HeapObject {
     }
 
     public ObjectNode(long id, String typeName, Map<String, Value> fields, Map<String, String> fieldTypes, String parentName) {
-        super(id, typeName);
+        this(id, typeName, fields, fieldTypes, parentName, false);
+    }
+
+    // freed: a C struct whose memory free() gave back.
+    public ObjectNode(long id, String typeName, Map<String, Value> fields, Map<String, String> fieldTypes, String parentName,
+                      boolean freed) {
+        super(id, typeName, freed);
         this.parentName = parentName;
         this.fields = Collections.unmodifiableMap(new LinkedHashMap<>(fields));
         this.fieldTypes = Collections.unmodifiableMap(new LinkedHashMap<>(fieldTypes));
@@ -44,7 +50,7 @@ public class ObjectNode extends HeapObject {
     // e.g. Node{val=5, next→7}
     @Override
     public String describe(Snapshot snapshot) {
-        StringBuilder text = new StringBuilder(Names.simple(getTypeName()) + "{");
+        StringBuilder text = new StringBuilder((isFreed() ? "freed " : "") + Names.simple(getTypeName()) + "{");
         boolean first = true;
         for (Map.Entry<String, Value> field : fields.entrySet()) {
             if (!first) {

@@ -327,6 +327,7 @@ public class SceneBuilder {
         Scene scene = new Scene();
         List<Structure> structures = detector.detect(snapshot);
         layOut(structures, scene, context);
+        fadeFreed(scene, snapshot);
         addFocus(scene, snapshot);
         addLabels(scene, snapshot);
         return scene;
@@ -434,6 +435,35 @@ public class SceneBuilder {
         addPointerMarkers(markers, snapshot, visible);
         markers.values().removeIf(List::isEmpty);
         return markers;
+    }
+
+    private static final Pattern OBJECT_KEY = Pattern.compile("^#(\\d+)(?!\\d)");
+
+    // C memory that free() gave back is drawn faded, captioned "freed", so a pointer still holding
+    // it is plainly dangling. Every shape of the object (its box, cells and fields) has a key that
+    // starts with "#id".
+    private static void fadeFreed(Scene scene, Snapshot snapshot) {
+        Set<Long> freed = new HashSet<>();
+        for (HeapObject object : snapshot.getHeap().values()) {
+            if (object.isFreed()) {
+                freed.add(object.getId());
+            }
+        }
+        if (freed.isEmpty()) {
+            return;
+        }
+        for (SceneNode node : new ArrayList<>(scene.getNodes())) {
+            Matcher key = OBJECT_KEY.matcher(node.key());
+            if (!key.find() || !freed.contains(Long.parseLong(key.group(1)))) {
+                continue;
+            }
+            scene.add(new SceneNode(node.key(), node.kind(), node.x(), node.y(), node.w(), node.h(), node.text(),
+                    node.caption(), SceneNode.Look.DIM));
+            if (node.key().equals("#" + key.group(1))) { // the object's own shape: its caption goes under it (labels are above)
+                scene.add(new SceneNode("freed:" + node.key(), SceneNode.Kind.TEXT, node.x(), node.bottom() + 2,
+                        Math.max(node.w(), 60), Style.CAPTION_H, "freed", null));
+            }
+        }
     }
 
     // The array a name means: the running function's, else the nearest caller's (swap(&arr[0], …)

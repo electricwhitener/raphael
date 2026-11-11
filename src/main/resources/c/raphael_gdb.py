@@ -15,9 +15,11 @@
 # {"kind": "end", "reason": "finished" | "steps" | "crash" | "stopped", ...}.
 # Values: {"p": "text"} (plain), {"r": id} (an object in "heap"), {"n": 1} (NULL).
 # Heap objects: {"k": "o", "type", "fields", "ftypes"} (a struct) or {"k": "a", "type", "elem", "items", "len"} (an array).
+import bisect
 import gdb
 import json
 import os
+import struct
 
 SRC = os.path.realpath(os.environ.get("RAPHAEL_SRC", "."))
 RUN = os.environ.get("RAPHAEL_RUN")
@@ -71,6 +73,68 @@ def student_file(symtab):
 def text_of(rel, line):
     lines = lines_of.get(rel) or []
     return lines[line - 1].strip() if 0 < line <= len(lines) else ""
+
+
+# ---- the shim's table of malloc'd blocks ----
+
+UNSET = 0xBE  # what the shim fills new memory with (raphael_rt.c)
+
+
+class Blocks:
+    """The blocks malloc gave the program, read from the shim's table at each step."""
+
+    def __init__(self):
+        self.starts, self.blocks = [], []  # sorted by address: (start, size, freed)
+        try:
+            count = int(gdb.parse_and_eval("(int) raphael_block_count"))
+            table = int(gdb.parse_and_eval("(long long) &raphael_blocks"))
+        except gdb.error:
+            return  # no shim (not compiled by Raphael)
+        if count <= 0:
+            return
+        raw = bytes(gdb.selected_inferior().read_memory(table, count * 24))
+        rows = sorted((a, n, f) for a, n, f in struct.iter_unpack("<QQi4x", raw) if a)
+        self.blocks = rows
+        self.starts = [r[0] for r in rows]
+
+    def at(self, address):
+        """The block this address is in (start, size, freed), or None; the newest if several."""
+        i = bisect.bisect_right(self.starts, address) - 1
+        while i >= 0:
+            start, size, freed = self.blocks[i]
+            if start <= address < start + max(size, 1):
+                # the same address can be freed and given out again: the live one wins
+                if freed and i + 1 < len(self.blocks) and self.blocks[i + 1][0] == start:
+                    i += 1
+                    continue
+                return self.blocks[i]
+            if start + size < address - 4096:
+                return None
+            i -= 1
+        return None
+
+    def starting_at(self, address):
+        block = self.at(address)
+        return block if block is not None and block[0] == address else None
+
+
+def unset(v):
+    """Whether v lies in malloc'd memory nobody has written yet."""
+    try:
+        if v.address is None:
+            return False
+        address = int(v.address)
+        if STEP_BLOCKS[0].at(address) is None:
+            return False
+        data = bytes(gdb.selected_inferior().read_memory(address, v.type.sizeof))
+        return len(data) > 0 and all(b == UNSET for b in data)
+    except (gdb.MemoryError, gdb.error, RuntimeError):
+        return False
+
+
+NO_BLOCKS = Blocks.__new__(Blocks)
+NO_BLOCKS.starts, NO_BLOCKS.blocks = [], []
+STEP_BLOCKS = [NO_BLOCKS]  # the table for the step being read
 
 
 # ---- values, structs and arrays ----
@@ -145,6 +209,7 @@ class Step:
     def __init__(self):
         self.heap = {}
         self.places = []  # (start, size, name, element size or 0) for every variable in sight
+        self.pointers = {}  # a block's start → the name of a variable pointing at it, for &a[3]
 
     def place(self, name, v):
         try:
@@ -153,34 +218,76 @@ class Step:
             t = v.type.strip_typedefs()
             element = t.target().sizeof if t.code == gdb.TYPE_CODE_ARRAY else 0
             self.places.append((int(v.address), t.sizeof, name, element))
+            if t.code == gdb.TYPE_CODE_PTR and not unset(v):
+                target = int(v)
+                if STEP_BLOCKS[0].starting_at(target) is not None:
+                    self.pointers.setdefault(target, name)
         except (gdb.error, RuntimeError):
             pass
 
-    def named_address(self, address):
-        """A pointer as C would write where it points: &x, &arr[3]; or None if it's not a variable."""
+    def named_address(self, address, element_size=0):
+        """A pointer as C would write where it points: &x, &arr[3], or &a[3] inside the block a
+        points to; None if it's none of these."""
         for start, size, name, element in self.places:
             if address == start and not element:
                 return "&" + name
         for start, size, name, element in self.places:
             if element and start <= address <= start + size and (address - start) % element == 0:  # one past the end too
                 return "&" + name + "[" + str((address - start) // element) + "]"
+        block = STEP_BLOCKS[0].at(address) if element_size > 0 else None
+        if block is None and element_size > 0:
+            block = STEP_BLOCKS[0].at(address - 1)  # one past the end of a block
+            block = block if block is not None and address == block[0] + block[1] else None
+        if block is not None and (address - block[0]) % element_size == 0:
+            name = self.pointers.get(block[0])
+            if name is not None:
+                return "&" + name + "[" + str((address - block[0]) // element_size) + "]"
         return None
+
+    def block_array(self, block, element):
+        """A malloc'd block as an array of its elements: its size / the element's size."""
+        start, size, freed = block
+        name = type_name(element) + "[]"
+        oid = object_id(start, name)
+        if oid in self.heap:
+            return {"r": oid}
+        if len(self.heap) >= MAX_OBJECTS:
+            return {"p": hex(start)}
+        length = size // max(element.sizeof, 1)
+        node = {"k": "a", "type": name, "elem": type_name(element), "items": [], "len": length}
+        if freed:
+            node["freed"] = True
+        self.heap[oid] = node
+        base = gdb.Value(start).cast(element.pointer())
+        items = []
+        for i in range(min(length, MAX_CELLS)):
+            items.append(self.value((base + i).dereference()))
+        node["items"] = items
+        return {"r": oid}
 
     def value(self, v):
         t = v.type.strip_typedefs()
         try:
+            if t.code in (gdb.TYPE_CODE_INT, gdb.TYPE_CODE_FLT, gdb.TYPE_CODE_PTR, gdb.TYPE_CODE_BOOL, gdb.TYPE_CODE_ENUM) and unset(v):
+                return {"p": "?"}  # malloc'd, never written
             if t.code == gdb.TYPE_CODE_PTR:
                 address = int(v)
                 if address == 0:
                     return {"n": 1}
                 target = t.target().strip_typedefs()
                 if target.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
+                    block = STEP_BLOCKS[0].starting_at(address)
+                    if block is not None and target.sizeof > 0 and block[1] >= 2 * target.sizeof:
+                        return self.block_array(block, t.target())  # malloc(n * sizeof(struct …)): an array of them
                     return self.struct_at(address, t.target())
                 if is_char(target):
                     return {"p": json.dumps(v.string(errors="replace")[:200])}  # up to its '\0'
                 if target.code == gdb.TYPE_CODE_FUNC:
                     return {"p": str(v).split(" ")[-1].strip("<>")}
-                return {"p": self.named_address(address) or hex(address)}
+                block = STEP_BLOCKS[0].starting_at(address)
+                if block is not None and target.sizeof > 0 and target.code != gdb.TYPE_CODE_VOID:
+                    return self.block_array(block, t.target())  # int *a = malloc(n * sizeof(int)): an array of n
+                return {"p": self.named_address(address, target.sizeof) or hex(address)}
             if t.code == gdb.TYPE_CODE_ARRAY:
                 return self.array(v)
             if t.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
@@ -214,6 +321,9 @@ class Step:
         except (gdb.MemoryError, gdb.error):
             return {"p": "?"}
         node = {"k": "o", "type": name, "fields": {}, "ftypes": {}}
+        block = STEP_BLOCKS[0].at(address)
+        if block is not None and block[2]:
+            node["freed"] = True  # free() gave it back: what's drawn is what it last held
         self.heap[oid] = node  # before the fields, so a cycle comes back to it
         for f in t.strip_typedefs().fields():
             if not f.name:
@@ -229,6 +339,8 @@ class Step:
         return {"r": oid}
 
     def text(self, v):
+        if unset(v):
+            return {"p": "?"}
         try:
             raw = bytes(int(v[i]) & 0xFF for i in range(v.type.strip_typedefs().sizeof))
             return {"p": json.dumps(raw.split(b"\0")[0].decode("utf-8", "replace"))}
@@ -290,6 +402,7 @@ def visible_symbols(frame, line):
 
 def frames_now(step):
     """The student's frames, the running one first; and the first one's frame object."""
+    STEP_BLOCKS[0] = Blocks()
     frames = []
     f = gdb.newest_frame()
     while f is not None and student_file(f.find_sal().symtab) is None:
