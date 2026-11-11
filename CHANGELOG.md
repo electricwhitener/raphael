@@ -2,7 +2,7 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
-## Unreleased
+## 1.3.0 (2026-11-11)
 
 **C runs**
 - Write a C program and press Run: Raphael compiles it with gcc and records every line through a debugger (gdb; lldb on a Mac), with every picture, view and explanation Java has.
