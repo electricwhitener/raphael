@@ -27,6 +27,14 @@ jobs:
           7z x -y -o"$RUNNER_TEMP" winlibs.7z > /dev/null
           echo "$RUNNER_TEMP/mingw64/bin" >> "$GITHUB_PATH"
           du -sh "$RUNNER_TEMP/mingw64"
+      - name: What's inside (for trimming the installer's copy)
+        run: |
+          cd "$RUNNER_TEMP/mingw64"
+          du -sh * | sort -h
+          du -sh */* 2>/dev/null | sort -h | tail -40
+          ls bin | head -200
+          ls -d share/* lib/* libexec/gcc/*/*/* 2>/dev/null | head -80
+          ldd bin/gdb.exe 2>/dev/null | grep -v -i "windows\|system32" || true
       - name: Versions, and Python inside gdb
         run: |
           gcc --version | head -1
