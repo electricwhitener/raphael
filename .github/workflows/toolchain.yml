@@ -91,3 +91,25 @@ jobs:
         with:
           name: macos-steps
           path: .claude/tools/cspike/raw.txt
+
+  # The program must never outlive Raphael. On macOS this failed now and then (2026-11-11):
+  # Raphael killed while the program was still connecting. Ten runs in a row of that test.
+  macos-kill:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: The kill test, ten times
+        run: |
+          mvn -B -q test-compile
+          pass=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if mvn -B -q surefire:test -Dtest='TracerTest#theProgramEndsWhenRaphaelIsKilled' > run$i.txt 2>&1; then pass=$((pass+1)); else tail -5 run$i.txt; fi
+          done
+          echo "passed $pass of 10"
+          [ "$pass" = 10 ]

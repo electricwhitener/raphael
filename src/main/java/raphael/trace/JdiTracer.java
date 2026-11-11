@@ -202,9 +202,11 @@ public class JdiTracer implements Tracer {
             String address = connector.startListening(arguments);
             try {
                 // UTF-8 keeps printed text intact; -Xmx caps the memory the program may use; the
-                // agent ends it if Raphael is killed.
+                // agent ends it if Raphael is killed. jdwp's timeout: if Raphael dies while the
+                // program is connecting to it (before the agent runs), the program gives up and exits
+                // instead of waiting, paused, for ever.
                 List<String> command = new ArrayList<>(List.of(javaCommand(),
-                        "-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,address=" + address,
+                        "-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,timeout=" + START_TIMEOUT_MS + ",address=" + address,
                         "-cp", program.classDir().toString(),
                         "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
                         "-Xmx" + runLimits.memoryMb() + "m"));
