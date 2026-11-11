@@ -12,4 +12,9 @@ public interface TraceListener {
     default void traceChanged(TraceModel model) {
         stepChanged(model);
     }
+
+    // Called when the key moments shown change (switched off or on). By default, a step change.
+    default void momentsChanged(TraceModel model) {
+        stepChanged(model);
+    }
 }

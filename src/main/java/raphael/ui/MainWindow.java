@@ -67,7 +67,7 @@ import raphael.trace.RunLimits;
 // goes to the program in front, through active(); the window itself never holds a program's state.
 // OOP: inheritance (extends JFrame); composition (the window is made of parts that each do one
 // job); an inner class implements Workbench.Host, the interface a Workbench talks back through.
-public class MainWindow extends JFrame {
+public class MainWindow extends JFrame implements MomentMode.Watcher {
 
     private static final String HELP = """
             run and stop
@@ -133,6 +133,20 @@ public class MainWindow extends JFrame {
     private JToolBar toolBar;
     private javax.swing.JToggleButton examplesButton; // pressed while the side bar is wanted
     private JMenuItem examplesItem;                     // View → Examples
+    private final java.util.Map<MomentMode, javax.swing.JRadioButtonMenuItem> momentChoices = new java.util.EnumMap<>(MomentMode.class);
+
+    javax.swing.JRadioButtonMenuItem momentChoice(MomentMode mode) { // for tests
+        return momentChoices.get(mode);
+    }
+
+    // The key-moment choice changed (here or in any tab): the Run menu shows it, and the status says it.
+    @Override
+    public void momentModeChanged(MomentMode mode) {
+        momentChoices.get(mode).setSelected(true);
+        if (isActive()) {
+            say("key moments: " + mode.description(), Style.INK_SOFT);
+        }
+    }
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
@@ -807,13 +821,17 @@ public class MainWindow extends JFrame {
         run.addSeparator();
         run.add(item("Next key moment", "alt PAGE_DOWN", () -> onModel(model -> model.nextMoment(1))));
         run.add(item("Previous key moment", "alt PAGE_UP", () -> onModel(model -> model.nextMoment(-1))));
-        javax.swing.JCheckBoxMenuItem pauses = new javax.swing.JCheckBoxMenuItem("Pause at key moments", ControlsBar.pausesAtMoments());
-        pauses.setToolTipText("While playing, stop at each key moment (a base case, a caught exception, a refused value…)");
-        pauses.addActionListener(e -> {
-            ControlsBar.setPauseAtMoments(pauses.isSelected());
-            say(pauses.isSelected() ? "playing pauses at key moments" : "playing goes straight through the key moments", Style.INK_SOFT);
-        });
-        run.add(pauses);
+        run.addSeparator(); // key moments: off, shown, or paused at (the same choice as the playback bar's)
+        javax.swing.ButtonGroup modes = new javax.swing.ButtonGroup();
+        for (MomentMode mode : MomentMode.values()) {
+            javax.swing.JRadioButtonMenuItem choice = new javax.swing.JRadioButtonMenuItem(mode.label(), mode == MomentMode.current());
+            choice.setToolTipText(mode.description());
+            choice.addActionListener(e -> MomentMode.set(mode));
+            modes.add(choice);
+            momentChoices.put(mode, choice);
+            run.add(choice);
+        }
+        MomentMode.watch(this);
         JMenu view = menu("View", KeyEvent.VK_V);
         view.add(item("Command Palette…", "shift control P", () -> {
             CommandPalette.showCommands(this, getJMenuBar());

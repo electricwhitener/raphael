@@ -70,7 +70,8 @@ class MomentsTest {
         assertTrue(caught.text().contains("catch (IllegalArgumentException …) at line 60 takes it: the types match."), caught.text());
         assertTrue(caught.text().contains("It left deposit() in the middle"), caught.text());
         long pausedPolymorphism = found.stream().filter(m -> m.kind().equals("polymorphism") && m.pauses()).count();
-        assertEquals(2, pausedPolymorphism, "the first two pause, the rest are noted");
+        assertEquals(1, pausedPolymorphism, "the first pauses; deposit() on line 55 again, for a Current, is a repeat");
+        assertEquals(1, found.stream().filter(m -> m.kind().equals("polymorphism") && m.line() == 55).count());
     }
 
     @Test

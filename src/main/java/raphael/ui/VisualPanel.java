@@ -105,7 +105,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     public void traceChanged(TraceModel model) {
         views.clear();
         if (model.getTrace() != null) {
-            views.put(View.CALLS, new raphael.render.CallsScenes(model.getTrace(), model.getMoments()));
+            views.put(View.CALLS, new raphael.render.CallsScenes(model.getTrace(), model.getAllMoments()));
             views.put(View.OBJECTS, new raphael.render.ObjectsScenes(model.getTrace(), model.getFacts()));
             views.put(View.FILES, new raphael.render.FilesScenes(model.getTrace(), model.getFacts(), model.getInput()));
         }

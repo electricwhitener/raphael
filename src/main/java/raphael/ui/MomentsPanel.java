@@ -80,6 +80,11 @@ public class MomentsPanel extends JPanel implements TraceListener {
     }
 
     @Override
+    public void momentsChanged(TraceModel model) {
+        traceChanged(model);
+    }
+
+    @Override
     public void stepChanged(TraceModel model) {
         list.clearSelection();
         for (int i = 0; i < rows.size(); i++) {

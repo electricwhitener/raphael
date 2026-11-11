@@ -157,4 +157,26 @@ class MainWindowTest {
         page.showExamplesOf(raphael.lang.Languages.byId("c"));
         assertTrue(page.showsExampleList());
     }
+
+    // The key-moment choice is one for every tab: changing it in a tab's playback bar changes the
+    // Run menu and every other tab, and it's remembered.
+    @Test
+    void theMomentChoiceIsSharedAndRemembered() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MomentMode before = MomentMode.current();
+        MainWindow window = new MainWindow();
+        try {
+            window.newProgram();
+            window.newProgram();
+            MomentMode.set(MomentMode.OFF);
+            assertTrue(window.momentChoice(MomentMode.OFF).isSelected());
+            assertEquals("off", raphael.App.SETTINGS.get("moments", ""));
+            MomentMode.set(MomentMode.PAUSE);
+            assertTrue(window.momentChoice(MomentMode.PAUSE).isSelected());
+            assertEquals(MomentMode.PAUSE, window.active().getControls().momentChoice());
+        } finally {
+            MomentMode.set(before);
+            window.dispose();
+        }
+    }
 }

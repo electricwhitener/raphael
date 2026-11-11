@@ -19,7 +19,8 @@ public class TraceModel {
     private Dimension runSize = new Dimension(); // the room the run's biggest picture needs
     private int step;
     private double speed = 1;   // 1 = normal, 2 = twice as fast
-    private List<raphael.explain.Moment> moments = List.of(); // the run's key moments, in step order
+    private List<raphael.explain.Moment> all = List.of();     // the run's key moments, in step order
+    private List<raphael.explain.Moment> moments = List.of(); // the ones shown: all, or none with moments off
     private raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts(); // what the run's code says
     private final List<TraceListener> listeners = new ArrayList<>();
 
@@ -62,7 +63,8 @@ public class TraceModel {
     public void load(Trace trace, List<Scene> scenes, Dimension runSize, List<raphael.explain.Moment> moments,
                      raphael.analysis.CodeFacts facts) {
         this.facts = facts;
-        this.moments = List.copyOf(moments);
+        this.all = List.copyOf(moments);
+        this.moments = MomentMode.current() == MomentMode.OFF ? List.of() : all;
         this.trace = trace;
         this.scenes = scenes;
         this.step = 0;
@@ -78,6 +80,7 @@ public class TraceModel {
         }
         trace = null;
         scenes = null;
+        all = List.of();
         moments = List.of();
         runSize = new Dimension();
         step = 0;
@@ -90,9 +93,22 @@ public class TraceModel {
         return facts;
     }
 
-    // The run's key moments, in step order.
+    // The run's key moments that are shown, in step order (none with moments off).
     public List<raphael.explain.Moment> getMoments() {
         return moments;
+    }
+
+    // Every key moment of the run, shown or not (the calls view badges its base cases with them).
+    public List<raphael.explain.Moment> getAllMoments() {
+        return all;
+    }
+
+    // The moment mode changed: show the run's moments, or none, and tell the panels.
+    public void momentsChanged() {
+        moments = MomentMode.current() == MomentMode.OFF ? List.of() : all;
+        for (TraceListener listener : listeners) {
+            listener.momentsChanged(this);
+        }
     }
 
     // The moments of one step (usually none).

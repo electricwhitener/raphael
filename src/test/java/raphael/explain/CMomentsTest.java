@@ -177,4 +177,17 @@ class CMomentsTest {
         Moment newline = first(new MomentFinder().find(trace, program.facts(), "19\nKim\n"), "read-newline");
         assertTrue(newline.text().startsWith("name got an empty line"), newline.text());
     }
+
+    // A recursion of many calls is explained once, not at every call: one of each kind of moment
+    // per place in the code (the C BST used to have 35).
+    @Test
+    void repeatsAreLeftOut() throws Exception {
+        Run run = c(raphael.io.ExampleCatalog.source(raphael.io.ExampleCatalog.find("bst_insert")), "");
+        java.util.Map<String, Long> kinds = new java.util.TreeMap<>();
+        for (Moment moment : run.moments()) {
+            kinds.merge(moment.kind() + "@" + moment.line(), 1L, Long::sum);
+        }
+        assertTrue(kinds.values().stream().allMatch(n -> n == 1), "a repeat at the same place: " + kinds);
+        assertTrue(run.moments().size() <= 10, run.moments().size() + " moments: " + kinds);
+    }
 }

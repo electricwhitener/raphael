@@ -16,7 +16,7 @@ import raphael.render.Style;
 // Playing uses a Swing Timer that moves one step at a time. Moving to a step any other way (a
 // key, a button, the slider, a line number) pauses it, so you stay on the step you asked for.
 // OOP: inheritance (extends JPanel); implements TraceListener (Observer pattern).
-public class ControlsBar extends JPanel implements TraceListener {
+public class ControlsBar extends JPanel implements TraceListener, MomentMode.Watcher {
 
     private static final String[] SPEEDS = {"0.5×", "1×", "2×", "4×", "8×"};
     private static final double[] SPEED_VALUES = {0.5, 1, 2, 4, 8};
@@ -31,22 +31,10 @@ public class ControlsBar extends JPanel implements TraceListener {
     private final JButton out = button(Icons.Glyph.STEP_OUT, "Finish call",
             "Finish call (step out): run until this method returns  (Alt+↑)");
     private final JButton play = button(Icons.Glyph.PLAY, "Play", "Play or pause  (Space)");
-    // Playing pauses by itself at each key moment (see explain/Moment), unless switched off.
-    private static boolean pauseAtMoments = raphael.App.SETTINGS.getBoolean("pauseAtMoments", true);
-
     private Runnable onPausedAtMoment = () -> { }; // the program says so in the status bar
 
     public void setOnPausedAtMoment(Runnable onPausedAtMoment) {
         this.onPausedAtMoment = onPausedAtMoment;
-    }
-
-    public static boolean pausesAtMoments() {
-        return pauseAtMoments;
-    }
-
-    public static void setPauseAtMoments(boolean pause) {
-        pauseAtMoments = pause;
-        raphael.App.SETTINGS.putBoolean("pauseAtMoments", pause);
     }
 
     // The step slider, with a small mark under each key moment: blue where play pauses, grey for a note.
@@ -78,6 +66,9 @@ public class ControlsBar extends JPanel implements TraceListener {
         }
     };
     private final JComboBox<String> speed = new JComboBox<>(SPEEDS);
+    // Key moments: off, shown, or shown and paused at (one choice for every tab; see MomentMode).
+    private final JComboBox<MomentMode> moments = new JComboBox<>(MomentMode.values());
+    private boolean showingMode; // true while the box is being set to the choice made elsewhere
     private final Timer playTimer;
     private boolean movingSlider; // true while we move the slider ourselves
     private boolean timerMoving;  // true while the play timer is moving to the next step
@@ -111,13 +102,22 @@ public class ControlsBar extends JPanel implements TraceListener {
                 timerMoving = true;
                 model.next();
                 timerMoving = false;
-                if (pauseAtMoments && model.pausesAt(model.getStep())) {
+                if (MomentMode.current() == MomentMode.PAUSE && model.pausesAt(model.getStep())) {
                     stopPlaying(); // a key moment: the card explains it; Space goes on
                     onPausedAtMoment.run();
                 }
             }
         });
         play.addActionListener(e -> togglePlay());
+        moments.setSelectedItem(MomentMode.current());
+        moments.setToolTipText(MomentMode.current().description());
+        moments.getAccessibleContext().setAccessibleName("Key moments");
+        moments.addActionListener(e -> {
+            if (!showingMode && moments.getSelectedItem() != null) {
+                MomentMode.set((MomentMode) moments.getSelectedItem()); // every tab follows, this one too
+            }
+        });
+        MomentMode.watch(this);
         speed.addActionListener(e -> {
             model.setSpeed(SPEED_VALUES[speed.getSelectedIndex()]);
             playTimer.setDelay((int) (Style.PLAY_STEP_MS / model.getSpeed()));
@@ -136,11 +136,31 @@ public class ControlsBar extends JPanel implements TraceListener {
         JPanel position = new JPanel(new FlowLayout(FlowLayout.RIGHT, Style.SPACE_2, 0));
         position.setOpaque(false);
         position.add(stepLabel);
+        position.add(moments);
         position.add(speed);
         add(buttons, BorderLayout.WEST);
         add(slider, BorderLayout.CENTER);
         add(position, BorderLayout.EAST);
         stepChanged(model);
+    }
+
+    MomentMode momentChoice() { // what the box shows (for tests)
+        return (MomentMode) moments.getSelectedItem();
+    }
+
+    @Override
+    public void momentModeChanged(MomentMode mode) {
+        showingMode = true;
+        moments.setSelectedItem(mode);
+        showingMode = false;
+        moments.setToolTipText(mode.description());
+        model.momentsChanged(); // the cards, marks and list follow
+    }
+
+    @Override
+    public void momentsChanged(TraceModel model) {
+        stepChanged(model);
+        slider.repaint(); // the marks
     }
 
     public void togglePlay() {

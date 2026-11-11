@@ -132,4 +132,42 @@ class TraceModelTest {
         TraceModel model = new TraceModel();
         assertThrows(IllegalArgumentException.class, () -> model.setSpeed(0));
     }
+
+    // Moments off: the run keeps its moments, but none are shown (no cards, marks or list) until
+    // they're switched on again; the listeners hear of each change. The calls view still gets them all.
+    @Test
+    void momentsOffHidesThemWithoutLosingThem() {
+        MomentMode before = MomentMode.current();
+        try {
+            MomentMode.set(MomentMode.SHOW);
+            TraceModel model = new TraceModel();
+            List<String> told = new ArrayList<>();
+            model.addListener(new TraceListener() {
+                @Override
+                public void stepChanged(TraceModel m) {
+                }
+
+                @Override
+                public void momentsChanged(TraceModel m) {
+                    told.add("moments " + m.getMoments().size());
+                }
+            });
+            Snapshot empty = new Snapshot(List.of(), Map.of(), Map.of(), 0, null);
+            raphael.explain.Moment moment = new raphael.explain.Moment(1, "base-case", "Base case", "…", true, null, 3);
+            model.load(new Trace(List.of(empty, empty), "", EndReason.FINISHED, "done"), List.of(new Scene(), new Scene()),
+                    new Dimension(), List.of(moment));
+            assertEquals(List.of(moment), model.getMoments());
+            MomentMode.set(MomentMode.OFF);
+            model.momentsChanged();
+            assertEquals(List.of(), model.getMoments());
+            assertEquals(List.of(), model.momentsAt(1));
+            assertEquals(List.of(moment), model.getAllMoments());
+            MomentMode.set(MomentMode.PAUSE);
+            model.momentsChanged();
+            assertEquals(List.of(moment), model.getMoments());
+            assertEquals(List.of("moments 0", "moments 1"), told);
+        } finally {
+            MomentMode.set(before);
+        }
+    }
 }
