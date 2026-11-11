@@ -591,32 +591,39 @@ def crash_signal(thread):
     return None
 
 
-last_step = [None]
+landing = [None]  # a skipped step (back on a line after its calls returned), kept for returns with nowhere else to go
 
 
 def finish_returns():
-    if last_step[0] is not None:
-        again = dict(last_step[0])
-        again["exits"] = exits[:]
-        again["out"] = output_size()
-        send(again)
+    """Returns that happened in main's last line, with no step after them to land on: they land
+    on main's stop after them, which was skipped as a doubled step."""
+    if landing[0] is not None and exits:
+        step = dict(landing[0])
+        step["exits"] = exits[:]
+        step["out"] = output_size()
+        send(step)
         del exits[:]
 
 
 def finish(reason, **more):
-    if exits and last_step[0] is not None and reason == "finished":
-        # Returns that happened in main's last line, with no step after them to land on: the last
-        # step again, with them.
-        again = dict(last_step[0])
-        again["exits"] = exits[:]
-        again["out"] = output_size()
-        send(again)
-        del exits[:]
+    if reason == "finished":
+        finish_returns()
     message = {"kind": "end", "reason": reason}
     message.update(more)
     send(message)
     if Run.process is not None and Run.process.GetState() != lldb.eStateExited:
         Run.process.Kill()
+
+
+def step_message(thread):
+    step = Step()
+    frames = frames_now(step, thread)
+    message = {"kind": "step", "frames": frames, "heap": step.heap, "globals": globals_now(step),
+               "exits": exits[:], "out": output_size()}
+    files = files_now()
+    if files is not None:
+        message["files"] = files
+    return message
 
 
 def run(debugger):
@@ -683,20 +690,15 @@ def run(debugger):
             # twice on one line; a frame's step on the line it last stopped on is skipped.
             cfa = frame.GetCFA()
             again = last_line_of.get(cfa) == (rel, line)
+            if again and exits:
+                landing[0] = step_message(thread)
             if not closing and not opening and not again:
                 last_line_of[cfa] = (rel, line)
                 for deeper in [c for c in last_line_of if c < cfa]:  # the stack grows down: those calls are over
                     del last_line_of[deeper]
                 watch_return(thread)
-                step = Step()
-                frames = frames_now(step, thread)
-                message = {"kind": "step", "frames": frames, "heap": step.heap, "globals": globals_now(step),
-                           "exits": exits[:], "out": output_size()}
-                files = files_now()
-                if files is not None:
-                    message["files"] = files
-                send(message)
-                last_step[0] = message
+                send(step_message(thread))
+                landing[0] = None
                 del exits[:]
                 steps += 1
                 if steps >= MAX_STEPS:

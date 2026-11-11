@@ -1,5 +1,6 @@
 package raphael.explain;
 
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,6 +27,7 @@ public final class CCrash {
     private static final Pattern STAR = Pattern.compile("\\*\\s*(" + NAME + ")\\b(?!\\s*\\()");
     private static final Pattern INDEX = Pattern.compile("\\b(" + NAME + ")\\s*\\[\\s*(" + NAME + "|\\d+)\\s*\\]");
     private static final Pattern GLIBC_ASSERT = Pattern.compile("Assertion `(.+)' failed");
+    private static final Pattern MAC_ASSERT = Pattern.compile("Assertion failed: \\((.+)\\), function \\w+, file ");
     private static final Pattern MINGW_ASSERT = Pattern.compile("Assertion failed: (.+), file ");
 
     private CCrash() {
@@ -126,13 +128,11 @@ public final class CCrash {
         if (output == null) {
             return null;
         }
-        Matcher assertion = GLIBC_ASSERT.matcher(output);
-        if (assertion.find()) {
-            return "assert(" + assertion.group(1) + ") failed";
-        }
-        assertion = MINGW_ASSERT.matcher(output);
-        if (assertion.find()) {
-            return "assert(" + assertion.group(1) + ") failed";
+        for (Pattern format : List.of(GLIBC_ASSERT, MAC_ASSERT, MINGW_ASSERT)) { // Linux's, macOS's and Windows' wording
+            Matcher assertion = format.matcher(output);
+            if (assertion.find()) {
+                return "assert(" + assertion.group(1) + ") failed";
+            }
         }
         if (output.contains("double free")) {
             return "free() was called twice on the same block";
