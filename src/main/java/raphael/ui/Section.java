@@ -21,6 +21,8 @@ import raphael.render.Style;
 // and a nested subclass of AbstractBorder that override how they get their colour.
 public final class Section {
 
+    static final int CLOSE_BUTTON = 20; // a panel's × button: a 20 px square, its hover fill no bigger
+
     private Section() {
     }
 
@@ -62,7 +64,7 @@ public final class Section {
         button.getAccessibleContext().setAccessibleName(tip);
         button.setRequestFocusEnabled(false);
         button.addActionListener(e -> close.run());
-        Zoom.size(button, 24, 24); // a small square, centred in the 32 px heading
+        Zoom.size(button, CLOSE_BUTTON, CLOSE_BUTTON); // a small square, centred in the 32 px heading
         JPanel holder = new JPanel(new java.awt.GridBagLayout());
         holder.setOpaque(false);
         holder.setBorder(Zoom.gap(0, 0, 0, Style.SPACE_1));

@@ -276,6 +276,39 @@ class MainWindowTest {
         }
     }
 
+    // ← → Home End step the run wherever the keyboard is (here the side bar's tree, which would
+    // fold its rows with them), but move the caret in the code.
+    @Test
+    void theArrowsStepFromAnywhereButText() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        try {
+            window.loadExample("BubbleSort");
+            Workbench program = window.active();
+            javax.swing.SwingUtilities.invokeAndWait(program::run);
+            for (int i = 0; i < 300 && program.isRunning(); i++) {
+                Thread.sleep(50);
+            }
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                program.getControls().pause();
+                program.getModel().setStep(2);
+                java.awt.Component tree = new RowTree(node -> false);
+                window.getContentPane().add(tree); // a tree in this window, as the side bar's are
+                assertTrue(window.spaceOrEnter(key(tree, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_RIGHT, java.awt.event.KeyEvent.CHAR_UNDEFINED)));
+                assertEquals(3, program.getModel().getStep(), "→ stepped");
+                window.spaceOrEnter(key(tree, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_LEFT, java.awt.event.KeyEvent.CHAR_UNDEFINED));
+                assertEquals(2, program.getModel().getStep(), "← stepped back");
+                window.spaceOrEnter(key(tree, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_END, java.awt.event.KeyEvent.CHAR_UNDEFINED));
+                assertEquals(program.getModel().size() - 1, program.getModel().getStep(), "End went to the last step");
+                javax.swing.JComponent editor = program.getCode().getEditor();
+                assertFalse(window.spaceOrEnter(key(editor, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_LEFT, java.awt.event.KeyEvent.CHAR_UNDEFINED)),
+                        "in the code ← moves the caret");
+            });
+        } finally {
+            window.dispose();
+        }
+    }
+
     private static java.awt.event.KeyEvent key(java.awt.Component on, int id, int code, char typed) {
         return new java.awt.event.KeyEvent(on, id, System.currentTimeMillis(), 0, code, typed);
     }

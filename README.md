@@ -84,7 +84,7 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 |---|---|---|---|
 | [FlatLaf](https://www.formdev.com/flatlaf/) | 3.7.2 | The modern look of the Swing window, light and dark | Apache 2.0 |
 | [JUnit 5](https://junit.org/junit5/) | 5.11.4 | The tests only | EPL 2.0 |
-| [IBM Plex Mono](https://github.com/IBM/plex) | 2.3 | The code font (`src/main/resources/fonts/`) | SIL OFL 1.1 |
+| [IBM Plex Mono](https://github.com/IBM/plex) | 2.3 | The code font when the system has none of VS Code's (Consolas, Menlo, DejaVu Sans Mono…) (`src/main/resources/fonts/`) | SIL OFL 1.1 |
 
 **Parts of the JDK it relies on.** These need no separate install.
 

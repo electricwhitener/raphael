@@ -14,9 +14,11 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - Everything you can click now lights up under the mouse: the examples side bar's rows, the welcome page's categories, the boxes in the toolbar, the line numbers you can click, the slider. Run gets darker under the mouse; it used to turn pale grey and look switched off.
 - A chosen row or cell is grey with a dark bar, not solid blue: blue means "about to happen", and Run is the one blue button. The language switches show the chosen language as a raised white pill.
 - Rounded scroll bars and menus, the interface's own text (the status bar, the colour key, panel headings) in the sans font, panel headings and tabs on one line, and short hints in the call stack, variables and terminal before the first run.
-- The code font is IBM Plex Mono.
+- The fonts are the ones VS Code uses on your system: Consolas and Segoe UI on Windows (also when Raphael runs inside WSL, read from Windows' own fonts), Menlo and the system font on a Mac, the system's monospace font on Linux. IBM Plex Mono, inside the app, is the fallback.
 
 **Fixes**
+- ← → Home and End step the run wherever the keyboard is, except where you type (the code, the search box, the terminal while the program asks for input). After a click in the side bar, a table or a panel, they used to move around in there instead.
+- A panel's × is a small, thin cross in a small square, as in VS Code, not a button as tall as the tab strip.
 - Ctrl+N asks which language the new program is in (the last one is lit, so Ctrl+N then Enter is quick).
 - One click on a group in the examples side bar opens or closes it, not only a click on its little arrow.
 - Tooltips no longer pile up two or three at a time on Linux under Windows (WSL), and the welcome page no longer repeats an example's sentence as a tooltip under it. A menu item's sentence shows in the status bar instead of over the menu.

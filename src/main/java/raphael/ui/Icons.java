@@ -197,11 +197,12 @@ public final class Icons {
                 g.draw(path(false, 4, 10, 8, 6, 12, 10));
             }
         },
-        CLOSE { // a cross
+        CLOSE { // a small, thin cross, as VS Code's: it closes a panel, it shouldn't shout
             @Override
             void draw(Graphics2D g) {
-                g.draw(new Line2D.Float(4.5f, 4.5f, 11.5f, 11.5f));
-                g.draw(new Line2D.Float(11.5f, 4.5f, 4.5f, 11.5f));
+                g.setStroke(new java.awt.BasicStroke(1.2f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+                g.draw(new Line2D.Float(5.5f, 5.5f, 10.5f, 10.5f));
+                g.draw(new Line2D.Float(10.5f, 5.5f, 5.5f, 10.5f));
             }
         };
 

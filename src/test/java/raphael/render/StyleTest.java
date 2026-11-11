@@ -62,9 +62,12 @@ class StyleTest {
         return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
     }
 
+    // The code font is the system's (as VS Code's: Consolas, Menlo, DejaVu Sans Mono…) or the
+    // bundled one: every letter as wide as every other, and it has the symbols the picture and panels use.
     @Test
-    void theBundledFontLoadsAndHasTheSymbolsWeUse() {
-        assertEquals("IBM Plex Mono", Style.MONO);
-        assertEquals(-1, Style.UI_FONT.canDisplayUpTo("→…·—"));
+    void theCodeFontIsMonospacedAndHasTheSymbolsWeUse() {
+        java.awt.FontMetrics metrics = new java.awt.Canvas().getFontMetrics(Style.CODE_FONT);
+        assertEquals(metrics.charWidth('i'), metrics.charWidth('W'), Style.MONO + " is monospaced");
+        assertEquals(-1, Style.UI_FONT.canDisplayUpTo("→←↑↓…·—–×•"), Style.MONO + " has the symbols");
     }
 }

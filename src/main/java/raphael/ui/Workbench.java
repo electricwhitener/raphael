@@ -386,14 +386,20 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
                 Style.INK_SOFT);
     }
 
-    private static javax.swing.JButton closeButton(String tip, Runnable close) {
+    // A tab strip's ×: a 20 px square centred in the strip (the strip would stretch a bare button to its full height).
+    private static JComponent closeButton(String tip, Runnable close) {
         javax.swing.JButton button = new javax.swing.JButton(Icons.of(Icons.Glyph.CLOSE, Icons.Role.TOOL));
         button.putClientProperty("JButton.buttonType", "toolBarButton");
         button.setToolTipText(tip);
         button.getAccessibleContext().setAccessibleName(tip);
         button.setRequestFocusEnabled(false);
         button.addActionListener(e -> close.run());
-        return button;
+        Zoom.size(button, Section.CLOSE_BUTTON, Section.CLOSE_BUTTON);
+        JPanel holder = new JPanel(new java.awt.GridBagLayout());
+        holder.setOpaque(false);
+        holder.setBorder(Zoom.gap(0, 0, 0, Style.SPACE_2));
+        holder.add(button);
+        return holder;
     }
 
     // The layout chosen in View → Panels and View → Layout (for every tab): which panels show, the

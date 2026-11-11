@@ -1582,7 +1582,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         order.remove(first);
         order.add(0, first);
         for (raphael.lang.Language language : order) {
-            JMenuItem item = new JMenuItem((change && language == first ? "✓ " : "") + language.name());
+            JMenuItem item = change ? new javax.swing.JRadioButtonMenuItem(language.name(), language == first) // the chosen one marked by the menu itself
+                    : new JMenuItem(language.name());
             item.addActionListener(e -> {
                 if (!change) {
                     newProgram(language);
@@ -2107,7 +2108,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
                 event -> isActive() && spaceOrEnter(event));
     }
 
-    // True if the key was used up here: Space played or paused, or Enter pressed a button.
+    // True if the key was used up here: Space played or paused, an arrow (or Home, End) stepped,
+    // or Enter pressed a button.
     boolean spaceOrEnter(KeyEvent event) {
         java.awt.Component owner = event.getComponent();
         if (owner == null || SwingUtilities.getWindowAncestor(owner) != this
@@ -2122,6 +2124,20 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             }
             event.consume();
             return true; // pressed, typed and released: none of it reaches the control
+        }
+        // ←, →, Home and End step the run wherever the keyboard is, except where text is typed (the
+        // code, the search box, the terminal while the program reads input; there Alt with them
+        // steps): a side bar tree, a table or a scroll pane would otherwise take them for itself.
+        int code = event.getKeyCode();
+        java.util.function.Consumer<TraceModel> step = code == KeyEvent.VK_RIGHT ? TraceModel::next
+                : code == KeyEvent.VK_LEFT ? TraceModel::previous : code == KeyEvent.VK_HOME ? TraceModel::first
+                : code == KeyEvent.VK_END ? TraceModel::last : null;
+        if (step != null && !event.isShiftDown() && !typesText(owner) && current != null && current.getModel().hasSteps()) {
+            if (event.getID() == KeyEvent.KEY_PRESSED) {
+                onModel(step);
+            }
+            event.consume();
+            return true;
         }
         if (event.getID() == KeyEvent.KEY_PRESSED && event.getKeyCode() == KeyEvent.VK_ENTER) {
             if (owner instanceof javax.swing.JComboBox && owner.isEnabled()) {

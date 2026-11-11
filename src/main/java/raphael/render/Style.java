@@ -143,7 +143,10 @@ public final class Style {
         useTheme(false);
     }
 
-    // Fonts: one monospace family for code, the picture and the panels (IBM Plex Mono, which ships inside the app)
+    // Fonts: one monospace family for code, the picture and the panels (the one VS Code uses on this system: pickMono)
+    // Inside WSL: Linux, with Windows' own files under /mnt/c. (Before MONO, which reads them.)
+    private static final boolean IN_WSL = System.getenv("WSL_DISTRO_NAME") != null;
+    private static final java.nio.file.Path WINDOWS_FONTS = java.nio.file.Path.of("/mnt/c/Windows/Fonts");
     public static final String MONO = pickMono();
     public static final Font UI_FONT = new Font(MONO, Font.PLAIN, 13);
     public static final int DEFAULT_CODE_SIZE = 13;
@@ -251,28 +254,44 @@ public final class Style {
         return font.getStringBounds(text, TEXT_CONTEXT).getWidth();
     }
 
-    // The font that ships inside the app, so it looks the same on every computer. If it can't be
-    // loaded: the first good monospace font that's installed. On Linux, Java's "Monospaced" is
-    // DejaVu Sans Mono, with fallbacks for symbols that font doesn't have.
+    // The code font VS Code uses on each system: Consolas on Windows, Menlo on a Mac, and on
+    // Linux Droid Sans Mono or the system's monospace font. Inside WSL (Linux on Windows), Java
+    // can't see Windows' fonts, so Consolas is read from C:\\Windows\\Fonts (the user's own, not
+    // shipped with Raphael). Last of all, the IBM Plex Mono that ships inside the app.
     private static String pickMono() {
-        String bundled = loadBundledMono();
-        if (bundled != null) {
-            return bundled;
-        }
         List<String> installed = Arrays.asList(
                 GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
-        for (String family : new String[] {"Cascadia Mono", "Consolas", "SF Mono", "Menlo"}) {
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        String[] wanted = os.startsWith("windows") ? new String[] {"Consolas"}
+                : os.startsWith("mac") ? new String[] {"Menlo", "Monaco"}
+                : new String[] {"Droid Sans Mono", "DejaVu Sans Mono", "Ubuntu Mono"};
+        if (IN_WSL) {
+            Font[] consolas = loadFiles(WINDOWS_FONTS.resolve("consola.ttf"), WINDOWS_FONTS.resolve("consolab.ttf"));
+            if (consolas != null) {
+                return consolas[0].getFamily();
+            }
+        }
+        for (String family : wanted) {
             if (installed.contains(family)) {
                 return family;
             }
         }
-        return Font.MONOSPACED;
+        Font[] bundled = loadBundled("IBMPlexMono-Regular.ttf", "IBMPlexMono-Bold.ttf");
+        return bundled != null ? bundled[0].getFamily() : Font.MONOSPACED;
     }
 
-    // Registers the regular and bold font files with Java, and returns their family name.
-    private static String loadBundledMono() {
-        Font[] mono = loadBundled("IBMPlexMono-Regular.ttf", "IBMPlexMono-Bold.ttf");
-        return mono == null ? null : mono[0].getFamily();
+    // A regular and a bold font file on the computer, registered with Java; null if either can't be read.
+    private static Font[] loadFiles(java.nio.file.Path regularFile, java.nio.file.Path boldFile) {
+        try {
+            GraphicsEnvironment fonts = GraphicsEnvironment.getLocalGraphicsEnvironment();
+            Font[] loaded = {Font.createFont(Font.TRUETYPE_FONT, regularFile.toFile()), Font.createFont(Font.TRUETYPE_FONT, boldFile.toFile())};
+            fonts.registerFont(loaded[0]);
+            fonts.registerFont(loaded[1]);
+            return loaded;
+        } catch (IOException | FontFormatException e) {
+            Logger.getLogger(Style.class.getName()).log(Level.INFO, "No " + regularFile.getFileName() + " to use", e);
+            return null;
+        }
     }
 
     // Loads a regular and a bold font file that ship inside the app, and registers them with Java.
@@ -292,11 +311,17 @@ public final class Style {
     }
 
     // The interface's own text (buttons, menus, dialogs, tooltips) is in a sans font: the
-    // system's own on Windows (Segoe UI) and macOS (SF), which FlatLaf picks, and Inter on Linux,
-    // where the usual system font looks dated. Inter ships inside the app (SIL Open Font License).
+    // system's own on Windows (Segoe UI) and macOS (SF), which FlatLaf picks, as VS Code does;
+    // inside WSL, Windows' Segoe UI read from its fonts folder; on other Linux, Inter, which ships
+    // inside the app (SIL Open Font License), as the usual system font looks dated.
     // Code, the picture and the panels stay in the monospace font.
     private static final boolean LINUX = !System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).matches("(windows|mac).*");
-    private static final Font[] INTER = LINUX ? loadBundled("Inter-Regular.ttf", "Inter-SemiBold.ttf") : null;
+    private static final Font[] INTER = LINUX ? linuxUiFont() : null; // regular and semibold
+
+    private static Font[] linuxUiFont() {
+        Font[] segoe = IN_WSL ? loadFiles(WINDOWS_FONTS.resolve("segoeui.ttf"), WINDOWS_FONTS.resolve("seguisb.ttf")) : null;
+        return segoe != null ? segoe : loadBundled("Inter-Regular.ttf", "Inter-SemiBold.ttf");
+    }
     public static final float UI_SIZE = 13f;
     public static final float UI_SMALL = 12f; // the status bar, the legend, chips and hints
     public static final float UI_LABEL = 11f; // small capital labels naming a region: CALL STACK, START
