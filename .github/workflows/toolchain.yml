@@ -1,0 +1,43 @@
+# Stage 14 check: can the C toolchain Raphael will bundle on Windows (w64devkit) trace a program?
+# Its gdb must have Python inside, because Raphael's tracer is a Python script that runs in gdb.
+# Started by hand only (Actions → toolchain → Run workflow), since it downloads about 70 MB.
+name: toolchain
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-gdb:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      W64DEVKIT: '2.11.0'
+      SHA256: 54c2bb9962e8a30c8270e34c5efc3d5fee579f53087fa7d435b95fbba2af7b2b
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download w64devkit and check its SHA-256
+        run: |
+          curl -sSL -o w64devkit.7z.exe "https://github.com/skeeto/w64devkit/releases/download/v$W64DEVKIT/w64devkit-x64-$W64DEVKIT.7z.exe"
+          echo "$SHA256  w64devkit.7z.exe" | sha256sum -c
+          7z x -y -o"$RUNNER_TEMP" w64devkit.7z.exe > /dev/null
+          echo "$RUNNER_TEMP/w64devkit/bin" >> "$GITHUB_PATH"
+      - name: Versions, and Python inside gdb
+        run: |
+          gcc --version | head -1
+          gdb --version | head -1
+          gdb -q -batch -nx -ex "python import sys; print('gdb has Python', sys.version)"
+      - name: Trace the spike's linked list
+        working-directory: .claude/tools/cspike
+        run: |
+          gcc -g -O0 -fno-inline -o list.exe list.c
+          RAPHAEL_OUT=steps.jsonl gdb -q -batch -nx -x spike.py ./list.exe
+          python check.py steps.jsonl
+      - name: Keep the steps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-steps
+          path: .claude/tools/cspike/steps.jsonl
