@@ -51,7 +51,9 @@ public class WelcomePage extends JPanel {
     private final Consumer<File> onRecent;
     private final JList<ExampleCatalog.Group> groups;
     private final JList<ExampleCatalog.Example> examples;
-    private final JLabel examplesHeading = heading("Examples");
+    // "Examples", and beside it how many there are and what to do: a heading, not a label in capitals.
+    private final JLabel examplesTitle = label("Examples", Style.sans(true, 15f), () -> Style.INK);
+    private final JLabel examplesNote = label("", Style.sans(false, 13f), () -> Style.MUTED);
     private final JLabel noneText = label("", Style.sans(false, 13f), () -> Style.INK); // follows the theme
     private final JPanel exampleCards = new JPanel(new java.awt.CardLayout());
     private raphael.lang.Language shownLanguage;
@@ -97,7 +99,27 @@ public class WelcomePage extends JPanel {
             }
         };
         groups.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        groups.setCellRenderer(new GroupRenderer());
+        GroupRenderer groupRenderer = new GroupRenderer();
+        groups.setCellRenderer(groupRenderer);
+        MouseAdapter groupHover = new MouseAdapter() { // a group under the mouse is lit, as the examples are
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                int index = groups.locationToIndex(e.getPoint());
+                int now = index >= 0 && groups.getCellBounds(index, index).contains(e.getPoint()) ? index : -1;
+                if (now != groupRenderer.hovered) {
+                    groupRenderer.hovered = now;
+                    groups.repaint();
+                }
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                groupRenderer.hovered = -1;
+                groups.repaint();
+            }
+        };
+        groups.addMouseListener(groupHover);
+        groups.addMouseMotionListener(groupHover);
         examples = new JList<>(new DefaultListModel<>()) {
             @Override
             public Color getBackground() {
@@ -190,22 +212,24 @@ public class WelcomePage extends JPanel {
         });
 
         JScrollPane groupScroll = scroll(groups);
-        Zoom.size(groupScroll, 224, 0);
+        Zoom.size(groupScroll, 240, 0); // room for "Recursion and backtracking" and its count
         groupScroll.setBorder(Section.hairline(0, 0, 0, 1));
-        JPanel browser = new JPanel(new BorderLayout()) {
-            @Override
-            protected void paintBorder(Graphics graphics) {
-                Graphics2D g = smooth(graphics);
-                g.setColor(Style.HAIRLINE);
-                g.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, Style.ARC, Style.ARC);
-            }
-        };
+        JPanel browser = new JPanel(new BorderLayout()); // no frame: the groups' shade and one line separate it
         browser.setOpaque(false);
-        browser.setBorder(Zoom.gap(1, 1, 1, 1));
         browser.add(groupScroll, BorderLayout.WEST);
         browser.add(scroll(examples), BorderLayout.CENTER);
         JPanel right = new JPanel(new BorderLayout(0, Style.SPACE_2));
         right.setOpaque(false);
+        java.awt.FlowLayout headingRow = new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0);
+        headingRow.setAlignOnBaseline(true);
+        JPanel examplesHeading = new JPanel(headingRow);
+        examplesHeading.setOpaque(false);
+        Zoom.font(examplesTitle, Style.sans(true, 15f));
+        Zoom.font(examplesNote, Style.sans(false, 13f));
+        examplesTitle.setBorder(Zoom.gap(0, 0, 0, Style.SPACE_3));
+        examplesHeading.add(examplesTitle);
+        examplesHeading.add(examplesNote);
+        examplesHeading.setBorder(Zoom.gap(0, 0, Style.SPACE_1, 0));
         right.add(examplesHeading, BorderLayout.NORTH);
         // A language with no examples yet says so, as the side bar does, and offers Java's.
         JPanel none = new JPanel();
@@ -357,9 +381,8 @@ public class WelcomePage extends JPanel {
         groups.setListData(found.toArray(new ExampleCatalog.Group[0]));
         groups.setSelectedIndex(0);
         int count = found.stream().mapToInt(group -> group.examples().size()).sum();
-        examplesHeading.setText(("Examples · " + (found.isEmpty() ? language.name()
-                : count + " " + language.name() + (count == 1 ? " program" : " programs") + " · click one, then press Run"))
-                .toUpperCase(java.util.Locale.ROOT));
+        examplesNote.setText(found.isEmpty() ? language.name()
+                : count + " " + language.name() + (count == 1 ? " program" : " programs") + ". Click one, then press Run.");
         noneText.setText("<html><b>No " + language.name() + " examples yet</b><br>They're coming. For now you can write and save "
                 + language.name() + " programs.</html>");
         ((java.awt.CardLayout) exampleCards.getLayout()).show(exampleCards, found.isEmpty() ? "none" : "list");
@@ -399,6 +422,7 @@ public class WelcomePage extends JPanel {
         button.add(EmptyState.keyChip(Shortcuts.keycap(keys)), BorderLayout.EAST);
         Zoom.maximum(button, START_WIDTH, 40);
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)); // it opens something, as the example rows do
         button.addActionListener(e -> run.run());
         return button;
     }
@@ -416,6 +440,7 @@ public class WelcomePage extends JPanel {
         link.setHorizontalAlignment(JButton.LEFT);
         link.setAlignmentX(Component.LEFT_ALIGNMENT);
         Zoom.maximum(link, START_WIDTH, 28);
+        link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         link.addActionListener(e -> run.run());
         return link;
     }
@@ -450,7 +475,7 @@ public class WelcomePage extends JPanel {
     private static void ring(Graphics2D g, int top, int width, int height) {
         g.setColor(Style.ACCENT);
         g.setStroke(new java.awt.BasicStroke(Style.FOCUS_WIDTH));
-        g.drawRoundRect(Style.SPACE_1 + 1, top + 1, width - 2 * Style.SPACE_1 - 3, height - top - 3, 6, 6);
+        g.drawRoundRect(Style.SPACE_1 + 1, top + 1, width - 2 * Style.SPACE_1 - 3, height - top - 3, Style.ARC, Style.ARC);
     }
 
     // A group in the list, with its section's name above it when it's the first of that section.
@@ -460,7 +485,9 @@ public class WelcomePage extends JPanel {
         private final JLabel name = new JLabel();
         private final JLabel count = new JLabel();
         private boolean selected;
+        private boolean lit; // under the mouse
         private boolean ringed; // chosen with the keyboard: a focus ring, not just a fill
+        int hovered = -1;
 
         GroupRenderer() {
             super(new BorderLayout());
@@ -472,6 +499,7 @@ public class WelcomePage extends JPanel {
             JPanel row = new JPanel(new BorderLayout());
             row.setOpaque(false);
             row.setBorder(Zoom.gap(Style.SPACE_1 + 1, Style.SPACE_3, Style.SPACE_1 + 1, Style.SPACE_3));
+            name.setBorder(Zoom.gap(0, 0, 0, Style.SPACE_3)); // the count never touches a long name
             row.add(name, BorderLayout.CENTER);
             row.add(count, BorderLayout.EAST);
             add(section, BorderLayout.NORTH);
@@ -488,8 +516,9 @@ public class WelcomePage extends JPanel {
             name.setText(group.name());
             count.setText(String.valueOf(group.examples().size()));
             selected = isSelected;
+            lit = index == hovered;
             ringed = isSelected && list.isFocusOwner();
-            name.setForeground(isSelected ? Style.ACCENT : Style.INK);
+            name.setForeground(Style.INK);
             Zoom.font(name, Style.sans(isSelected, 13f));
             count.setForeground(Style.MUTED);
             return this;
@@ -502,14 +531,11 @@ public class WelcomePage extends JPanel {
 
         @Override
         protected void paintComponent(Graphics graphics) {
-            if (selected) {
-                Graphics2D g = smooth(graphics);
-                int top = section.isVisible() ? section.getPreferredSize().height : 0;
-                g.setColor(Style.ACCENT_TINT);
-                g.fillRoundRect(Style.SPACE_1, top, getWidth() - 2 * Style.SPACE_1, getHeight() - top, 6, 6);
-                if (ringed) {
-                    ring(g, top, getWidth(), getHeight());
-                }
+            Graphics2D g = smooth(graphics);
+            int top = section.isVisible() ? section.getPreferredSize().height : 0;
+            Section.paintRow(g, top, getWidth(), getHeight(), selected, lit);
+            if (ringed) {
+                ring(g, top, getWidth(), getHeight());
             }
         }
     }
@@ -562,8 +588,7 @@ public class WelcomePage extends JPanel {
         protected void paintComponent(Graphics graphics) {
             if (lit) {
                 Graphics2D g = smooth(graphics);
-                g.setColor(Style.HOVER);
-                g.fillRoundRect(Style.SPACE_1, 1, getWidth() - 2 * Style.SPACE_1, getHeight() - 2, 6, 6);
+                Section.paintRow(g, 0, getWidth(), getHeight(), false, true);
             }
             if (ringed) {
                 ring(smooth(graphics), 0, getWidth(), getHeight());

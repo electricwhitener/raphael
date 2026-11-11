@@ -84,11 +84,12 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         // (a focused box would take the arrows to change its choice). Tab still reaches them.
         speed.setRequestFocusEnabled(false);
         moments.setRequestFocusEnabled(false);
+        hoverBorder(speed);
+        hoverBorder(moments);
         speed.setToolTipText("playing speed");
         speed.getAccessibleContext().setAccessibleName("Playback speed");
         slider.getAccessibleContext().setAccessibleName("Step position");
-        stepLabel.setToolTipText("this step, and how many the run has");
-        Zoom.font(stepLabel, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(stepLabel, Style.sans(false, Style.UI_SMALL));
 
         first.addActionListener(e -> model.first());
         back.addActionListener(e -> model.previous());
@@ -255,10 +256,9 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         slider.setMaximum(Math.max(model.size() - 1, 0));
         slider.setValue(model.getStep());
         movingSlider = false;
-        // "21 / 130": short, so the bar fits the smallest window; the tooltip and screen readers say it in words.
+        // "21 / 130": short, so the bar fits the smallest window; screen readers say it in words.
         stepLabel.setText(has ? (model.getStep() + 1) + " / " + model.size() : "– / –");
         String words = has ? "step " + (model.getStep() + 1) + " of " + model.size() : "no run yet";
-        stepLabel.setToolTipText(words + " (this step, and how many the run has)");
         stepLabel.getAccessibleContext().setAccessibleName(words);
         // As wide as the run's last step needs, so the label doesn't grow while it counts.
         String widest = model.size() + " / " + model.size();
@@ -303,5 +303,34 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
     // Off on the welcome page, where there's nothing to play.
     public void setSpeedEnabled(boolean enabled) {
         speed.setEnabled(enabled);
+    }
+
+    // A box's edge darkens under the mouse, as a button's fill does (FlatLaf has no key for it).
+    // Its arrow is a child that takes the mouse too, so the edge goes back only when the mouse leaves the whole box.
+    private static void hoverBorder(JComboBox<?> box) {
+        java.awt.event.MouseAdapter hover = new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (box.isEnabled()) {
+                    box.putClientProperty("FlatLaf.style", "borderColor: " + hex(Style.OUTLINE));
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                java.awt.Point at = javax.swing.SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), box);
+                if (!box.contains(at)) {
+                    box.putClientProperty("FlatLaf.style", null);
+                }
+            }
+        };
+        box.addMouseListener(hover);
+        for (java.awt.Component child : box.getComponents()) {
+            child.addMouseListener(hover);
+        }
+    }
+
+    private static String hex(java.awt.Color color) {
+        return String.format("#%06x", color.getRGB() & 0xFFFFFF);
     }
 }

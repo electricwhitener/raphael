@@ -28,6 +28,8 @@ import raphael.render.Style;
 public class LocalsPanel extends JPanel implements TraceListener {
 
     private final JLabel header = Section.header("variables");
+    private boolean idle = true; // no run yet: the empty table says what it will show
+    private JTable table;
     private final Set<Integer> changedRows = new HashSet<>();
     private final DefaultTableModel rows = new DefaultTableModel(new Object[] {"name", "value"}, 0) {
         @Override
@@ -38,7 +40,17 @@ public class LocalsPanel extends JPanel implements TraceListener {
 
     public LocalsPanel() {
         super(new BorderLayout());
-        JTable table = new JTable(rows);
+        JTable table = new JTable(rows) {
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                super.paintComponent(g);
+                if (idle) {
+                    Section.paintHint(g, this, "The running method's variables appear here, and the one that just changed is highlighted.");
+                }
+            }
+        };
+        this.table = table;
+        table.setFillsViewportHeight(true); // as tall as the panel, so the hint has room
         table.setShowGrid(false);
         table.setTableHeader(null); // the section header already says what this is
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN); // long values get the extra room
@@ -68,6 +80,8 @@ public class LocalsPanel extends JPanel implements TraceListener {
         rows.setRowCount(0);
         changedRows.clear();
         Snapshot now = model.getSnapshot();
+        idle = now == null;
+        table.repaint();
         if (now == null || now.getFrames().isEmpty()) {
             header.setText("VARIABLES");
             return;

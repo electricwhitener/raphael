@@ -35,7 +35,15 @@ import raphael.trace.LiveInput;
 // DocumentFilter subclass keeps the printed text from being edited (encapsulation).
 public class TerminalPanel extends JPanel implements TraceListener {
 
-    private final JTextPane screen = new JTextPane();
+    private final JTextPane screen = new JTextPane() {
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            super.paintComponent(g);
+            if (printed == null && last == null && getDocument().getLength() == 0) { // before the first run
+                Section.paintHint(g, this, "What your program prints appears here. If it reads input, you type it here.");
+            }
+        }
+    };
     private final StyledDocument document = screen.getStyledDocument();
     private final JLabel heading = Section.header("terminal");
     // Under the text while a program waits for input: a pale blue strip with a blue line on top,
@@ -119,7 +127,7 @@ public class TerminalPanel extends JPanel implements TraceListener {
         JScrollPane scroll = new JScrollPane(screen);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         hint.setVisible(false);
-        Zoom.font(hint, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(hint, Style.sans(false, Style.UI_SMALL));
         hint.setBorder(Zoom.gap(Style.SPACE_1 + 2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         JPanel body = new JPanel(new BorderLayout());
         body.add(scroll, BorderLayout.CENTER);

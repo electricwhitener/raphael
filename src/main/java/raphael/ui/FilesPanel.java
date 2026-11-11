@@ -188,7 +188,7 @@ public class FilesPanel extends JPanel implements TraceListener {
         };
         tab.putClientProperty("JButton.buttonType", "borderless");
         tab.setContentAreaFilled(false);
-        Zoom.font(tab, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(tab, Style.sans(false, Style.UI_SMALL));
         tab.setBorder(Zoom.gap(2, Style.SPACE_2, 2, Style.SPACE_2 + 8));
         tab.setRequestFocusEnabled(false);
         tab.setToolTipText(changed ? name + " changed on this step" : name);

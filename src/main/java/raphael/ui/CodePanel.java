@@ -792,6 +792,7 @@ public class CodePanel extends JPanel implements TraceListener {
         private boolean clickable;
         private int throwLine = -1; // a caught exception's jump, from the line that threw it
         private int catchLine = -1; // to the line of its catch, or -1 for none
+        private int hoverLine = -1; // the line number under the mouse (1 = the first), lit while clicking it jumps
 
         LineNumbers(JTextArea editor, IntConsumer onClick) {
             this.editor = editor;
@@ -806,6 +807,27 @@ public class CodePanel extends JPanel implements TraceListener {
                         } catch (BadLocationException ignored) {
                             // clicked below the last line
                         }
+                    }
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    hoverLine = -1;
+                    repaint();
+                }
+            });
+            addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
+                @Override
+                public void mouseMoved(MouseEvent e) {
+                    int line;
+                    try {
+                        line = editor.getLineOfOffset(editor.viewToModel2D(new Point(0, e.getY()))) + 1;
+                    } catch (BadLocationException ignored) {
+                        line = -1;
+                    }
+                    if (line != hoverLine) {
+                        hoverLine = line;
+                        repaint();
                     }
                 }
             });
@@ -865,6 +887,12 @@ public class CodePanel extends JPanel implements TraceListener {
                     int number = line + 1;
                     int baseline = (int) where.getY() + metrics.getAscent();
                     double middle = where.getY() + where.getHeight() / 2;
+                    if (clickable && number == hoverLine) { // a click here jumps: the number is lit, as a button would be
+                        int inset = Zoom.px(Style.SPACE_1);
+                        g2.setColor(Style.HOVER);
+                        g2.fillRoundRect(BRACKET + inset, (int) where.getY(), getWidth() - BRACKET - 2 * inset, (int) where.getHeight(),
+                                Zoom.px(Style.ARC), Zoom.px(Style.ARC));
+                    }
                     Color color = Style.MUTED;
                     Font font = getFont();
                     if (number == current) {
@@ -876,6 +904,9 @@ public class CodePanel extends JPanel implements TraceListener {
                         arrow(g2, BRACKET + 7, middle, 3.5, Style.MUTED);
                     }
                     String text = String.valueOf(number);
+                    if (clickable && number == hoverLine && number != current) {
+                        color = Style.INK;
+                    }
                     g2.setFont(font);
                     g2.setColor(color);
                     g2.drawString(text, getWidth() - 8 - g2.getFontMetrics().stringWidth(text), baseline);

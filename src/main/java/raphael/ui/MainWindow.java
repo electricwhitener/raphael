@@ -217,6 +217,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         });
         getContentPane().setBackground(Style.BACKGROUND);
         setJMenuBar(buildMenuBar());
+        javax.swing.MenuSelectionManager.defaultManager().addChangeListener(menuWatcher);
         toolBar = buildToolBar();
         busy.setBorder(BorderFactory.createEmptyBorder());
         Zoom.size(busy, 0, 2);
@@ -259,7 +260,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         add(sideSplit, BorderLayout.CENTER);
         placeSideBar();
 
-        Zoom.font(status, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(status, Style.sans(false, Style.UI_SMALL));
         status.setBorder(Zoom.gap(0, Style.SPACE_3, 0, Style.SPACE_3));
         statusBar.setBorder(Section.hairline(1, 0, 0, 0));
         Zoom.size(statusBar, 0, Style.STATUS_H);
@@ -267,7 +268,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         JPanel statusRight = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, Style.SPACE_3, 0));
         statusRight.setOpaque(false);
         updateNotice.putClientProperty("JButton.buttonType", "borderless");
-        Zoom.font(updateNotice, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(updateNotice, Style.sans(false, Style.UI_SMALL));
         updateNotice.setRequestFocusEnabled(false);
         updateNotice.setVisible(false);
         updateNotice.addActionListener(e -> openReleasePage(App.SETTINGS.get("newerPage", UpdateCheck.RELEASES_PAGE)));
@@ -276,6 +277,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         position.putClientProperty("JButton.buttonType", "borderless");
         Zoom.font(position, Style.CODE_FONT.deriveFont(12f)); // monospace, so the numbers don't jitter as the cursor moves
         position.setRequestFocusEnabled(false);
+        position.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         position.setToolTipText(Shortcuts.label("Go to line  (Ctrl+G)"));
         position.addActionListener(e -> goToLine());
         position.getAccessibleContext().setAccessibleName("Line and column. Go to line.");
@@ -284,7 +286,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         statusRight.add(updateNotice);
         statusRight.add(legend);
         languageChip.putClientProperty("JButton.buttonType", "borderless");
-        Zoom.font(languageChip, Style.UI_FONT.deriveFont(12f));
+        Zoom.font(languageChip, Style.sans(false, Style.UI_SMALL));
         languageChip.setRequestFocusEnabled(false);
         languageChip.setToolTipText("The program's language: click to change it");
         languageChip.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
@@ -469,8 +471,12 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         }
     }
 
+    // A text field that's part of the interface (the side bar's search), not code: refont leaves it in the sans font.
+    static final String SANS_TEXT = "raphael.sansText";
+
     private static void refont(Container container) {
-        if (container instanceof JTextComponent || container instanceof JList || container instanceof JTable) {
+        boolean chrome = container instanceof JComponent && Boolean.TRUE.equals(((JComponent) container).getClientProperty(SANS_TEXT));
+        if (!chrome && (container instanceof JTextComponent || container instanceof JList || container instanceof JTable)) {
             container.setFont(Style.CODE_FONT);
         }
         if (container instanceof JTable) {
@@ -645,7 +651,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
         saveButton = save;
         save.addActionListener(e -> save());
-        javax.swing.JToggleButton examples = new javax.swing.JToggleButton("Examples");
+        javax.swing.JToggleButton examples = new javax.swing.JToggleButton("Examples", Icons.of(Icons.Glyph.SIDE_BAR, Icons.Role.TOOL));
+        examples.setIconTextGap(Style.SPACE_2); // an icon, as every other toolbar control has: it reads as a button
         examples.setSelected(examplesPanel.isVisible());
         examplesButton = examples;
         examples.setToolTipText(Shortcuts.label("Show or hide the examples  (Ctrl+B)"));
@@ -734,7 +741,6 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             themeButton.setVisible(level < 3);
             helpButton.setVisible(level < 3);
             examplesButton.setText(level > 0 ? null : "Examples");
-            examplesButton.setIcon(level > 0 ? Icons.of(Icons.Glyph.SIDE_BAR, Icons.Role.TOOL) : null);
             if (controls != null) {
                 controls.setCompact(Math.min(level, 2));
             }
@@ -775,9 +781,13 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
                 : "Compile and record the program  (Ctrl+Enter or F5)"));
         runButton.setBackground(fill);
         runButton.setForeground(text);
+        // In a toolbar, FlatLaf reads the toolbar.* keys for hover and press: without them the
+        // toolbar's grey hover won, and Run looked switched off just as the mouse reached it.
         String pressed = hex(running ? Style.INK_SOFT : Style.ACCENT_PRESSED);
         runButton.putClientProperty("FlatLaf.style", "arc: " + Style.ARC + "; margin: 5,10,5,14; borderWidth: 0; focusWidth: "
-                + Style.FOCUS_WIDTH + "; hoverBackground: " + pressed + "; pressedBackground: " + pressed);
+                + Style.FOCUS_WIDTH + "; hoverBackground: " + pressed + "; pressedBackground: " + pressed
+                + "; toolbar.hoverBackground: " + pressed + "; toolbar.pressedBackground: " + pressed
+                + "; toolbar.hoverForeground: " + hex(text) + "; toolbar.pressedForeground: " + hex(text));
     }
 
     // Keyboard shortcuts that work anywhere in the window. (In the editor, the arrow keys and
@@ -1166,6 +1176,59 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             welcomeSaid = message;
             showStatus(message, color);
         }
+    }
+
+    // While a menu is open: its items' sentences (their tooltips) show in the status bar, not as
+    // tooltips over the menu, where they covered the next item. The status comes back as it was.
+    private final javax.swing.event.ChangeListener menuWatcher = e -> menuChanged();
+    private String statusBeforeMenu;
+    private Color colourBeforeMenu;
+
+    private void menuChanged() {
+        javax.swing.MenuElement[] path = javax.swing.MenuSelectionManager.defaultManager().getSelectedPath();
+        if (path.length == 0 || !isOurs(path[0])) {
+            if (statusBeforeMenu != null) {
+                showStatus(statusBeforeMenu, colourBeforeMenu);
+                statusBeforeMenu = null;
+            }
+            return;
+        }
+        javax.swing.MenuElement last = path[path.length - 1];
+        if (last instanceof javax.swing.JPopupMenu) { // a menu just opened: no tooltip popups from its items
+            for (java.awt.Component item : ((javax.swing.JPopupMenu) last).getComponents()) {
+                if (item instanceof JMenuItem) {
+                    javax.swing.ToolTipManager.sharedInstance().unregisterComponent((JMenuItem) item);
+                }
+            }
+        }
+        String sentence = last instanceof JMenuItem ? ((JMenuItem) last).getToolTipText() : null;
+        if (sentence != null) {
+            if (statusBeforeMenu == null) {
+                statusBeforeMenu = status.getText();
+                colourBeforeMenu = status.getForeground();
+            }
+            status.setText(sentence);
+            status.setForeground(Style.INK_SOFT);
+        } else if (statusBeforeMenu != null) {
+            showStatus(statusBeforeMenu, colourBeforeMenu);
+            statusBeforeMenu = null;
+        }
+    }
+
+    // A closed window stops listening to the menus, which every window shares.
+    @Override
+    public void dispose() {
+        javax.swing.MenuSelectionManager.defaultManager().removeChangeListener(menuWatcher);
+        super.dispose();
+    }
+
+    // Whether a menu belongs to this window (the selection is shared by every window).
+    private boolean isOurs(javax.swing.MenuElement element) {
+        java.awt.Component component = element.getComponent();
+        if (component instanceof javax.swing.JPopupMenu && ((javax.swing.JPopupMenu) component).getInvoker() != null) {
+            component = ((javax.swing.JPopupMenu) component).getInvoker();
+        }
+        return SwingUtilities.getWindowAncestor(component) == this || component == getJMenuBar();
     }
 
     private void showStatus(String message, Color color) {

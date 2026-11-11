@@ -5,9 +5,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Insets;
-import java.awt.font.TextAttribute;
 import java.util.Locale;
-import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -33,8 +31,9 @@ public final class Section {
                 return Style.MUTED;
             }
         };
-        Zoom.font(label, Style.SECTION_FONT.deriveFont(Map.of(TextAttribute.TRACKING, 0.08)));
-        label.setBorder(Zoom.gap(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+        Zoom.font(label, Style.sectionFont());
+        // 9 + the text + 9 = STRIP_H (32), the height of the tab strips beside it, so the baselines line up.
+        label.setBorder(Zoom.gap(9, Style.SPACE_3, 9, Style.SPACE_3));
         return label;
     }
 
@@ -63,11 +62,16 @@ public final class Section {
         button.getAccessibleContext().setAccessibleName(tip);
         button.setRequestFocusEnabled(false);
         button.addActionListener(e -> close.run());
+        Zoom.size(button, 24, 24); // a small square, centred in the 32 px heading
+        JPanel holder = new JPanel(new java.awt.GridBagLayout());
+        holder.setOpaque(false);
+        holder.setBorder(Zoom.gap(0, 0, 0, Style.SPACE_1));
+        holder.add(button);
         JPanel row = new JPanel(new BorderLayout());
         row.setOpaque(false);
         wrapped.remove(heading);
         row.add(heading, BorderLayout.CENTER);
-        row.add(button, BorderLayout.EAST);
+        row.add(holder, BorderLayout.EAST);
         wrapped.add(row, BorderLayout.NORTH);
         return row; // the heading's row, for a right-click menu
     }
@@ -75,6 +79,54 @@ public final class Section {
     private static boolean headed(JComponent panel) {
         return panel.getLayout() instanceof BorderLayout
                 && ((BorderLayout) panel.getLayout()).getLayoutComponent(BorderLayout.NORTH) != null;
+    }
+
+    // How a row of a list or tree shows its state, the same everywhere: under the mouse, a grey
+    // rounded fill; chosen, a darker grey with an ink bar at its left (so it isn't told by colour
+    // alone). Drawn from y = top to the bottom of a width × height row.
+    public static void paintRow(java.awt.Graphics2D g, int top, int width, int height, boolean chosen, boolean hovered) {
+        if (!chosen && !hovered) {
+            return;
+        }
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        int inset = Zoom.px(Style.ROW_INSET);
+        int arc = Zoom.px(Style.ARC);
+        g.setColor(chosen ? Style.SELECTED : Style.HOVER);
+        g.fillRoundRect(inset, top + 1, width - 2 * inset, height - top - 2, arc, arc);
+        if (chosen) {
+            int bar = Zoom.px(Style.SELECT_BAR_W);
+            int gap = Zoom.px(Style.SPACE_2) - 2;
+            g.setColor(Style.INK);
+            g.fillRoundRect(inset, top + gap, bar, Math.max(bar, height - top - 2 * gap), bar, bar);
+        }
+    }
+
+    // A short muted sentence in the middle of an empty panel, saying what will appear there.
+    // Wrapped to the panel's width, less a margin.
+    public static void paintHint(Graphics g, JComponent on, String text) {
+        java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+        g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2.setFont(Zoom.scaled(Style.sans(false, Style.UI_SMALL)));
+        g2.setColor(Style.MUTED);
+        java.awt.FontMetrics m = g2.getFontMetrics();
+        java.awt.Rectangle seen = on.getVisibleRect();
+        int room = Math.max(m.stringWidth("Variables appear here"), seen.width - 2 * Zoom.px(Style.SPACE_6));
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            if (line.length() > 0 && m.stringWidth(line + " " + word) > room) {
+                lines.add(line.toString());
+                line.setLength(0);
+            }
+            line.append(line.length() > 0 ? " " : "").append(word);
+        }
+        lines.add(line.toString());
+        int y = seen.y + (seen.height - lines.size() * m.getHeight()) / 2 + m.getAscent();
+        for (String one : lines) {
+            g2.drawString(one, seen.x + (seen.width - m.stringWidth(one)) / 2, y);
+            y += m.getHeight();
+        }
+        g2.dispose();
     }
 
     // A thin grey line on the chosen sides (1 = draw, 0 = don't).

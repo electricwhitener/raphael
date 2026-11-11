@@ -7,17 +7,14 @@ import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.Insets;
 import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
-import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import javax.swing.SpinnerNumberModel;
 import raphael.render.Style;
@@ -42,18 +39,14 @@ public class SettingsDialog extends JDialog {
     private final JSpinner timeout = spinner(RunLimits.MIN_TIMEOUT, RunLimits.MAX_TIMEOUT, 1);
     private final JSpinner memory = spinner(RunLimits.MIN_MEMORY, RunLimits.MAX_MEMORY, 64);
     private final JSpinner textSize = spinner(Style.MIN_CODE_SIZE, Style.MAX_CODE_SIZE, 1);
-    private final JToggleButton system = segment("System");
-    private final JToggleButton light = segment("Light");
-    private final JToggleButton dark = segment("Dark");
+    private Theme theme = Theme.SYSTEM; // the switch's choice
+    private final Segmented themes = new Segmented(java.util.List.of("System", "Light", "Dark"),
+            index -> theme = new Theme[] {Theme.SYSTEM, Theme.LIGHT, Theme.DARK}[index]);
     private final javax.swing.JCheckBox updates = new javax.swing.JCheckBox();
     private Values chosen; // set by Save
 
     SettingsDialog(Frame owner, Values current) {
         super(owner, "Settings", true); // true: the window waits until this closes
-        ButtonGroup themes = new ButtonGroup();
-        themes.add(system);
-        themes.add(light);
-        themes.add(dark);
         fill(current);
 
         JPanel form = new JPanel(new GridBagLayout());
@@ -66,12 +59,8 @@ public class SettingsDialog extends JDialog {
         row(form, y++, "Memory for the program", "Past this, the program ends with OutOfMemoryError.", memory, "MB");
         group(form, y++, "Appearance", true);
         row(form, y++, "Text size", "The code, the variables and the terminal.", textSize, "pt");
-        JPanel segments = new JPanel(new GridLayout(1, 3, 0, 0)); // one row that never wraps
-        segments.setOpaque(false);
-        segments.add(system);
-        segments.add(light);
-        segments.add(dark);
-        row(form, y++, "Theme", "System follows your computer's light or dark mode.", segments, null);
+        themes.describe("theme");
+        row(form, y++, "Theme", "System follows your computer's light or dark mode.", themes, null);
         group(form, y++, "Updates", true);
         updates.getAccessibleContext().setAccessibleName("Check for new versions");
         JLabel updatesName = row(form, y, "Check for new versions",
@@ -128,13 +117,13 @@ public class SettingsDialog extends JDialog {
         timeout.setValue(values.limits().timeoutSeconds());
         memory.setValue(values.limits().memoryMb());
         textSize.setValue(values.textSize());
-        (values.theme() == Theme.LIGHT ? light : values.theme() == Theme.DARK ? dark : system).setSelected(true);
+        theme = values.theme();
+        themes.choose(theme == Theme.LIGHT ? 1 : theme == Theme.DARK ? 2 : 0);
         updates.setSelected(values.checkUpdates());
     }
 
     Values read() {
         RunLimits limits = new RunLimits((Integer) steps.getValue(), (Integer) timeout.getValue(), (Integer) memory.getValue());
-        Theme theme = light.isSelected() ? Theme.LIGHT : dark.isSelected() ? Theme.DARK : Theme.SYSTEM;
         return new Values(limits, (Integer) textSize.getValue(), theme, updates.isSelected());
     }
 
@@ -143,16 +132,6 @@ public class SettingsDialog extends JDialog {
         spinner.setPreferredSize(new Dimension(Zoom.px(104), Zoom.px(32)));
         Zoom.font(spinner, Style.UI_FONT);
         return spinner;
-    }
-
-    // One part of a three-way switch.
-    private static JToggleButton segment(String text) {
-        JToggleButton button = new JToggleButton(text);
-        Zoom.font(button, Style.sans(false, 13f));
-        button.setPreferredSize(new Dimension(Math.max(Zoom.px(72), button.getPreferredSize().width + Zoom.px(Style.SPACE_2)), Zoom.px(32)));
-        button.putClientProperty("FlatLaf.style", "selectedBackground: " + hex(Style.ACCENT)
-                + "; selectedForeground: " + hex(Style.ON_ACCENT));
-        return button;
     }
 
     private static void group(JPanel form, int y, String name, boolean ruleAbove) {
@@ -217,9 +196,5 @@ public class SettingsDialog extends JDialog {
         label.setFont(font);
         label.setForeground(color);
         return label;
-    }
-
-    private static String hex(Color color) {
-        return String.format("#%06x", color.getRGB() & 0xFFFFFF);
     }
 }

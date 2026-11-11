@@ -2,6 +2,20 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**A more modern interface**
+- Everything you can click now lights up under the mouse: the examples side bar's rows, the welcome page's categories, the boxes in the toolbar, the line numbers you can click, the slider. Run gets darker under the mouse; it used to turn pale grey and look switched off.
+- A chosen row or cell is grey with a dark bar, not solid blue: blue means "about to happen", and Run is the one blue button. The language switches show the chosen language as a raised white pill.
+- Rounded scroll bars and menus, the interface's own text (the status bar, the colour key, panel headings) in the sans font, panel headings and tabs on one line, and short hints in the call stack, variables and terminal before the first run.
+- The code font is IBM Plex Mono.
+
+**Fixes**
+- Ctrl+N asks which language the new program is in (the last one is lit, so Ctrl+N then Enter is quick).
+- One click on a group in the examples side bar opens or closes it, not only a click on its little arrow.
+- Tooltips no longer pile up two or three at a time on Linux under Windows (WSL), and the welcome page no longer repeats an example's sentence as a tooltip under it. A menu item's sentence shows in the status bar instead of over the menu.
+- A program waiting for input, or one long step, could be stopped as "an infinite loop" when the computer's clock jumped ahead (WSL does this every half minute or so). Time limits now use a clock that never jumps.
+
 ## 1.4.0 (2026-11-11)
 
 **The terminal**

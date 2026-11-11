@@ -102,12 +102,36 @@ public class App {
                 Map.entry("TabbedPane.selectedForeground", hex(Style.INK)),
                 Map.entry("TabbedPane.underlineColor", hex(Style.INK)),
                 Map.entry("TabbedPane.inactiveUnderlineColor", hex(Style.MUTED)),
-                Map.entry("TabbedPane.hoverColor", hex(Style.HOVER)),
+                Map.entry("TabbedPane.hoverColor", hex(Style.TAB_HOVER)), // HOVER is too close to BAR to see
                 Map.entry("TabbedPane.tabSeparatorColor", hex(Style.HAIRLINE)),
                 Map.entry("TabbedPane.contentAreaColor", hex(Style.HAIRLINE)),
                 Map.entry("TabbedPane.tabSelectionHeight", "2"),
-                // A switched-on toolbar toggle (the find bar's Aa, W and .*) is filled grey.
-                Map.entry("ToggleButton.toolbar.selectedBackground", hex(Style.PRESSED))));
+                // A switched-on toolbar toggle (the find bar's Aa, W and .*, Examples) is filled grey.
+                Map.entry("ToggleButton.toolbar.selectedBackground", hex(Style.SELECTED)),
+                // A chosen row (lists, tables, combo boxes, menus) is grey with ink text, not solid
+                // blue: blue means "about to happen", and Run is the one blue button.
+                Map.entry("@selectionBackground", hex(Style.SELECTED)),
+                Map.entry("@selectionForeground", hex(Style.INK)),
+                Map.entry("@selectionInactiveBackground", hex(Style.SELECTED)),
+                Map.entry("@menuSelectionBackground", hex(Style.HOVER)),
+                // Selected text keeps the light blue the code editor uses.
+                Map.entry("TextField.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("FormattedTextField.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("PasswordField.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("TextArea.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("TextPane.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("EditorPane.selectionBackground", hex(Style.ACCENT_TINT)),
+                Map.entry("ScrollBar.track", hex(Style.BACKGROUND)), // no strip behind the thumb
+                Map.entry("ScrollBar.thumb", hex(Style.SCROLL_THUMB)),
+                Map.entry("ScrollBar.hoverThumbColor", hex(Style.SCROLL_THUMB_HOVER)),
+                Map.entry("ScrollBar.pressedThumbColor", hex(Style.SCROLL_THUMB_PRESSED)),
+                Map.entry("ScrollBar.hoverTrackColor", hex(Style.HOVER)),
+                Map.entry("Slider.hoverThumbColor", hex(Style.ACCENT_PRESSED)),
+                Map.entry("Slider.pressedThumbColor", hex(Style.ACCENT_PRESSED)),
+                Map.entry("MenuBar.hoverBackground", hex(Style.HOVER)),
+                Map.entry("@menuItemMargin", Style.SPACE_1 + "," + Style.SPACE_3 + "," + Style.SPACE_1 + "," + Style.SPACE_3),
+                Map.entry("TabbedPane.closeHoverBackground", hex(Style.PRESSED)),
+                Map.entry("TabbedPane.closeHoverForeground", hex(Style.INK))));
         if (Style.defaultUiFont() != null) { // Linux: the bundled Inter; elsewhere FlatLaf's system font
             // FlatLaf zooms the system font itself, but uses a font it's given as it is: so at the zoom's size.
             UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(Style.defaultUiFont()
@@ -122,9 +146,23 @@ public class App {
         UIManager.put("Button.arc", Style.ARC);
         UIManager.put("TextComponent.arc", Style.ARC);
         UIManager.put("Component.focusWidth", Style.FOCUS_WIDTH); // a visible ring on the focused control
+        // Scroll bars: a rounded thumb, 8 px of a 12 px hit area, that darkens under the mouse.
         UIManager.put("ScrollBar.width", 12);
-        UIManager.put("ScrollBar.thumbArc", 0);
+        UIManager.put("ScrollBar.thumbArc", 999);
+        UIManager.put("ScrollBar.trackArc", 999);
+        UIManager.put("ScrollBar.thumbInsets", new java.awt.Insets(2, 2, 2, 2));
+        UIManager.put("ScrollBar.trackInsets", new java.awt.Insets(0, 0, 0, 0));
+        UIManager.put("ScrollBar.hoverThumbWithTrack", true);
         UIManager.put("ScrollBar.showButtons", false);
+        UIManager.put("Slider.trackWidth", 4);
+        UIManager.put("Slider.thumbSize", new Dimension(14, 14));
+        // Menus: a rounded popup, and a rounded grey pill inside it for the item under the mouse.
+        UIManager.put("PopupMenu.borderCornerRadius", Style.ARC);
+        UIManager.put("PopupMenu.borderInsets", new java.awt.Insets(Style.SPACE_1, Style.SPACE_1, Style.SPACE_1, Style.SPACE_1));
+        UIManager.put("MenuItem.selectionArc", Style.ARC - 2);
+        UIManager.put("MenuItem.selectionInsets", new java.awt.Insets(0, Style.SPACE_1, 0, Style.SPACE_1));
+        UIManager.put("MenuBar.selectionArc", Style.ARC - 2);
+        UIManager.put("TabbedPane.closeArc", 6);
         UIManager.put("SplitPane.dividerSize", 8);
         UIManager.put("SplitPaneDivider.style", "plain");
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));

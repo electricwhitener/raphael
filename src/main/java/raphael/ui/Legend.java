@@ -25,7 +25,7 @@ public class Legend extends JComponent {
 
     // Measured and drawn at 100% on a Graphics scaled by the interface's zoom: swatches, gaps and
     // text grow together.
-    private final Font font = Style.UI_FONT.deriveFont(12f);
+    private final Font font = Style.sans(false, Style.UI_SMALL);
 
     @Override
     public Dimension getPreferredSize() {

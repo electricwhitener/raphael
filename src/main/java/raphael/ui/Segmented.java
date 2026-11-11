@@ -10,8 +10,8 @@ import javax.swing.JToggleButton;
 import raphael.render.Style;
 
 // A row of equal cells where one is chosen (a segmented control), like the switch between light and
-// dark in Settings: the chosen cell is filled blue with bold text, the others sit on the bar's
-// shade. The colours are read while painting, so it follows dark mode by itself. Tab reaches it,
+// dark in Settings: a grey track with the chosen cell raised on it as a white pill, in bold (grey,
+// not blue: blue means "about to happen"). The colours are read while painting, so it follows dark mode by itself. Tab reaches it,
 // and the arrow keys move between cells (Swing's toggle buttons in a group).
 // OOP: inheritance (extends JPanel); composition (a group of toggle buttons); anonymous
 // subclasses override how each cell is coloured; the choice is passed out through an IntConsumer.
@@ -28,8 +28,8 @@ public class Segmented extends JPanel {
             boolean first = i == 0;
             boolean last = i == names.size() - 1;
             JToggleButton cell = new JToggleButton(names.get(i)) {
-                // Painted here, not by the look and feel, so the chosen cell is always the accent
-                // colour and the row reads as one control: only its two outer ends are rounded.
+                // Painted here, not by the look and feel, so the row reads as one control: each
+                // cell draws its part of the track (only the two outer ends rounded), then its pill.
                 @Override
                 protected void paintComponent(java.awt.Graphics g) {
                     java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
@@ -45,11 +45,22 @@ public class Segmented extends JPanel {
                     if (!last) { // and on the right
                         shape.add(new java.awt.geom.Area(new java.awt.Rectangle(w - 1 - arc, 0, arc, h - 1)));
                     }
-                    g2.setColor(isSelected() ? Style.ACCENT : getModel().isPressed() ? Style.PRESSED
-                            : getModel().isRollover() ? Style.HOVER : Style.BAR);
+                    g2.setColor(Style.HOVER);
                     g2.fill(shape);
-                    g2.setColor(Style.CONTROL_BORDER);
-                    g2.draw(shape);
+                    int pad = Zoom.px(2);
+                    java.awt.geom.RoundRectangle2D pill = new java.awt.geom.RoundRectangle2D.Double(
+                            pad, pad, w - 1 - 2 * pad, h - 1 - 2 * pad, arc - 2, arc - 2);
+                    if (isSelected()) {
+                        g2.setColor(Style.RAISED);
+                        g2.fill(pill);
+                        if (!Style.isDark()) { // a white pill on light grey needs an edge to lift it
+                            g2.setColor(Style.HAIRLINE);
+                            g2.draw(pill);
+                        }
+                    } else if (getModel().isPressed() || getModel().isRollover()) {
+                        g2.setColor(Style.PRESSED);
+                        g2.fill(pill);
+                    }
                     if (isFocusOwner()) {
                         g2.setColor(Style.ACCENT);
                         g2.setStroke(new java.awt.BasicStroke(Style.FOCUS_WIDTH));
@@ -57,7 +68,7 @@ public class Segmented extends JPanel {
                     }
                     g2.setFont(Zoom.scaled(Style.sans(isSelected(), 12.5f)));
                     java.awt.FontMetrics m = g2.getFontMetrics();
-                    g2.setColor(isSelected() ? Style.ON_ACCENT : Style.INK_SOFT);
+                    g2.setColor(isSelected() ? Style.INK : Style.INK_SOFT);
                     g2.drawString(getText(), (w - m.stringWidth(getText())) / 2, (h - m.getHeight()) / 2 + m.getAscent());
                     g2.dispose();
                 }
@@ -80,10 +91,9 @@ public class Segmented extends JPanel {
         }
     }
 
-    // Says what the cells are for, to a screen reader and in their tooltips.
+    // Says what the cells are for, to a screen reader. (No tooltip: it would repeat the cell's word.)
     public void describe(String what) {
         for (JToggleButton cell : cells) {
-            cell.setToolTipText(cell.getText() + " " + what);
             cell.getAccessibleContext().setAccessibleDescription(what);
         }
     }

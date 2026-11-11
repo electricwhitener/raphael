@@ -200,7 +200,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             viewTabs.setToolTipTextAt(i, VIEW_TIPS[i]);
         }
         viewTabs.putClientProperty("JTabbedPane.tabType", "underlined");
-        viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
+        viewTabs.putClientProperty("JTabbedPane.tabHeight", Style.STRIP_H); // the same strip as the panel headings
         viewTabs.putClientProperty("JTabbedPane.hasFullBorder", false);
         viewTabs.setFocusable(false);
         viewTabs.addChangeListener(e -> visual.showView(VisualPanel.View.values()[Math.max(0, viewTabs.getSelectedIndex())]));
@@ -219,7 +219,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         bottomTabs.putClientProperty("JTabbedPane.tabType", "underlined");
         bottomTabs.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT); // one row, even when narrow
         bottomTabs.putClientProperty("JTabbedPane.tabInsets", new java.awt.Insets(0, Style.SPACE_2, 0, Style.SPACE_2));
-        bottomTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
+        bottomTabs.putClientProperty("JTabbedPane.tabHeight", Style.STRIP_H);
         bottomTabs.setFocusable(false);
         bottomTabs.setBorder(Section.hairline(0, 1, 0, 0));
         controls.setOnPausedAtMoment(() -> say("paused at a key moment · space goes on · the moments box (or the Run menu) stops the pausing", Style.INK_SOFT));

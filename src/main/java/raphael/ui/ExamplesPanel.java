@@ -57,7 +57,28 @@ public class ExamplesPanel extends JPanel {
                 ((javax.swing.plaf.basic.BasicTreeUI) getUI()).setRightChildIndent(12);
             }
         }
+
+        // Each row's hover and selection across the whole row, under the rows (FlatLaf's own
+        // full-width blue selection is switched off: JTree.paintSelection).
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            g.setColor(Style.BACKGROUND);
+            g.fillRect(0, 0, getWidth(), getHeight());
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            int selected = getSelectionRows() == null || getSelectionRows().length == 0 ? -1 : getSelectionRows()[0];
+            for (int row : new int[] {hoverRow, selected}) {
+                java.awt.Rectangle bounds = row >= 0 ? getRowBounds(row) : null;
+                if (bounds != null) {
+                    g2.translate(0, bounds.y);
+                    Section.paintRow(g2, 0, getWidth(), bounds.height, row == selected, row == hoverRow);
+                    g2.translate(0, -bounds.y);
+                }
+            }
+            g2.dispose();
+            super.paintComponent(g);
+        }
     };
+    private int hoverRow = -1; // the tree's row under the mouse, or -1
     private final JLabel empty = new JLabel();
     private final Segmented switcher = new Segmented(Languages.all().stream().map(Language::name).toList(),
             index -> showLanguage(Languages.all().get(index)));
@@ -68,6 +89,8 @@ public class ExamplesPanel extends JPanel {
         super(new BorderLayout());
         this.actions = actions;
         switcher.describe("examples");
+        search.putClientProperty(MainWindow.SANS_TEXT, true); // interface text, not code
+        Zoom.font(search, Style.sans(false, 13f));
         search.putClientProperty("JTextField.placeholderText", "Search examples");
         search.putClientProperty("JTextField.showClearButton", true);
         search.getDocument().addDocumentListener(new DocumentListener() {
@@ -111,6 +134,31 @@ public class ExamplesPanel extends JPanel {
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
         tree.setToggleClickCount(1); // a click anywhere on a group's row opens or closes it, not only on its arrow
+        tree.setOpaque(false); // it paints its own background, under the rows' hover and selection
+        tree.putClientProperty("JTree.paintSelection", false);
+        MouseAdapter hover = new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                int row = tree.getClosestRowForLocation(e.getX(), e.getY());
+                java.awt.Rectangle bounds = row >= 0 ? tree.getRowBounds(row) : null;
+                int now = bounds != null && e.getY() >= bounds.y && e.getY() < bounds.y + bounds.height ? row : -1;
+                if (now != hoverRow) {
+                    hoverRow = now;
+                    tree.repaint();
+                }
+                TreePath path = now >= 0 ? tree.getPathForRow(now) : null;
+                boolean opens = path != null && exampleOf(path.getLastPathComponent()) != null; // an example opens; a group only folds
+                tree.setCursor(java.awt.Cursor.getPredefinedCursor(opens ? java.awt.Cursor.HAND_CURSOR : java.awt.Cursor.DEFAULT_CURSOR));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                hoverRow = -1;
+                tree.repaint();
+            }
+        };
+        tree.addMouseMotionListener(hover);
+        tree.addMouseListener(hover);
         Zoom.rowHeight(tree, Style.PALETTE_ROW_H - 4);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         tree.setCellRenderer(new Renderer());
@@ -311,6 +359,8 @@ public class ExamplesPanel extends JPanel {
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected, boolean expanded,
                                                       boolean leaf, int row, boolean focused) {
             super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, focused);
+            setBackgroundSelectionColor(null); // the tree paints the row's selection, the whole row wide
+            setBorderSelectionColor(null);
             DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
             ExampleCatalog.Example example = exampleOf(node);
             setIcon(null);

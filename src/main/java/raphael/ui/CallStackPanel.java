@@ -21,7 +21,16 @@ public class CallStackPanel extends JPanel implements TraceListener {
 
     private static final String LEFT_MARK = "↑ "; // marks a method a caught exception left
     private final DefaultListModel<String> frames = new DefaultListModel<>();
-    private final JList<String> list = new JList<>(frames);
+    private boolean idle = true; // no run yet: the empty list says what it will show
+    private final JList<String> list = new JList<>(frames) {
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            super.paintComponent(g);
+            if (idle) {
+                Section.paintHint(g, this, "The methods that are running appear here, newest first.");
+            }
+        }
+    };
 
     public CallStackPanel() {
         super(new BorderLayout());
@@ -51,6 +60,8 @@ public class CallStackPanel extends JPanel implements TraceListener {
     public void stepChanged(TraceModel model) {
         frames.clear();
         Snapshot snapshot = model.getSnapshot();
+        idle = snapshot == null;
+        list.repaint();
         if (snapshot == null) {
             return;
         }

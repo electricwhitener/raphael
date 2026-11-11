@@ -82,6 +82,9 @@ public final class Style {
     public static final int PALETTE_ROW_H = 28; // a line of the command palette
     public static final int PALETTE_W = 560;
     public static final int ARC = 8;         // corners of buttons and fields
+    public static final int ROW_INSET = SPACE_1; // a hovered or chosen row's fill stops this far from the list's edges
+    public static final int SELECT_BAR_W = 3;    // the bar at the left of a chosen row (so it isn't told by colour alone)
+    public static final int STRIP_H = 32;        // panel headings and the tab strips under the program tabs
     public static final int FOCUS_WIDTH = 2; // the ring around the focused control
 
     // Colours. These aren't final, because dark mode swaps them all at once in useTheme().
@@ -98,6 +101,12 @@ public final class Style {
     public static Color BAR;           // the toolbar and status bar
     public static Color HOVER;         // a button under the mouse
     public static Color PRESSED;       // a button being pressed
+    public static Color SELECTED;      // a chosen row or cell: grey, not blue (blue means "about to happen")
+    public static Color TAB_HOVER;     // a tab under the mouse, a visible step on BAR
+    public static Color RAISED;        // the chosen cell of a segmented control, raised off its track
+    public static Color SCROLL_THUMB;  // a scroll bar's thumb, under the mouse, and dragged
+    public static Color SCROLL_THUMB_HOVER;
+    public static Color SCROLL_THUMB_PRESSED;
     public static Color CONTROL_BORDER; // edges of fields and buttons (3:1 against the background, as WCAG asks)
     public static Color ICON_DISABLED; // an icon on a button that can't be used now
     public static Color FILL;          // inside a cell
@@ -148,7 +157,6 @@ public final class Style {
     public static final Font MARKER_FONT = new Font(MONO, Font.BOLD, 12);
     public static final Font CAPTION_FONT = new Font(MONO, Font.PLAIN, 11);
     public static final Font TITLE_FONT = new Font(MONO, Font.BOLD, 12);
-    public static final Font SECTION_FONT = new Font(MONO, Font.BOLD, 11);
 
     // Motion. Shapes move on springs: "response" is roughly how long a move takes, in seconds.
     public static final double SPRING_RESPONSE = 0.35;
@@ -180,6 +188,12 @@ public final class Style {
         BAR = pick(0xF6F8FA, 0x161B22);
         HOVER = pick(0xEAEEF2, 0x262C36);
         PRESSED = pick(0xD8DEE4, 0x30363D);
+        SELECTED = pick(0xDDE3EA, 0x2D333B);
+        TAB_HOVER = pick(0xE6EAEF, 0x242A33);
+        RAISED = pick(0xFFFFFF, 0x3D444D);
+        SCROLL_THUMB = pick(0xBBC2CA, 0x484F58);
+        SCROLL_THUMB_HOVER = pick(0x8C959F, 0x6E7681);
+        SCROLL_THUMB_PRESSED = pick(0x6E7781, 0x8B949E);
         CONTROL_BORDER = pick(0x87909A, 0x656D76);
         ICON_DISABLED = pick(0xBBC2CA, 0x4A525C);
         ON_ACCENT = pick(0xFFFFFF, 0x0D1117);
@@ -284,6 +298,13 @@ public final class Style {
     private static final boolean LINUX = !System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).matches("(windows|mac).*");
     private static final Font[] INTER = LINUX ? loadBundled("Inter-Regular.ttf", "Inter-SemiBold.ttf") : null;
     public static final float UI_SIZE = 13f;
+    public static final float UI_SMALL = 12f; // the status bar, the legend, chips and hints
+    public static final float UI_LABEL = 11f; // small capital labels naming a region: CALL STACK, START
+
+    // Those labels: the sans font, bold, spaced out a little (they're scanned, not read).
+    public static Font sectionFont() {
+        return sans(true, UI_LABEL).deriveFont(java.util.Map.of(java.awt.font.TextAttribute.TRACKING, 0.06));
+    }
 
     // The interface font at a size, regular or bold. Read after the look is set up, because on
     // Windows and macOS it's FlatLaf's choice.
