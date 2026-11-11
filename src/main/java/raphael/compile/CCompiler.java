@@ -98,6 +98,11 @@ public class CCompiler {
             command.addAll(List.of("-include", shim[0].toString()));
             command.addAll(sources);
             command.add(shim[1].toString());
+            if (Toolchains.WINDOWS) {
+                // WinLibs' gcc hands ld its link-time-optimization plugin by an unquoted path, and
+                // under "C:\Program Files" the space breaks it; Raphael never uses that plugin.
+                command.add("-fno-use-linker-plugin");
+            }
             command.addAll(List.of("-o", dir.resolve(EXE).toString()));
             gccSaid = run(command, dir.resolve("src"));
         }
