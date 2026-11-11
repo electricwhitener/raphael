@@ -245,6 +245,9 @@ public class CTracer implements Tracer {
                         case "crash" -> {
                             String signal = (String) message.get("signal");
                             Map<String, Object> at = (Map<String, Object>) message.get("step");
+                            if (!signal.startsWith("SIG") && raphael.explain.CCrash.detail("SIGABRT", null, null, printedSoFar()) != null) {
+                                signal = "SIGABRT"; // Windows' abort() reaches gdb without a signal name; its words are in the output
+                            }
                             Step plain = step(at, null);
                             String detail = raphael.explain.CCrash.detail(signal, plain.snapshot(0), lineText(at), printedSoFar());
                             String text = crashText(signal) + (detail == null ? "" : ": " + detail);
