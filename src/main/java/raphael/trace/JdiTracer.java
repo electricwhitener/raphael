@@ -70,6 +70,9 @@ public class JdiTracer implements Tracer {
     private volatile RunLimits limits = RunLimits.DEFAULTS;
     private volatile List<Path> inputFiles = List.of();
     private static final int START_TIMEOUT_MS = 20_000; // a program that hasn't connected by then never will
+    // The program's side: its connection to Raphael, counted from when it tries (milliseconds when
+    // Raphael is there). Short, so a program whose Raphael died while it connected ends soon.
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
     boolean remember = true; // tests turn this off to check that remembering objects changes nothing
     boolean recordExits = true; // the timing check turns this off, to see what recording returns costs
     int lastObjectsRead;     // how many objects the last run read from the program, for tests
@@ -206,7 +209,7 @@ public class JdiTracer implements Tracer {
                 // program is connecting to it (before the agent runs), the program gives up and exits
                 // instead of waiting, paused, for ever.
                 List<String> command = new ArrayList<>(List.of(javaCommand(),
-                        "-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,timeout=" + START_TIMEOUT_MS + ",address=" + address,
+                        "-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,timeout=" + CONNECT_TIMEOUT_MS + ",address=" + address,
                         "-cp", program.classDir().toString(),
                         "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
                         "-Xmx" + runLimits.memoryMb() + "m"));

@@ -104,9 +104,9 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: The kill test, ten times
+      - name: The kill test, ten times, after the rest of the tests (it failed in the full suite)
         run: |
-          mvn -B -q test-compile
+          mvn -B -q test -Dtest='CTracerTest,ExamplesTest,TracerTest' || true
           pass=0
           for i in 1 2 3 4 5 6 7 8 9 10; do
             if mvn -B -q surefire:test -Dtest='TracerTest#theProgramEndsWhenRaphaelIsKilled' > run$i.txt 2>&1; then pass=$((pass+1)); else tail -5 run$i.txt; fi
