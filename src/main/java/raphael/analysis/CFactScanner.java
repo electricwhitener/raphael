@@ -32,6 +32,7 @@ public final class CFactScanner {
     private final String unit;
     private final CodeFacts facts;
     private final List<Token> tokens = new ArrayList<>();
+    private final java.util.Set<String> structs = new java.util.HashSet<>(); // struct names, and typedef names for structs
 
     private CFactScanner(CodeFacts facts, String source, String file, String unit) {
         this.facts = facts;
@@ -152,7 +153,32 @@ public final class CFactScanner {
         int t = 0;
         while (t < tokens.size()) {
             String s = text(t);
-            if (s.equals("{")) { // a struct, union, enum or initializer at the top level
+            if (s.equals("typedef") && (text(t + 1).equals("struct") || text(t + 1).equals("union")) && isName(t + 2)
+                    && isName(t + 3) && text(t + 4).equals(";")) {
+                structs.add(text(t + 2)); // typedef struct Node Node;
+                structs.add(text(t + 3));
+                t += 5;
+                continue;
+            }
+            if ((s.equals("struct") || s.equals("union")) && isName(t + 1) && text(t + 2).equals("{")) {
+                structs.add(text(t + 1));
+                int end = struct(text(t + 1), t + 2); // struct Node { … } (also inside a typedef)
+                if (isName(end + 1)) {
+                    structs.add(text(end + 1)); // typedef struct Node { … } Node_t;
+                }
+                t = end + 1;
+                continue;
+            }
+            if ((s.equals("struct") || s.equals("union")) && text(t + 1).equals("{")) {
+                int end = closing(t + 1);
+                if (isName(end + 1)) {
+                    structs.add(text(end + 1));
+                    struct(text(end + 1), t + 1); // typedef struct { … } Point;
+                }
+                t = end + 1;
+                continue;
+            }
+            if (s.equals("{")) { // an enum or an initializer at the top level
                 t = closing(t) + 1;
                 continue;
             }
@@ -230,6 +256,101 @@ public final class CFactScanner {
         facts.add(new CodeFacts.MethodFact(file, unit, name, tokens.get(t).line(), tokens.get(bodyEnd).line(),
                 recursive, returnsValue, parameters));
         return bodyEnd;
+    }
+
+    // A struct's fields, as FieldFacts of a "class" named after it: struct Node *next is a field
+    // of type Node (a link, as CTracer names it), struct Node *kids[4] one of type Node[], int
+    // keys[3] one of type int[]. open: its "{". Returns its "}".
+    private int struct(String name, int open) {
+        int close = closing(open);
+        int start = open + 1;
+        for (int k = open + 1; k <= close; k++) {
+            if (text(k).equals("{")) { // a struct or union inside: its fields aren't this one's
+                k = closing(k);
+                continue;
+            }
+            if (!text(k).equals(";") && k != close) {
+                continue;
+            }
+            field(name, start, k - 1);
+            start = k + 1;
+        }
+        return close;
+    }
+
+    // One declaration inside a struct, from `from` to `to`: int x, y; struct Node *next; char name[8];
+    private void field(String struct, int from, int to) {
+        List<List<Integer>> parts = splitAtCommas(from, to);
+        if (parts.isEmpty() || parts.get(0).isEmpty()) {
+            return;
+        }
+        List<Integer> first = parts.get(0);
+        String base;
+        int declarator; // where the first declarator begins
+        if ((text(first.get(0)).equals("struct") || text(first.get(0)).equals("union")) && first.size() > 1
+                && text(first.get(1)).equals("{")) {
+            base = text(first.get(0)); // union { … } u: an unnamed one, its declarator after the }
+            declarator = first.indexOf(closing(first.get(1))) + 1;
+        } else if ((text(first.get(0)).equals("struct") || text(first.get(0)).equals("union")) && first.size() > 1) {
+            base = text(first.get(1)); // struct Node → Node
+            declarator = 2;
+        } else {
+            declarator = nameIndex(first); // the first declarator starts at its first * or else at its name
+            for (int k = 0; k < declarator; k++) {
+                if (text(first.get(k)).equals("*")) {
+                    declarator = k;
+                    break;
+                }
+            }
+            StringBuilder type = new StringBuilder();
+            for (int k = 0; k < declarator; k++) {
+                if (!SPECIFIERS.contains(text(first.get(k)))) {
+                    type.append(type.length() == 0 ? "" : " ").append(text(first.get(k)));
+                }
+            }
+            base = type.toString();
+        }
+        boolean structType = text(first.get(0)).equals("struct") || text(first.get(0)).equals("union")
+                || structs.contains(base) || base.equals(struct); // Node *next, with typedef struct Node Node
+        for (int p = 0; p < parts.size(); p++) {
+            List<Integer> part = p == 0 ? first.subList(Math.min(declarator, first.size()), first.size()) : parts.get(p);
+            boolean pointer = false;
+            boolean array = false;
+            String fieldName = null;
+            for (int k : part) {
+                String s = text(k);
+                if (s.equals("(")) {
+                    fieldName = null; // a function pointer: not a field Raphael draws
+                    break;
+                }
+                pointer |= s.equals("*");
+                array |= s.equals("[");
+                if (isName(k) && !array && fieldName == null) {
+                    fieldName = s;
+                }
+            }
+            if (fieldName == null || base.isEmpty()) {
+                continue;
+            }
+            String type = structType ? base : base + (pointer ? " *" : "");
+            facts.add(new CodeFacts.FieldFact(struct, fieldName, array ? type + "[]" : type, false, false,
+                    tokens.get(part.isEmpty() ? from : part.get(0)).line(), false));
+        }
+    }
+
+    // The index (in the part) of the first declarator's name: the last name before any [ or =.
+    private int nameIndex(List<Integer> part) {
+        int found = part.size() - 1;
+        for (int k = 0; k < part.size(); k++) {
+            String s = text(part.get(k));
+            if (s.equals("[") || s.equals("=")) {
+                break;
+            }
+            if (isName(part.get(k))) {
+                found = k;
+            }
+        }
+        return found;
     }
 
     // The tokens from `from` to `to`, in groups split at the commas outside any brackets.

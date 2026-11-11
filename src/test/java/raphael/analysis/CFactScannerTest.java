@@ -56,6 +56,45 @@ class CFactScannerTest {
         assertTrue(facts.returnAt(null, 10).recursive());
     }
 
+    // A struct's fields, so a program with a node struct opens on the picture, as a Java node class does.
+    @Test
+    void structFields() {
+        CodeFacts facts = facts("""
+                typedef struct Pair Pair;
+                struct Pair { int a, b; Pair *other; };
+                struct Node {
+                    int key;
+                    struct Node *left, *right;
+                    struct Node *kids[4];
+                    char name[8];
+                    int (*compare)(int, int);
+                    union { int i; float f; } u;
+                };
+                typedef struct {
+                    double x, y;
+                } Point;
+                int main(void) { return 0; }
+                """);
+        java.util.Map<String, String> types = new java.util.LinkedHashMap<>();
+        for (CodeFacts.FieldFact field : facts.fields()) {
+            types.put(field.className() + "." + field.name(), field.type());
+        }
+        assertEquals("int", types.get("Pair.a"));
+        assertEquals("int", types.get("Pair.b"));
+        assertEquals("Pair", types.get("Pair.other")); // a link, though written through the typedef
+        assertEquals("int", types.get("Node.key"));
+        assertEquals("Node", types.get("Node.left"));
+        assertEquals("Node", types.get("Node.right"));
+        assertEquals("Node[]", types.get("Node.kids"));
+        assertEquals("char[]", types.get("Node.name"));
+        assertFalse(types.containsKey("Node.compare")); // a function pointer
+        assertEquals("union", types.get("Node.u"));
+        assertFalse(types.containsKey("Node.i")); // the union's own fields aren't the struct's
+        assertEquals("double", types.get("Point.x"));
+        assertEquals("double", types.get("Point.y"));
+        assertEquals(List.of("main"), facts.methods().stream().map(CodeFacts.MethodFact::name).toList());
+    }
+
     @Test
     void commentsAndStringsDontCount() {
         CodeFacts facts = facts("""
