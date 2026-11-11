@@ -82,7 +82,7 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 
 | Dependency | Version | Used for | Licence |
 |---|---|---|---|
-| [FlatLaf](https://www.formdev.com/flatlaf/) | 3.5.4 | The modern look of the Swing window, light and dark | Apache 2.0 |
+| [FlatLaf](https://www.formdev.com/flatlaf/) | 3.7.2 | The modern look of the Swing window, light and dark | Apache 2.0 |
 | [JUnit 5](https://junit.org/junit5/) | 5.11.4 | The tests only | EPL 2.0 |
 | [JetBrains Mono NL](https://www.jetbrains.com/lp/mono/) | 2.304 | The font (`src/main/resources/fonts/`) | SIL OFL 1.1 |
 

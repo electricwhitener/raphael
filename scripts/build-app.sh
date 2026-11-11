@@ -5,10 +5,10 @@
 # compiles into target/classes in the background and can leave broken class files there.
 set -e
 cd "$(dirname "$0")/.."
-FLATLAF=$(find ~/.m2 -name 'flatlaf-3.5.4.jar' 2>/dev/null | head -1)
+FLATLAF=$(find ~/.m2 -name 'flatlaf-3.7.2.jar' 2>/dev/null | head -1)
 if [ -z "$FLATLAF" ]; then # a fresh computer: let Maven download the libraries first
     mvn -q compile
-    FLATLAF=$(find ~/.m2 -name 'flatlaf-3.5.4.jar' | head -1)
+    FLATLAF=$(find ~/.m2 -name 'flatlaf-3.7.2.jar' | head -1)
 fi
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
