@@ -466,6 +466,28 @@ class TracerTest {
         assertNothingLeftBehind("exit"); // a normal quit, in the middle of a run
     }
 
+    // The surviving program's parent and state (ps), and its threads (jcmd), if it answers.
+    private static String diagnose(long pid) {
+        StringBuilder said = new StringBuilder();
+        String jcmd = Path.of(System.getProperty("java.home"), "bin", "jcmd").toString();
+        for (List<String> command : List.of(List.of("ps", "-o", "pid,ppid,stat,etime,command", "-p", String.valueOf(pid)),
+                List.of(jcmd, String.valueOf(pid), "Thread.print"))) {
+            try {
+                Process p = new ProcessBuilder(command).redirectErrorStream(true).start();
+                if (p.waitFor(10, TimeUnit.SECONDS)) {
+                    String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    said.append(out, 0, Math.min(out.length(), 4000)).append("\n");
+                } else {
+                    p.destroyForcibly();
+                    said.append(command.get(0)).append(": no answer in 10 s\n");
+                }
+            } catch (Exception e) {
+                said.append(command.get(0)).append(": ").append(e).append("\n");
+            }
+        }
+        return said.toString();
+    }
+
     private void assertNothingLeftBehind(String how) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Process raphael = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"),
@@ -493,8 +515,9 @@ class TracerTest {
                 Thread.sleep(100);
             }
             if (program.isAlive()) {
+                String state = diagnose(pid); // what the survivor is doing, for the failure message
                 program.destroyForcibly();
-                fail("the traced program was still running after Raphael ended (" + how + ")");
+                fail("the traced program was still running after Raphael ended (" + how + ")\n" + state);
             }
         }
     }
