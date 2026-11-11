@@ -64,7 +64,7 @@ class StyleTest {
 
     @Test
     void theBundledFontLoadsAndHasTheSymbolsWeUse() {
-        assertEquals("JetBrains Mono NL", Style.MONO);
+        assertEquals("IBM Plex Mono", Style.MONO);
         assertEquals(-1, Style.UI_FONT.canDisplayUpTo("→…·—"));
     }
 }

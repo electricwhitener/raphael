@@ -84,7 +84,7 @@ scripts/package.sh deb         # or an installer: msi on Windows, dmg on macOS, 
 |---|---|---|---|
 | [FlatLaf](https://www.formdev.com/flatlaf/) | 3.7.2 | The modern look of the Swing window, light and dark | Apache 2.0 |
 | [JUnit 5](https://junit.org/junit5/) | 5.11.4 | The tests only | EPL 2.0 |
-| [JetBrains Mono NL](https://www.jetbrains.com/lp/mono/) | 2.304 | The font (`src/main/resources/fonts/`) | SIL OFL 1.1 |
+| [IBM Plex Mono](https://github.com/IBM/plex) | 2.3 | The code font (`src/main/resources/fonts/`) | SIL OFL 1.1 |
 
 **Parts of the JDK it relies on.** These need no separate install.
 
@@ -396,7 +396,7 @@ Safety:
 | `SettingsDialog` | The settings window: run limits, text size, and a System / Light / Dark theme switch | `ask()`, `read()` |
 | `SourceFile` (model) | One file of a program: its path in the program's folder and its text | record |
 | **resources/examples/** | The 103 example programs, in a folder per topic, and `catalog.txt`, which groups them for the menus | — |
-| **resources/fonts/** | The JetBrains Mono NL font files and their licence | — |
+| **resources/fonts/** | The IBM Plex Mono and Inter font files and their licences | — |
 
 ## OOP concepts
 
@@ -520,6 +520,6 @@ Raphael is free and open source, under the [MIT License](LICENSE).
 
 The logo art (`src/main/resources/logo/raphael.jpg`, and the icons made from it) is an original character used with permission. It is not covered by the MIT License.
 
-The bundled fonts are under the SIL Open Font License: JetBrains Mono NL (`src/main/resources/fonts/OFL.txt`) and Inter (`src/main/resources/fonts/Inter-OFL.txt`). FlatLaf and JUnit keep their own licences, listed above.
+The bundled fonts are under the SIL Open Font License: IBM Plex Mono (`src/main/resources/fonts/IBMPlexMono-OFL.txt`) and Inter (`src/main/resources/fonts/Inter-OFL.txt`). FlatLaf and JUnit keep their own licences, listed above.
 
 Raphael keeps your code on your computer; see [PRIVACY.md](PRIVACY.md). To report a problem or suggest an idea, see [CONTRIBUTING.md](CONTRIBUTING.md).

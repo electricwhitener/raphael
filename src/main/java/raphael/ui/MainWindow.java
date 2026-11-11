@@ -88,7 +88,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
               (In the editor, hold Alt with the arrow keys.)
 
             the editor
-              Ctrl+N, O, S       new (in the last language), open, save
+              Ctrl+N, O, S       new (choose its language), open, save
               Ctrl+Shift+S       save as
               Ctrl+W             close the tab
               Ctrl+Shift+T       reopen a closed tab
@@ -178,6 +178,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     private final JMenu recentMenu = new JMenu("Open recent");
     private JMenuItem saveRecordingItem;
     private JButton saveButton;
+    private JButton newButton; // the toolbar's New: Ctrl+N opens its menu of languages under it
     // The commands that need a program open; they're off on the welcome page, keys included.
     private final List<JMenuItem> needsProgram = new java.util.ArrayList<>();
     // "saved recording · 163 steps" in the status bar, while a recording read from a file is on show.
@@ -217,10 +218,9 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         getContentPane().setBackground(Style.BACKGROUND);
         setJMenuBar(buildMenuBar());
         toolBar = buildToolBar();
-        busy.setIndeterminate(true);
         busy.setBorder(BorderFactory.createEmptyBorder());
         Zoom.size(busy, 0, 2);
-        busy.setVisible(false);
+        showBusy(false);
         JPanel north = new JPanel(new BorderLayout());
         north.add(toolBar, BorderLayout.CENTER);
         north.add(busy, BorderLayout.SOUTH);
@@ -639,6 +639,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
 
         JButton newProgram = ControlsBar.button(Icons.Glyph.NEW, "New program", "New program, or paste one in  (Ctrl+N)");
         newProgram.addActionListener(e -> chooseLanguage(newProgram, false)); // a menu of the languages
+        newButton = newProgram;
         JButton open = ControlsBar.button(Icons.Glyph.OPEN, "Open", "Open a program or a recording  (Ctrl+O)");
         open.addActionListener(e -> open());
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
@@ -827,7 +828,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     private JMenuBar buildMenuBar() {
         JMenuBar bar = new JMenuBar();
         JMenu file = menu("File", KeyEvent.VK_F);
-        file.add(item("New", "control N", this::newProgram)); // in the last language chosen
+        file.add(item("New…", "control N", this::askNewProgram)); // which language: a menu, the last one first
         JMenu newIn = new JMenu("New Program In");
         for (raphael.lang.Language language : raphael.lang.Languages.all()) {
             newIn.add(item(language.name(), null, () -> newProgram(language)));
@@ -1385,6 +1386,12 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         newProgram(lastNewLanguage());
     }
 
+    // Ctrl+N: the New button's menu of languages, the last one chosen lit, so Enter takes it.
+    // Opened just after: a menu item (and its shortcut) closes every open menu once its action has run.
+    private void askNewProgram() {
+        SwingUtilities.invokeLater(() -> chooseLanguage(newButton != null && newButton.isShowing() ? newButton : getRootPane(), false));
+    }
+
     // A new program in this language, from its template, with the cursor where the code goes.
     void newProgram(raphael.lang.Language language) {
         App.SETTINGS.put("lastNewLanguage", language.id());
@@ -1397,8 +1404,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         say(Shortcuts.label("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
-    // A menu of the four languages under a button: for New (a new program in that language, the
-    // last one chosen first, with Ctrl+N beside it), or for the status bar's chip (the program in
+    // A menu of the four languages under a button: for New and Ctrl+N (a new program in that
+    // language, the last one chosen first and lit), or for the status bar's chip (the program in
     // front becomes that language; its code stays as it is, coloured and run as the new language).
     private void chooseLanguage(JComponent under, boolean change) {
         JPopupMenu menu = new JPopupMenu();
@@ -1407,8 +1414,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         order.remove(first);
         order.add(0, first);
         for (raphael.lang.Language language : order) {
-            String keys = !change && language == first ? Shortcuts.label("   Ctrl+N") : "";
-            JMenuItem item = new JMenuItem((change && language == first ? "✓ " : "") + language.name() + keys);
+            JMenuItem item = new JMenuItem((change && language == first ? "✓ " : "") + language.name());
             item.addActionListener(e -> {
                 if (!change) {
                     newProgram(language);
@@ -1424,7 +1430,15 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             menu.insert(note, 0);
             menu.insert(new JPopupMenu.Separator(), 1);
         }
-        menu.show(under, 0, change ? -menu.getPreferredSize().height : under.getHeight());
+        if (under == getRootPane()) { // no New button in sight (a narrow toolbar): near the top, in the middle
+            menu.show(under, (under.getWidth() - menu.getPreferredSize().width) / 2, Zoom.px(Style.SPACE_6 * 2));
+        } else {
+            menu.show(under, 0, change ? -menu.getPreferredSize().height : under.getHeight());
+        }
+        if (!change) { // the keyboard can choose at once: the first language is lit, Enter takes it
+            javax.swing.MenuSelectionManager.defaultManager().setSelectedPath(
+                    new javax.swing.MenuElement[] {menu, (JMenuItem) menu.getComponent(0)});
+        }
     }
 
     // The program in front becomes another language. A template nobody has typed into is swapped
@@ -1605,7 +1619,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         showExample(example, false).setPreview(false);
     }
 
-    // The language New uses without asking (Ctrl+N): the last one chosen, else the one being learned.
+    // The language New puts first (and the welcome page's New program uses): the last one chosen, else the one being learned.
     static raphael.lang.Language lastNewLanguage() {
         String id = App.SETTINGS.get("lastNewLanguage", null);
         return id == null ? raphael.lang.Languages.preferred() : raphael.lang.Languages.byId(id);
@@ -1620,6 +1634,13 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             }
         }
         return new int[] {1, 0};
+    }
+
+    // The moving bar under the toolbar while a program records. It moves only while it's shown:
+    // a hidden bar that is still "indeterminate" keeps Swing's animation timer ticking 60 times a second.
+    private void showBusy(boolean shown) {
+        busy.setIndeterminate(shown);
+        busy.setVisible(shown);
     }
 
     void loadExample(String name) {
@@ -1746,7 +1767,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         showWelcomeControls(current == null);
         if (current == null) {
             styleRunButton();
-            busy.setVisible(false);
+            showBusy(false);
             updateTitle();
             showPosition();
             showStatus(welcomeSaid, Style.INK_SOFT);
@@ -2412,7 +2433,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             }
             updateTitle();
             styleRunButton();
-            busy.setVisible(workbench.isRunning());
+            showBusy(workbench.isRunning());
             showStatus(workbench.statusText(), workbench.statusColor());
             showLegendIfRoom();
             showPosition();

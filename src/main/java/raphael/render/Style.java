@@ -134,7 +134,7 @@ public final class Style {
         useTheme(false);
     }
 
-    // Fonts: one monospace family everywhere (JetBrains Mono, which ships inside the app)
+    // Fonts: one monospace family for code, the picture and the panels (IBM Plex Mono, which ships inside the app)
     public static final String MONO = pickMono();
     public static final Font UI_FONT = new Font(MONO, Font.PLAIN, 13);
     public static final int DEFAULT_CODE_SIZE = 13;
@@ -257,7 +257,7 @@ public final class Style {
 
     // Registers the regular and bold font files with Java, and returns their family name.
     private static String loadBundledMono() {
-        Font[] mono = loadBundled("JetBrainsMonoNL-Regular.ttf", "JetBrainsMonoNL-Bold.ttf");
+        Font[] mono = loadBundled("IBMPlexMono-Regular.ttf", "IBMPlexMono-Bold.ttf");
         return mono == null ? null : mono[0].getFamily();
     }
 

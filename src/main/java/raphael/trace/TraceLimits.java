@@ -13,4 +13,10 @@ public final class TraceLimits {
 
     private TraceLimits() {
     }
+
+    // Milliseconds on a steady clock, for the time limits. Not the wall clock: that one can jump
+    // (WSL 2 moves it seconds ahead now and then), and a jump looked like a line running too long.
+    static long steadyMillis() {
+        return System.nanoTime() / 1_000_000;
+    }
 }

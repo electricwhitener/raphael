@@ -128,6 +128,12 @@ public class App {
         UIManager.put("SplitPane.dividerSize", 8);
         UIManager.put("SplitPaneDivider.style", "plain");
         UIManager.put("Table.intercellSpacing", new Dimension(0, 0));
+        if (System.getenv("WSL_DISTRO_NAME") != null) {
+            // A popup's drop shadow needs a window of its own, and WSLg sometimes misses the hiding
+            // of such a window: tooltips piled up. Without the shadow, a tooltip (or a menu) that
+            // fits inside Raphael's window is drawn in it, and goes when it should.
+            UIManager.put("Popup.dropShadowPainted", false);
+        }
     }
 
     private static String hex(java.awt.Color color) {

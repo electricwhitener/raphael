@@ -110,6 +110,7 @@ public class ExamplesPanel extends JPanel {
                 "selectionInactiveBackground:$Tree.selectionBackground;selectionInactiveForeground:$Tree.selectionForeground");
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
+        tree.setToggleClickCount(1); // a click anywhere on a group's row opens or closes it, not only on its arrow
         Zoom.rowHeight(tree, Style.PALETTE_ROW_H - 4);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         tree.setCellRenderer(new Renderer());

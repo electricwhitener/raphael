@@ -278,14 +278,15 @@ public class CTracer implements Tracer {
             reader.setDaemon(true);
             reader.start();
 
-            long lastLine = System.currentTimeMillis();
+            long lastLine = TraceLimits.steadyMillis();
             long stopAskedAt = -1;
+            int typedSeen = 0;
             while (true) {
                 if (stopRequested && stopAskedAt < 0) {
                     Files.writeString(stopFile, "stop"); // the script ends the run at its next step
-                    stopAskedAt = System.currentTimeMillis();
+                    stopAskedAt = TraceLimits.steadyMillis();
                 }
-                long now = System.currentTimeMillis();
+                long now = TraceLimits.steadyMillis();
                 if (stopAskedAt >= 0 && now - stopAskedAt > STOP_GRACE_MS) {
                     end(EndReason.STOPPED, "Stopped by you."); // stuck inside one line: it can't see the request
                     forced = true;
@@ -306,6 +307,10 @@ public class CTracer implements Tracer {
                     live.programWaits();
                     lastLine = now; // the watchdog doesn't count the time spent waiting for typing
                 }
+                if (live != null && live.typed().size() != typedSeen) {
+                    typedSeen = live.typed().size();
+                    lastLine = now; // a line was just typed: the program has its whole time from here
+                }
                 String line = lines.poll(POLL_MS, TimeUnit.MILLISECONDS);
                 if (line == null) {
                     continue;
@@ -319,7 +324,7 @@ public class CTracer implements Tracer {
                     }
                     return;
                 }
-                lastLine = System.currentTimeMillis();
+                lastLine = TraceLimits.steadyMillis();
                 @SuppressWarnings("unchecked")
                 Map<String, Object> message = (Map<String, Object>) Json.read(line);
                 if (handle(message)) {

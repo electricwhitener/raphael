@@ -374,7 +374,8 @@ public class JdiTracer implements Tracer {
 
         private void handleEvents() throws InterruptedException {
             EventQueue queue = vm.eventQueue();
-            long lastEvent = System.currentTimeMillis();
+            long lastEvent = TraceLimits.steadyMillis();
+            int typedSeen = 0;
             while (true) {
                 if (stopRequested) {
                     end(EndReason.STOPPED, "Stopped by you.");
@@ -382,13 +383,17 @@ public class JdiTracer implements Tracer {
                     return;
                 }
                 EventSet events = queue.remove(POLL_MS);
+                if (live != null && live.typed().size() != typedSeen) {
+                    typedSeen = live.typed().size();
+                    lastEvent = TraceLimits.steadyMillis(); // a line was just typed: the program has its whole time from here
+                }
                 if (events == null) {
-                    if (waitsForInput(System.currentTimeMillis() - lastEvent)) {
+                    if (waitsForInput(TraceLimits.steadyMillis() - lastEvent)) {
                         live.programWaits();
-                        lastEvent = System.currentTimeMillis(); // the timeout doesn't count the time spent waiting for typing
+                        lastEvent = TraceLimits.steadyMillis(); // the timeout doesn't count the time spent waiting for typing
                         continue;
                     }
-                    if (System.currentTimeMillis() - lastEvent >= limits.timeoutSeconds() * 1000L) {
+                    if (TraceLimits.steadyMillis() - lastEvent >= limits.timeoutSeconds() * 1000L) {
                         end(EndReason.TIMEOUT, "Stopped: the program did nothing for "
                                 + limits.timeoutSeconds() + " seconds.");
                         stopProgram();
@@ -396,7 +401,7 @@ public class JdiTracer implements Tracer {
                     }
                     continue;
                 }
-                lastEvent = System.currentTimeMillis();
+                lastEvent = TraceLimits.steadyMillis();
                 if (live != null) {
                     live.programMoved();
                 }

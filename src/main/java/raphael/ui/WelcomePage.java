@@ -539,7 +539,13 @@ public class WelcomePage extends JPanel {
                                                       int index, boolean isSelected, boolean focused) {
             title.setText(example.title());
             blurb.setText(example.blurb());
-            setToolTipText(example.blurb()); // the whole sentence, when the row is too narrow for it
+            // The whole sentence as a tooltip only when the row is too narrow for it: otherwise it
+            // would repeat the line right under the pointer.
+            java.awt.Insets in = getInsets();
+            int room = list.getWidth() - in.left - in.right;
+            boolean cut = blurb.getFontMetrics(blurb.getFont()).stringWidth(example.blurb()) > room
+                    || title.getFontMetrics(title.getFont()).stringWidth(example.title()) > room;
+            setToolTipText(cut ? example.blurb() : null);
             title.setForeground(Style.INK);
             blurb.setForeground(Style.INK_SOFT);
             ringed = isSelected && list.isFocusOwner();
