@@ -4,9 +4,9 @@
 [![latest release](https://img.shields.io/github/v/release/electricwhitener/raphael)](https://github.com/electricwhitener/raphael/releases/latest)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**See your Java program's data structures change while it runs.** Paste or open a Java program and press **Run**. Raphael records every line, then plays it back as a picture: arrays, linked lists, trees and objects, animated as each line changes them. Step forward and back through the whole run.
+**See your Java or C program's data structures change while it runs.** Paste or open a Java or C program and press **Run**. Raphael records every line, then plays it back as a picture: arrays, linked lists, trees and objects, animated as each line changes them. Step forward and back through the whole run.
 
-**[Download Raphael](https://github.com/electricwhitener/raphael/releases/latest)** for Windows, macOS or Linux. It's free, open source, and has its own Java inside, so there's nothing else to install. ([Which file, and the first-run warnings](#install-it).)
+**[Download Raphael](https://github.com/electricwhitener/raphael/releases/latest)** for Windows, macOS or Linux. It's free, open source, and has its own Java inside, so there's nothing else to install (for C: on Windows nothing either; on Linux the package brings gcc and gdb; on a Mac, Apple's Command Line Tools). ([Which file, and the first-run warnings](#install-it).)
 
 ![Raphael reversing a linked list](docs/demo.gif)
 

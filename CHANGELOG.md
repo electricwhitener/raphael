@@ -4,8 +4,18 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**C runs**
+- Write a C program and press Run: Raphael compiles it with gcc and records every line through a debugger (gdb; lldb on a Mac), with every picture, view and explanation Java has.
+- Structs are boxes linked by their pointers, so C's linked lists and trees are drawn as Java's are. A pointer to a variable reads `&x`, and a pointer into an array is a marker under its cell.
+- `malloc`'d memory is an array of its length, memory not yet set shows `?`, and freed memory stays drawn, faded and labelled "freed", so a dangling pointer is plain to see. A second `free` of a block is caught.
+- Crashes are explained: which pointer was NULL, freed or never set, which divisor was 0, which index was outside its array, which `assert` failed.
+- Compile errors get plain hints (a missing `;` or `#include`, a wrong pointer type, an undeclared name, a function never written).
+- Key moments for C: malloc made a block, free left pointers dangling, a function changed its caller's variable through a pointer, and `scanf("%c")` reading the newline a `%d` left behind (Java's `nextLine()` after `nextInt()` gets the same moment).
+- The Windows installer includes a C compiler and debugger (WinLibs, about 400 MB installed); the Linux package depends on gcc and gdb; on a Mac, Apple's Command Line Tools (`xcode-select --install`).
+- The first C examples: hello, pointers and swap, factorial, a linked list, a binary search tree, and a NULL-pointer bug.
+
 **Languages**
-- Write C, C++ and Python programs as well as Java: they're coloured and saved as their own language (running them comes next).
+- Write C, C++ and Python programs as well as Java: they're coloured and saved as their own language (C runs; C++ and Python come next).
 - New asks which language (Ctrl+N repeats the last one), the welcome page asks which language you're learning, a pasted program is recognised, and the language in the status bar changes it.
 
 **Examples**
