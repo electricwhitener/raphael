@@ -12,6 +12,7 @@ import java.util.Locale;
 public final class Toolchains {
 
     public static final boolean WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows");
+    public static final boolean MAC = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("mac");
 
     private Toolchains() {
     }
@@ -35,13 +36,36 @@ public final class Toolchains {
         return null;
     }
 
+    private static Boolean gdbHasPython; // asked once per run of Raphael
+
+    // Whether gdb is there and can run Python, which Raphael's C tracer is written in.
+    public static synchronized boolean gdbHasPython() {
+        if (gdbHasPython == null) {
+            gdbHasPython = false;
+            Path gdb = find("gdb");
+            if (gdb != null) {
+                try {
+                    Process p = new ProcessBuilder(gdb.toString(), "-q", "-batch", "-nx", "-ex", "python print('raphael' + '-ok')")
+                            .redirectErrorStream(true).start();
+                    p.getOutputStream().close();
+                    String said = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    gdbHasPython = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) && said.contains("raphael-ok");
+                } catch (java.io.IOException e) {
+                    gdbHasPython = false;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        return gdbHasPython;
+    }
+
     // What to do when a tool is missing, in a sentence for this system.
     public static String howToInstall(String what) {
-        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         if (WINDOWS) {
             return "Raphael couldn't find " + what + ". Reinstalling Raphael puts it back.";
         }
-        if (os.contains("mac")) {
+        if (MAC) {
             return "Raphael needs Apple's Command Line Tools for " + what + ". Type xcode-select --install in Terminal.";
         }
         return "Raphael needs " + what + ". On Ubuntu or Debian, type sudo apt install gcc gdb in a terminal.";

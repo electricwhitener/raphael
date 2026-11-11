@@ -1,0 +1,20 @@
+// The C examples. "# title", "## category", an optional "### subcategory", then one case
+// a line: path | title | blurb. A case before any ### belongs to the category itself.
+// More come with Stage 17's curriculum.
+
+# C
+## Basics
+basics/hello | Hello, C | printf, a few variables, and main returning 0 to say all went well.
+basics/swap | Pointers and swap | A function can change your variables only through their addresses.
+
+## Recursion
+recursion/factorial | Factorial | Each call waits for the one it made, then multiplies by what it gave back.
+
+## Linked lists
+lists/linked_list | A linked list | malloc a node, link it at the head, then walk the list with a pointer.
+
+## Trees
+trees/bst_insert | Binary search tree | Insert with recursion: smaller keys go left, bigger ones right.
+
+## Find the bug
+bugs/null_pointer | A NULL pointer | Reading through a pointer that points nowhere crashes the program.

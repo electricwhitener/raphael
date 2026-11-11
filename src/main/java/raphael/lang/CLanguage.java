@@ -7,11 +7,14 @@ import raphael.compile.CompileResult;
 import raphael.compile.CompileSetupException;
 import raphael.compile.GccHints;
 import raphael.model.SourceFile;
+import raphael.toolchain.Toolchains;
+import raphael.trace.CTracer;
+import raphael.trace.Tracer;
 
-// C: the language most data-structures courses are taught in. Compiled with gcc (CCompiler); it
-// stays NotRunnableYet until its tracer is written (Stage 14, step 3).
-// OOP: inheritance (a Language, through NotRunnableYet until then) and overriding.
-public class CLanguage extends NotRunnableYet {
+// C: the language most data-structures courses are taught in. Compiled with gcc (CCompiler) and
+// traced through gdb (CTracer).
+// OOP: inheritance (a Language) and overriding.
+public class CLanguage extends Language {
 
     static final Set<String> KEYWORDS = Set.of("auto", "break", "case", "char", "const", "continue", "default", "do",
             "double", "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register",
@@ -66,6 +69,24 @@ public class CLanguage extends NotRunnableYet {
     @Override
     public boolean usesFiles(String code) {
         return code.matches("(?s).*\\bfopen\\s*\\(.*");
+    }
+
+    // Null when gcc and a gdb with Python are here. On a Mac, C runs through lldb (coming next).
+    @Override
+    public String cantRun() {
+        if (Toolchains.find("gcc") == null) {
+            return Toolchains.howToInstall("gcc to compile C");
+        }
+        if (!Toolchains.gdbHasPython()) {
+            return Toolchains.MAC ? "Running C on a Mac comes in the next update of Raphael, which uses lldb there."
+                    : Toolchains.howToInstall("gdb (with Python) to run C");
+        }
+        return null;
+    }
+
+    @Override
+    public Tracer newTracer() {
+        return new CTracer();
     }
 
     @Override

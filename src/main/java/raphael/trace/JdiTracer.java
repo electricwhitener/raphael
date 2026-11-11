@@ -83,6 +83,30 @@ public class JdiTracer implements Tracer {
                 "end traced programs"));
     }
 
+    // Why a run hit the step limit, for any language's tracer.
+    static String stepLimitMessage(Snapshot last, int maxSteps) {
+        String method = recursingMethod(last);
+        return method != null
+                ? "Stopped after " + maxSteps + " steps, with " + method + " calling itself again and again. Is its base case missing?"
+                : "Stopped after " + maxSteps + " steps. If it isn't an infinite loop, try a smaller input, or allow more steps in settings.";
+    }
+
+    // The method that fills the whole call stack, if one does: a recursion that never stops
+    // long before Java's own StackOverflowError, which only comes thousands of calls later.
+    private static String recursingMethod(Snapshot step) {
+        List<FrameSnapshot> frames = step.getFrames();
+        if (frames.size() < TraceLimits.MAX_FRAMES) {
+            return null;
+        }
+        String method = frames.get(0).getMethodName();
+        for (FrameSnapshot frame : frames) {
+            if (!frame.getMethodName().equals(method)) {
+                return null;
+            }
+        }
+        return method + "()";
+    }
+
     @Override
     public Trace trace(CompileResult program, String input) throws TraceException {
         RunLimits runLimits = limits; // one set of limits for the whole run, even if settings change meanwhile
@@ -501,31 +525,11 @@ public class JdiTracer implements Tracer {
             exitsFor(snapshots.get(snapshots.size() - 1));
             steps = snapshots.size();
             if (snapshots.size() >= limits.maxSteps()) {
-                String method = recursingMethod(snapshots.get(snapshots.size() - 1));
-                end(EndReason.STEP_LIMIT, method != null
-                        ? "Stopped after " + limits.maxSteps() + " steps, with " + method
-                                + " calling itself again and again. Is its base case missing?"
-                        : "Stopped after " + limits.maxSteps()
-                                + " steps. If it isn't an infinite loop, try a smaller input, or allow more steps in settings.");
+                end(EndReason.STEP_LIMIT, stepLimitMessage(snapshots.get(snapshots.size() - 1), limits.maxSteps()));
                 stopProgram();
             }
         }
 
-        // The method that fills the whole call stack, if one does: a recursion that never stops
-        // long before Java's own StackOverflowError, which only comes thousands of calls later.
-        private static String recursingMethod(Snapshot step) {
-            List<FrameSnapshot> frames = step.getFrames();
-            if (frames.size() < TraceLimits.MAX_FRAMES) {
-                return null;
-            }
-            String method = frames.get(0).getMethodName();
-            for (FrameSnapshot frame : frames) {
-                if (!frame.getMethodName().equals(method)) {
-                    return null;
-                }
-            }
-            return method + "()";
-        }
 
         // An exception that will be caught. Java's own code throws and catches many exceptions
         // inside itself (while loading classes, for instance), so only the ones the student's code

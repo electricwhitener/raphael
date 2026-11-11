@@ -281,8 +281,11 @@ Safety:
 | `CompileHints` | A plain hint for javac's common errors ("cannot find symbol" → which name, and what to check) | `hint(message)` |
 | `CCompiler` | Compiles a C program (one text or a folder's files) with gcc (`-g -O0`, flags that make every gcc stop where gcc 14 does, `-std=gnu17`), links in the runtime shim, and reads gcc's, clang's and the linker's messages into compile errors | `compile(code)`, `compileFolder(files, preferredMain)`, `errors(output, named)` |
 | `GccHints` | A plain hint for the C compiler's common errors, in gcc's or Apple clang's words (a missing `#include` → which header) | `hint(message)` |
-| `raphael_rt.c` (resources/c/) | The runtime shim linked into every C program, compiled without `-g`: turns stdout's buffer off so output keeps up with the steps | its constructor |
-| `Toolchains` (toolchain/) | Finds gcc (and later gdb, lldb and Python), and says how to install what's missing on this system | `find(name)`, `howToInstall(what)` |
+| `raphael_rt.c` (resources/c/) | The runtime shim linked into every C program, compiled without `-g`: reads input from and writes output to the files Raphael names, unbuffered, so output keeps up with the steps | its constructor |
+| `Toolchains` (toolchain/) | Finds gcc and gdb (and later lldb and Python), checks that gdb can run Python, and says how to install what's missing on this system | `find(name)`, `gdbHasPython()`, `howToInstall(what)` |
+| `CTracer` | Traces a C program through gdb: starts it with the helper script, reads one JSON line per step, and builds the same Snapshots as Java's tracer; a watchdog ends a program stuck on one line | `trace(program, input)`, `stop()`, `crashText(signal)` |
+| `raphael_gdb.py` (resources/c/) | The Python script inside gdb: steps through the student's lines and sends each step's frames, locals, structs, arrays, globals, returns, output size and files as JSON | `run()`, `Step.value()`, `frames_now()`, `watch_return()` |
+| `Json` | A small reader for the helper's JSON lines (maps, lists, strings, numbers) | `read(text)` |
 | `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
 | **trace/** | | |
 | `Tracer` | Interface: "run this program and record every step" | `trace(program, input)`, `trace(program)`, `stop()`, `stepsSoFar()` |
@@ -436,6 +439,8 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `NamesTest`: short type names, including lambdas.
 - `ErrorExplainerTest`: a NullPointerException names the variable that was null; an index past the end says how many cells there are and mentions `<=`; the other common exceptions; which ones have advice.
 - `CompileHintsTest`: a plain hint for each common javac message, naming the variable or class it's about; rare messages are left as they are.
+- `CTracerTest`: a C linked list (heap, links, returns, output), factorial's returns, a void function's closing brace, a segfault after output, a one-line infinite loop ended by the watchdog, runaway recursion at the step limit, `scanf` input and a file written (empty until `fclose`), Stop, and a program of two files (skipped where C can't run).
+- `JsonTest`: the JSON reader on what Python writes, and on bad text.
 - `CCompilerTest`: C compiles with gcc and runs; output printed before a crash is kept; a missing `;`, a missing `#include` (with the header in the hint), a wrong pointer type, an undeclared variable, a function never written and a missing `main`; programs of several files, whose errors name their file; canned gcc, clang and linker output (skipped tests where there's no gcc, except the canned ones).
 - `DialogsTest`: buttons in each system's order (Windows, macOS, Linux); the draft's time reads "today at", "yesterday at" or a date.
 - `FileDropTest`: a dropped file is opened, and pasting text into the editor still works.

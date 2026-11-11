@@ -1469,3 +1469,20 @@ root 38 (B)
 ## graphs/UnionFind
 3 and 5 are connected
 
+
+## c/basics/hello
+total 7, share 3.5, grade A
+
+## c/basics/swap
+after swap_copies: x=1 y=2
+after swap: x=2 y=1
+
+## c/recursion/factorial
+5! = 120
+
+## c/lists/linked_list
+40 30 20 10
+
+## c/trees/bst_insert
+20 30 40 50 60 70
+

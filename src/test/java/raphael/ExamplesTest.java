@@ -16,12 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import raphael.compile.CompileResult;
-import raphael.compile.SourceCompiler;
 import raphael.io.ExampleCatalog;
 import raphael.model.EndReason;
 import raphael.model.Trace;
 import raphael.render.SceneBuilder;
-import raphael.trace.JdiTracer;
 
 // Every example in the catalog compiles, runs to the end it's meant to have, and prints what it
 // should. The outputs are in expected-output.txt, under a "## path" line each.
@@ -29,20 +27,22 @@ class ExamplesTest {
 
     // The examples that end some other way on purpose: they're in "Find the bug".
     private static final Map<String, EndReason> ENDINGS = Map.of(
-            "OffByOne", EndReason.EXCEPTION, "NullNode", EndReason.EXCEPTION, "MissingBaseCase", EndReason.STEP_LIMIT);
+            "OffByOne", EndReason.EXCEPTION, "NullNode", EndReason.EXCEPTION, "MissingBaseCase", EndReason.STEP_LIMIT,
+            "null_pointer", EndReason.EXCEPTION);
 
     private Trace run(String name) throws Exception {
-        String source = ExampleCatalog.source(ExampleCatalog.find(name));
-        CompileResult program = new SourceCompiler().compile(source);
+        ExampleCatalog.Example example = ExampleCatalog.find(name);
+        String source = ExampleCatalog.source(example);
+        CompileResult program = example.language().compile(source);
         assertTrue(program.success(), () -> name + " didn't compile: " + program.errors());
-        Trace trace = new JdiTracer().trace(program, ExampleCatalog.input(source));
+        Trace trace = example.language().newTracer().trace(program, ExampleCatalog.input(source));
         assertEquals(trace.size(), new SceneBuilder(source).build(trace).size());
         assertTrue(trace.size() > 0, name + " recorded no steps");
         return trace;
     }
 
     static Stream<String> examples() {
-        return ExampleCatalog.all().stream() // the languages Raphael runs (Java, until Stage 14)
+        return ExampleCatalog.all().stream() // the languages Raphael can run on this computer
                 .filter(example -> example.language().cantRun() == null).map(ExampleCatalog.Example::name);
     }
 
@@ -52,7 +52,7 @@ class ExamplesTest {
         Trace trace = run(name);
         assertEquals(ENDINGS.getOrDefault(name, EndReason.FINISHED), trace.getEndReason(), name);
         if (trace.getEndReason() == EndReason.FINISHED) {
-            String path = ExampleCatalog.find(name).path();
+            String path = ExampleCatalog.find(name).key(); // "oop/References" for Java, "c/lists/linked_list" for C
             assertEquals(expectedOutputs().get(path), trace.getOutput().trim().replace("\r\n", "\n"), path);
         }
     }
