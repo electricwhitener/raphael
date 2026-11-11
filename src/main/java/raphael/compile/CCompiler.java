@@ -44,7 +44,7 @@ public class CCompiler {
     // gcc's warning names at the end of a message: " [-Wimplicit-function-declaration]"
     private static final Pattern FLAG_NAME = Pattern.compile("\\s*\\[-W[^\\]]*\\]$");
 
-    private static Path[] runtime; // raphael_rt.h and raphael_rt.o, compiled once per run of Raphael
+    private static Path[] runtime; // raphael_rt.h and raphael_rt.o, compiled once per run of Raphael (and on Windows their folder, for -B)
 
     // A program typed into the editor (or opened as one file).
     public CompileResult compile(String code) throws CompileSetupException {
@@ -98,10 +98,11 @@ public class CCompiler {
             command.addAll(List.of("-include", shim[0].toString()));
             command.addAll(sources);
             command.add(shim[1].toString());
-            if (Toolchains.WINDOWS) {
-                // WinLibs' gcc hands ld its link-time-optimization plugin by an unquoted path, and
-                // under "C:\Program Files" the space breaks it; Raphael never uses that plugin.
-                command.add("-fno-use-linker-plugin");
+            if (shim.length > 2) {
+                // Windows: gcc's link rule names default-manifest.o by an unquoted path, which the
+                // space in "C:\Program Files" splits; -B makes gcc take Raphael's copy, from a folder
+                // with no spaces, first.
+                command.add("-B" + shim[2] + java.io.File.separator);
             }
             command.addAll(List.of("-o", dir.resolve(EXE).toString()));
             gccSaid = run(command, dir.resolve("src"));
@@ -206,6 +207,16 @@ public class CCompiler {
         Output said = run(List.of(gcc.toString(), "-O1", "-c", source.toString(), "-o", object.toString()), dir);
         if (said.exit() != 0) {
             throw new CompileSetupException("gcc couldn't compile Raphael's C runtime: " + said.text().strip());
+        }
+        Path manifest = gcc.getParent().getParent().resolve("x86_64-w64-mingw32").resolve("lib").resolve("default-manifest.o");
+        if (Toolchains.WINDOWS && Files.isRegularFile(manifest)) {
+            try {
+                Files.copy(manifest, dir.resolve(manifest.getFileName()));
+                runtime = new Path[] {header, object, dir};
+                return runtime;
+            } catch (IOException e) {
+                // without the copy, a gcc in a folder without spaces still works
+            }
         }
         runtime = new Path[] {header, object};
         return runtime;
