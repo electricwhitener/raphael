@@ -118,8 +118,8 @@ class CTracerTest {
             nodes += object instanceof ObjectNode ? 1 : 0;
         }
         assertEquals(3, nodes);
-        assertTrue(last.getOutputLength() == 0 || last.getOutputLength() == 7); // before or after printf, whichever ran last
-        assertEquals("sum 60\n".length(), trace.getOutputAt(trace.size() - 1).replace("\r\n", "\n").length());
+        assertEquals(trace.getOutput().length(), last.getOutputLength()); // the last step, return 0, comes after printf
+        assertEquals(0, trace.get(0).getOutputLength());
     }
 
     @Test
