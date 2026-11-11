@@ -2,7 +2,6 @@ package raphael.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.FlowLayout;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -11,13 +10,11 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
-import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.ToolTipManager;
@@ -51,26 +48,26 @@ public class ExamplesPanel extends JPanel {
 
     private final Actions actions;
     private final JTextField search = new JTextField();
-    private final JTree tree = new JTree(new DefaultMutableTreeNode());
+    private final JTree tree = new JTree(new DefaultMutableTreeNode()) {
+        @Override
+        public void updateUI() { // also when the theme changes, which makes a new UI
+            super.updateUI();
+            if (getUI() instanceof javax.swing.plaf.basic.BasicTreeUI) {
+                ((javax.swing.plaf.basic.BasicTreeUI) getUI()).setLeftChildIndent(8);
+                ((javax.swing.plaf.basic.BasicTreeUI) getUI()).setRightChildIndent(12);
+            }
+        }
+    };
     private final JLabel empty = new JLabel();
-    private final JPanel switcher = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-    private final List<JToggleButton> languageButtons = new ArrayList<>();
+    private final Segmented switcher = new Segmented(Languages.all().stream().map(Language::name).toList(),
+            index -> showLanguage(Languages.all().get(index)));
+    private final JPanel emptyBox = new JPanel();
     private Language language = Languages.preferred();
 
     public ExamplesPanel(Actions actions) {
         super(new BorderLayout());
         this.actions = actions;
-        ButtonGroup group = new ButtonGroup();
-        for (Language each : Languages.all()) {
-            JToggleButton button = new JToggleButton(each.name());
-            button.putClientProperty("JButton.buttonType", "toolBarButton");
-            button.setFocusable(false);
-            button.setToolTipText(each.name() + " examples");
-            button.addActionListener(e -> showLanguage(each));
-            group.add(button);
-            switcher.add(button);
-            languageButtons.add(button);
-        }
+        switcher.describe("examples");
         search.putClientProperty("JTextField.placeholderText", "Search examples");
         search.putClientProperty("JTextField.showClearButton", true);
         search.getDocument().addDocumentListener(new DocumentListener() {
@@ -107,6 +104,10 @@ public class ExamplesPanel extends JPanel {
         top.add(search, BorderLayout.CENTER);
         add(top, BorderLayout.NORTH);
 
+        // Four levels that each look different: the steps in from the left are small, so the
+        // case titles get the room.
+        tree.putClientProperty("FlatLaf.style",
+                "selectionInactiveBackground:$Tree.selectionBackground;selectionInactiveForeground:$Tree.selectionForeground");
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
         tree.setRowHeight(Style.PALETTE_ROW_H - 4);
@@ -152,9 +153,19 @@ public class ExamplesPanel extends JPanel {
         JPanel middle = new JPanel(new BorderLayout());
         middle.setOpaque(false);
         middle.add(scroll, BorderLayout.CENTER);
-        empty.setVerticalAlignment(JLabel.TOP);
-        empty.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
-        middle.add(empty, BorderLayout.NORTH);
+        // A language with no examples yet: say so, and offer Java's.
+        emptyBox.setOpaque(false);
+        emptyBox.setLayout(new javax.swing.BoxLayout(emptyBox, javax.swing.BoxLayout.Y_AXIS));
+        emptyBox.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
+        empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+        emptyBox.add(empty);
+        javax.swing.JButton showJava = new javax.swing.JButton("Show Java examples");
+        showJava.putClientProperty("JButton.buttonType", "borderless");
+        showJava.setForeground(Style.ACCENT);
+        showJava.setAlignmentX(Component.LEFT_ALIGNMENT);
+        showJava.addActionListener(e -> showLanguage(Languages.JAVA));
+        emptyBox.add(showJava);
+        middle.add(emptyBox, BorderLayout.NORTH);
         add(middle, BorderLayout.CENTER);
         showLanguage(language);
     }
@@ -162,9 +173,7 @@ public class ExamplesPanel extends JPanel {
     // Shows one language's examples (the switch follows).
     public void showLanguage(Language chosen) {
         language = chosen;
-        for (int i = 0; i < languageButtons.size(); i++) {
-            languageButtons.get(i).setSelected(Languages.all().get(i) == chosen);
-        }
+        switcher.choose(Languages.all().indexOf(chosen));
         fill();
     }
 
@@ -255,9 +264,11 @@ public class ExamplesPanel extends JPanel {
             }
         }
         boolean none = root.getChildCount() == 0;
-        empty.setVisible(none);
-        empty.setText(none ? "<html>" + (wanted.isEmpty() ? "No " + language.name() + " examples yet: they come when Raphael can run "
-                + language.name() + "." : "No " + language.name() + " example matches.") + "</html>" : "");
+        emptyBox.setVisible(none);
+        search.setEnabled(!none || !wanted.isEmpty());
+        empty.setText(none ? "<html><b>" + (wanted.isEmpty() ? "No " + language.name() + " examples yet" : "No " + language.name()
+                + " example matches") + "</b><br>" + (wanted.isEmpty() ? "They're coming. For now you can write and save "
+                + language.name() + " programs." : "Try fewer words.") + "</html>" : "");
     }
 
     private static boolean matchesAll(String text, String wanted) {
@@ -306,16 +317,22 @@ public class ExamplesPanel extends JPanel {
             if (example != null) {
                 setText(example.title());
                 setToolTipText(example.blurb());
-                setFont(Style.sans(false, 13f));
+                setFont(Style.sans(false, 12.5f));
             } else if (node.getLevel() == 1) {
                 setText(String.valueOf(node.getUserObject()).toUpperCase(Locale.ROOT));
                 setFont(Style.sans(true, 10.5f));
                 if (!selected) {
                     setForeground(Style.MUTED);
                 }
-            } else {
+            } else if (node.getLevel() == 2) { // a category
                 setText(String.valueOf(node.getUserObject()));
-                setFont(Style.sans(node.getLevel() == 2, 13f));
+                setFont(Style.sans(true, 13f));
+            } else { // a subcategory: lighter than its category, so the levels step down
+                setText(String.valueOf(node.getUserObject()));
+                setFont(Style.sans(false, 13f));
+                if (!selected) {
+                    setForeground(Style.INK_SOFT);
+                }
             }
             return this;
         }

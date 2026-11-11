@@ -32,7 +32,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
 
     private static final int COLUMN = 440;
     private static final String[][] STEPS = {
-        {"Paste or open a Java program", "Ctrl+V"},
+        {"Paste or open a program", "Ctrl+V"},
         {"Press Run", "Ctrl+Enter"},
         {"Step with ← →, or play with Space", "← →"},
     };
@@ -74,7 +74,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
         column.add(left(chips));
         if (canDrop) {
             column.add(Box.createVerticalStrut(Style.SPACE_3));
-            column.add(label("You can also drop a .java file anywhere on this window.", Style.sans(false, 12f), () -> Style.MUTED));
+            column.add(label("You can also drop a code file anywhere on this window.", Style.sans(false, 12f), () -> Style.MUTED));
         }
 
         add(column, new GridBagConstraints());

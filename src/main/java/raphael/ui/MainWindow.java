@@ -131,7 +131,7 @@ public class MainWindow extends JFrame {
     private final JButton updateNotice = new JButton();
     private final JPanel statusBar = new JPanel(new BorderLayout());
     private JToolBar toolBar;
-    private JButton examplesButton;
+    private javax.swing.JToggleButton examplesButton; // pressed while the side bar is open
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
@@ -204,6 +204,10 @@ public class MainWindow extends JFrame {
                 this::loadExample, this::openFile, language -> {
                     App.SETTINGS.put("lastNewLanguage", language.id());
                     examplesPanel.showLanguage(language);
+                    if (!examplesPanel.isVisible() && !App.SETTINGS.getBoolean("examplesOpenedOnce", false)) {
+                        App.SETTINGS.putBoolean("examplesOpenedOnce", true); // the first answer opens the side bar, once
+                        showExamplesPanel(true);
+                    }
                     say("New programs and the examples are in " + language.name() + " now", Style.INK_SOFT);
                 }));
         welcome.setTransferHandler(new FileDrop(null, this::openDropped));
@@ -219,7 +223,8 @@ public class MainWindow extends JFrame {
                 App.SETTINGS.putInt("examplesWidth", sideSplit.getDividerLocation());
             }
         });
-        examplesPanel.setVisible(App.SETTINGS.getBoolean("examplesShown", true));
+        // On the first run the welcome page asks the language first; the side bar opens on the answer.
+        examplesPanel.setVisible(App.SETTINGS.getBoolean("examplesShown", true) && raphael.lang.Languages.chosen());
         examplesPanel.setMinimumSize(new Dimension(180, 0));
         sideSplit.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null); // the arrow keys step the program
         add(sideSplit, BorderLayout.CENTER);
@@ -252,6 +257,8 @@ public class MainWindow extends JFrame {
         languageChip.setFont(Style.UI_FONT.deriveFont(12f));
         languageChip.setRequestFocusEnabled(false);
         languageChip.setToolTipText("The program's language: click to change it");
+        languageChip.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        languageChip.setMargin(new java.awt.Insets(Style.SPACE_1 / 2, Style.SPACE_2, Style.SPACE_1 / 2, Style.SPACE_2));
         languageChip.addActionListener(e -> chooseLanguage(languageChip, true));
         statusRight.add(positionDivider);
         statusRight.add(languageChip);
@@ -589,7 +596,8 @@ public class MainWindow extends JFrame {
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
         saveButton = save;
         save.addActionListener(e -> save());
-        JButton examples = new JButton("Examples");
+        javax.swing.JToggleButton examples = new javax.swing.JToggleButton("Examples");
+        examples.setSelected(examplesPanel.isVisible());
         examplesButton = examples;
         examples.setToolTipText(Shortcuts.label("Show or hide the examples  (Ctrl+B)"));
         examples.setRequestFocusEnabled(false);
@@ -626,7 +634,7 @@ public class MainWindow extends JFrame {
                 part.setFocusable(true);
             }
         }
-        for (JButton tall : new JButton[] {examples, runButton}) {
+        for (javax.swing.AbstractButton tall : new javax.swing.AbstractButton[] {examples, runButton}) {
             tall.putClientProperty("JComponent.minimumHeight", 32); // as tall as the icon buttons; width as the text needs
         }
         return bar;
@@ -967,7 +975,7 @@ public class MainWindow extends JFrame {
         String details = "Raphael " + versionText() + ", Java " + System.getProperty("java.version") + ", "
                 + System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch");
         Dialogs.question(this, version != null ? "Raphael " + version : "Raphael").title("About Raphael")
-                .body("See your Java program's data structures change while it runs."
+                .body("See your program's data structures change while it runs."
                         + (version == null ? "\nBuilt from the source code." : "")
                         + "\n\nFree and open source, under the MIT License.")
                 .helper("Copy details", button -> {
@@ -1299,10 +1307,10 @@ public class MainWindow extends JFrame {
             menu.add(item);
         }
         if (change) {
-            menu.addSeparator();
-            JMenuItem note = new JMenuItem("The code stays as it is");
+            JMenuItem note = new JMenuItem("Changing it doesn't edit your code");
             note.setEnabled(false);
-            menu.add(note);
+            menu.insert(note, 0);
+            menu.insert(new JPopupMenu.Separator(), 1);
         }
         menu.show(under, 0, change ? -menu.getPreferredSize().height : under.getHeight());
     }
@@ -1333,6 +1341,9 @@ public class MainWindow extends JFrame {
 
     void showExamplesPanel(boolean show) {
         examplesPanel.setVisible(show);
+        if (examplesButton != null) {
+            examplesButton.setSelected(show);
+        }
         App.SETTINGS.putBoolean("examplesShown", show);
         if (show) {
             sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
@@ -2115,13 +2126,15 @@ public class MainWindow extends JFrame {
                 // a preview tab's title is in italics, as in VS Code: the next example clicked replaces it
                 tabs.setTitleAt(index, workbench.isPreview() ? "<html><i>" + title.replace("&", "&amp;").replace("<", "&lt;")
                         + "</i></html>" : title);
+                tabs.setForegroundAt(index, workbench.isPreview() ? Style.MUTED : null); // lighter too, not italics alone
                 File file = workbench.getCurrentFile();
                 String tip = file != null ? file.getAbsolutePath()
                         : workbench.getFolder() != null ? workbench.getFolder().getAbsolutePath()
                         : workbench.getDocumentName().endsWith("(example)")
                         ? "Example: " + workbench.getDocumentName().replace(" (example)", "") + ". Save As… keeps a copy."
                         : "not saved yet";
-                tabs.setToolTipTextAt(index, workbench.isRunning() ? "recording…" : tip);
+                tabs.setToolTipTextAt(index, workbench.isRunning() ? "recording…"
+                        : workbench.isPreview() ? "Preview: double-click the example, edit it or run it to keep this tab" : tip);
             }
             if (workbench != current) {
                 return; // a program that isn't in front: its state shows when it is

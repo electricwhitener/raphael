@@ -297,7 +297,7 @@ Safety:
 | `RunFile` | Saves and opens recordings (`.raphael`): serialization through stacked streams, a header, and a filter that reads only Raphael's own classes | `write()`, `read()` |
 | `RunFileException` | A recording that can't be opened, with the reason in plain words | — |
 | `StepLog` | The run as a CSV table, one row per step | `write()`, `row()` |
-| `ExampleCatalog` | The example programs and their groups, read from `examples/catalog.txt` | `groups()`, `all()`, `find()`, `source()` |
+| `ExampleCatalog` | Each language's example programs, read from `examples/<language>/catalog.txt` (title, category, subcategory, cases) | `groups(language)`, `all()`, `find()`, `source()`, `input()` |
 | `UpdateCheck` | Asks GitHub, at most once a day, whether a newer Raphael exists | `newer()`, `isNewer()`, `currentVersion()` |
 | **model/** | | |
 | `Value` → `PrimitiveValue`, `ReferenceValue`, `NullValue` | What a variable, field or array cell holds: `5`, `#12` or `null` | `display()` |
@@ -355,7 +355,10 @@ Safety:
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks, matching brackets and undo; one `FileText` per file of the program, following the program from file to file | `setCode()`, `setFiles()`, `showFile()`, `showErrors()`, `stepChanged()`, `goToLine()`, `undo()`, `isDirty()`, `markBrackets()`, `ColoredView.drawUnselectedText()` |
 | `EditorKeys` | What a code editor does for you: keeps the indentation, moves lines with Tab, comments with Ctrl+/, finds text | `install()`, `newLine()`, `indent()`, `toggleComment()`, `find()` |
-| `JavaTokens` | Splits code into the pieces that get a colour: comments, strings, numbers, keywords, types, methods | `of(code)` |
+| `Language`, `JavaLanguage`, `CLanguage`, `CppLanguage`, `PythonLanguage`, `NotRunnableYet` (lang/) | One class per language: file endings, comments, how blocks open, the new-program template, colouring, whether code reads input or files, how to recognise pasted code, and how to compile and trace it (only Java runs so far) | `endings()`, `template()`, `tokens()`, `likeness()`, `cantRun()`, `compile()`, `newTracer()`, `owns()` |
+| `Languages`, `RegexLexer`, `Token` (lang/) | The registry of languages and the one being learned; one configurable lexer that colours every language | `byId()`, `forFile()`, `recognise()`, `preferred()`, `tokens()` |
+| `Segmented` | A row of equal cells with one chosen (the language switches), painted so the chosen cell is always the accent colour | `choose()`, `describe()` |
+| `ExamplesPanel` | The examples side bar: a language switch, search, and the tree of title, category, subcategory and cases; one click previews, a double click keeps | `showLanguage()`, `select()`, `focusSearch()`, the interface `Actions` |
 | `VisualPanel` | Shows the animated picture: centred and scaled to fit, plus zoom | `stepChanged()`, `paintComponent()`, `fitToRun()`, `zoomBy()`, `setMessage()`, `cardFor()`, `note()` |
 | `ControlsBar` | Step buttons, skip call and finish call, slider, play and speed; a step made by hand pauses playing | `stepChanged()`, `togglePlay()`, `play()` |
 | `CallStackPanel`, `LocalsPanel`, `ConsolePanel` | Running methods; variables (changed ones tinted); output (new output tinted) and a stdin box that appears when needed | `stepChanged()`, `showInput()` |
@@ -399,10 +402,11 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 | Exception handling | Raphael shows the student's own exceptions: caught ones too, with the jump from `throw` to `catch` and an explanation (`JdiTracer.caught()`, `ErrorExplainer`); a family of checked exceptions under the abstract `RaphaelException`, each keeping its cause; `MainWindow.runFailed()` tells expected problems from bugs; `ErrorReporter` catches what nothing else did, on every thread; `SafeFiles.describe()` turns `NoSuchFileException` and `AccessDeniedException` into plain reasons; try-with-resources in `SourceCompiler` and `OutputDrainer`; `ExecutionException` caught in `MainWindow`; multi-catch and `finally` in `SystemTheme.run()`; try-with-resources over two streams in `ParentWatch.jar()` | A custom checked exception, resources that close themselves, and background errors shown to the user. |
 | Threads | `OutputDrainer`, `SwingWorker` in `MainWindow`, Swing `Timer` in `Animator` and `ControlsBar`, the shutdown hook in `JdiTracer` | Output is read on separate threads, tracing runs in the background, and timers drive play and the animation. |
 | Nested and anonymous classes | `Animator.LiveNode` / `LiveEdge` / `Flyer`, `ScenePainter.Curve`, `JdiTracer.Run`, `CodePanel.LineNumbers` / `ColoredView`; the `SwingWorker` in `MainWindow.run()` and the cell renderers in the panels | Helpers that only make sense inside their outer class. |
-| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `JavaTokens`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
+| Static members | `TraceLimits`, `Style`, `Names`, `Section`, `Shortcuts`, `SystemTheme`, `ParentWatch`, `AppFolders`, `AppLog`, `SafeFiles`, `ErrorReporter`, `Languages`, `NullValue.INSTANCE`, `Diff.between()` | Constants, utility classes, a single shared object (singleton) and a static factory method. |
 | Records and enums | `Icons.Glyph` (an enum whose constants each override `draw()`), `SettingsDialog.Theme`, `CompileResult`, `RunLimits` (its compact constructor checks the ranges), `SettingsDialog.Values`, `SceneNode` (+ `Look`), `SceneEdge`, `Scene.Move`, `IndexUsage.Access`, `RenderContext.Marker`, `EndReason`, `SceneNode.Kind` | Small unchangeable data classes, and fixed sets of named values. |
 | Design pattern: Observer | `TraceModel` and `TraceListener` | Panels register with the model and are told when the step changes; they never talk to each other. |
 | Design pattern: Visitor | `FactScanner` extends javac's `TreePathScanner` | javac walks its syntax tree and calls the `visitXxx` method for each kind of node; the scanner only says what to do with each kind. |
+| Design pattern: Strategy | `Language` and its subclasses | Each language is a different way of doing the same jobs (colour, compile, trace); a tab holds one and calls it without knowing which. |
 | Design pattern: Registry | `StructureRenderer.forStructure()` | A map from each kind of structure to the renderer that draws it, instead of a chain of `instanceof` tests. |
 | Design pattern: Template Method | `Concept.moments()` | The same steps for every concept (does it apply? then find), with each subclass filling them in. |
 | Design pattern: Memento | `Trace` and `Snapshot` | Saved copies of the program's state, so stepping back is just showing an earlier copy. |
@@ -459,7 +463,9 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `TraceModelTest`: the step stays in range, listeners hear each change once, step over, step out, jump to line, clearing, speed checks, the size of a run's biggest picture.
 - `CodePanelTest`: undo and redo, undo locked during a run, the unsaved flag, the width of the longest line.
 - `EditorKeysTest`: indentation, the closing brace, Tab and Shift+Tab, comments, find.
-- `JavaTokensTest`: each kind of colour, words inside comments and strings, unfinished text while typing, very long strings.
+- `LexerTest`: each kind of colour, words inside comments and strings, unfinished text while typing, very long strings.
+- `LanguagesTest`: recognising pasted C, C++, Python and Java; file endings and names; templates.
+- `ExamplesPanelTest`: the tree holds every case, and search filters it.
 - `ControlsBarTest`: a step made by hand pauses playing.
 - `MainWindowTest`: no panel around the picture takes the shortcut keys for itself.
 - `ShortcutsTest`: Ctrl becomes Cmd and Alt becomes Option on a Mac, in the keys and in the text; the keys screen stays in two columns.

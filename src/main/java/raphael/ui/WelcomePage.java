@@ -44,7 +44,7 @@ import raphael.render.Style;
 public class WelcomePage extends JPanel {
 
     private static final int MAX_WIDTH = 1160;
-    private static final int START_WIDTH = 240;
+    private static final int START_WIDTH = 260;
 
     private final JPanel page;
     private final JPanel recentList = new JPanel();
@@ -282,7 +282,7 @@ public class WelcomePage extends JPanel {
         words.setOpaque(false);
         words.setLayout(new BoxLayout(words, BoxLayout.Y_AXIS));
         words.add(label("Raphael", Style.sans(true, 22f), () -> Style.INK));
-        words.add(label("Watch your Java program run, one line at a time.", Style.sans(false, 13.5f), () -> Style.INK_SOFT));
+        words.add(label("Watch your program run, one line at a time.", Style.sans(false, 13.5f), () -> Style.INK_SOFT));
         header.add(words);
         header.add(Box.createHorizontalGlue());
         return header;
@@ -299,26 +299,28 @@ public class WelcomePage extends JPanel {
             question.setForeground(Style.ACCENT);
         }
         box.add(question);
-        JPanel row = new JPanel(new java.awt.GridLayout(1, 0, Style.SPACE_1, 0));
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
-        for (raphael.lang.Language language : raphael.lang.Languages.all()) {
-            javax.swing.JToggleButton button = new javax.swing.JToggleButton(language.name());
-            button.setSelected(raphael.lang.Languages.chosen() && raphael.lang.Languages.preferred() == language);
-            button.setToolTipText("New programs and the examples start in " + language.name());
-            button.addActionListener(e -> {
-                raphael.lang.Languages.setPreferred(language);
-                question.setText("I'm learning");
-                question.setForeground(null); // the heading's own colour again
-                showExamplesOf(language);
-                chosen.accept(language);
-            });
-            group.add(button);
-            row.add(button);
+        List<raphael.lang.Language> all = raphael.lang.Languages.all();
+        Segmented row = new Segmented(all.stream().map(raphael.lang.Language::name).toList(), index -> {
+            raphael.lang.Language language = all.get(index);
+            raphael.lang.Languages.setPreferred(language);
+            question.setText("I'm learning");
+            question.setForeground(null); // the heading's own colour again
+            showExamplesOf(language);
+            chosen.accept(language);
+        });
+        row.describe("is the language you're learning: new programs and the examples start in it");
+        if (raphael.lang.Languages.chosen()) {
+            row.choose(all.indexOf(raphael.lang.Languages.preferred()));
         }
-        row.setMaximumSize(new Dimension(START_WIDTH, Style.CONTROL_H + 4));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(START_WIDTH, Style.CONTROL_H));
         box.add(row);
+        JLabel note = new JLabel("You can change this any time.");
+        note.setFont(Style.sans(false, 12f));
+        note.setForeground(Style.MUTED);
+        note.setAlignmentX(Component.LEFT_ALIGNMENT);
+        note.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, 0, 0, 0));
+        box.add(note);
         return box;
     }
 

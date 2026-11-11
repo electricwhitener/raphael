@@ -2,6 +2,16 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**Languages**
+- Write C, C++ and Python programs as well as Java: they're coloured and saved as their own language (running them comes next).
+- New asks which language (Ctrl+N repeats the last one), the welcome page asks which language you're learning, a pasted program is recognised, and the language in the status bar changes it.
+
+**Examples**
+- An examples side bar (Ctrl+B): pick the language, search, and browse title, category, subcategory and case. One click previews an example in a tab the next click reuses; a double click keeps it.
+- The examples are filed into subcategories: singly, doubly and circular lists; BST, AVL, red-black, B and B+ trees; heaps and hashing; graph traversals and shortest paths.
+
 ## 1.2.0 (2026-11-11)
 
 **Key moments**
