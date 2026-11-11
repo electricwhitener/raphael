@@ -167,6 +167,90 @@ class CTracerTest {
         assertEquals("5", trace.get(trace.size() - 1).getStatics().get("main.seen").display());
     }
 
+    // ---- pointers and structs ----
+
+    @Test
+    void pointersToVariablesAreNamedAsCWritesThem() throws Exception {
+        Trace trace = trace("""
+                void swap(int *a, int *b) {
+                    int t = *a;
+                    *a = *b;
+                    *b = t;
+                }
+
+                int main(void) {
+                    int x = 1;
+                    int arr[4] = {5, 6, 7, 8};
+                    int *end = arr + 4;
+                    swap(&x, &arr[2]);
+                    return x + (int) (end - arr);
+                }
+                """, "");
+        FrameSnapshot inSwap = trace.getSnapshots().stream().map(s -> s.getFrames().get(0))
+                .filter(f -> f.getMethodName().equals("swap")).findFirst().orElseThrow();
+        assertEquals("&x", inSwap.getLocals().get("a").display());
+        assertEquals("&arr[2]", inSwap.getLocals().get("b").display());
+        Snapshot last = trace.get(trace.size() - 1);
+        assertEquals("&arr[4]", last.getFrames().get(0).getLocals().get("end").display()); // one past the end
+        assertEquals("7", last.getFrames().get(0).getLocals().get("x").display());
+    }
+
+    @Test
+    void pointerToAPointerBuildsAList() throws Exception {
+        Trace trace = trace("""
+                #include <stdlib.h>
+                struct Node { int val; struct Node *next; };
+
+                void push(struct Node **head_ref, int val) {
+                    struct Node *n = malloc(sizeof *n);
+                    n->val = val;
+                    n->next = *head_ref;
+                    *head_ref = n;
+                }
+
+                int main(void) {
+                    struct Node *head = NULL;
+                    push(&head, 1);
+                    push(&head, 2);
+                    return head->val;
+                }
+                """, "");
+        FrameSnapshot inPush = trace.getSnapshots().stream().map(s -> s.getFrames().get(0))
+                .filter(f -> f.getMethodName().equals("push")).findFirst().orElseThrow();
+        assertEquals("&head", inPush.getLocals().get("head_ref").display());
+        Snapshot last = trace.get(trace.size() - 1);
+        ObjectNode head = (ObjectNode) last.getObject(((ReferenceValue) last.getFrames().get(0).getLocals().get("head")).id());
+        assertEquals("2", head.getField("val").display());
+        assertEquals("1", ((ObjectNode) last.getObject(((ReferenceValue) head.getField("next")).id())).getField("val").display());
+    }
+
+    @Test
+    void structsOnTheStackAndInArrays() throws Exception {
+        Trace trace = trace("""
+                typedef struct {
+                    char name[8];
+                    int age;
+                } Person;
+
+                int main(void) {
+                    Person people[2] = {{"Ann", 20}, {"Bo", 31}};
+                    Person *older = &people[1];
+                    char word[4] = "hi";
+                    return older->age + word[0];
+                }
+                """, "");
+        Snapshot last = trace.get(trace.size() - 1);
+        java.util.Map<String, raphael.model.Value> locals = last.getFrames().get(0).getLocals();
+        raphael.model.ArrayNode people = (raphael.model.ArrayNode) last.getObject(((ReferenceValue) locals.get("people")).id());
+        assertEquals("Person[]", people.getTypeName());
+        ObjectNode ann = (ObjectNode) last.getObject(((ReferenceValue) people.getElements().get(0)).id());
+        assertEquals("Person", ann.getTypeName()); // the typedef's name: the struct has none
+        assertEquals("\"Ann\"", ann.getField("name").display()); // a char array in a struct reads as its text
+        assertEquals(people.getElements().get(1), locals.get("older")); // the same box as the array's cell
+        raphael.model.ArrayNode word = (raphael.model.ArrayNode) last.getObject(((ReferenceValue) locals.get("word")).id());
+        assertEquals(List.of("'h'", "'i'", "'\\0'", "'\\0'"), word.getElements().stream().map(raphael.model.Value::display).toList());
+    }
+
     @Test
     void segfaultEndsTheRunAndKeepsTheOutput() throws Exception {
         Trace trace = trace("""

@@ -140,10 +140,31 @@ def char_literal(code):
 
 
 class Step:
-    """What one step reads: the objects it reached, by id."""
+    """What one step reads: the objects it reached, by id, and where each variable is in memory."""
 
     def __init__(self):
         self.heap = {}
+        self.places = []  # (start, size, name, element size or 0) for every variable in sight
+
+    def place(self, name, v):
+        try:
+            if v.address is None:
+                return
+            t = v.type.strip_typedefs()
+            element = t.target().sizeof if t.code == gdb.TYPE_CODE_ARRAY else 0
+            self.places.append((int(v.address), t.sizeof, name, element))
+        except (gdb.error, RuntimeError):
+            pass
+
+    def named_address(self, address):
+        """A pointer as C would write where it points: &x, &arr[3]; or None if it's not a variable."""
+        for start, size, name, element in self.places:
+            if address == start and not element:
+                return "&" + name
+        for start, size, name, element in self.places:
+            if element and start <= address <= start + size and (address - start) % element == 0:  # one past the end too
+                return "&" + name + "[" + str((address - start) // element) + "]"
+        return None
 
     def value(self, v):
         t = v.type.strip_typedefs()
@@ -159,7 +180,7 @@ class Step:
                     return {"p": json.dumps(v.string(errors="replace")[:200])}  # up to its '\0'
                 if target.code == gdb.TYPE_CODE_FUNC:
                     return {"p": str(v).split(" ")[-1].strip("<>")}
-                return {"p": hex(address)}
+                return {"p": self.named_address(address) or hex(address)}
             if t.code == gdb.TYPE_CODE_ARRAY:
                 return self.array(v)
             if t.code in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION):
@@ -197,9 +218,22 @@ class Step:
         for f in t.strip_typedefs().fields():
             if not f.name:
                 continue
+            ft = f.type.strip_typedefs()
+            if ft.code == gdb.TYPE_CODE_ARRAY and is_char(ft.target()):
+                # A char array inside a struct is a name or a word: shown as its text, up to the '\0'.
+                node["fields"][f.name] = self.text(v[f.name])
+                node["ftypes"][f.name] = "char[]"
+                continue
             node["fields"][f.name] = self.value(v[f.name])
             node["ftypes"][f.name] = type_name(f.type)
         return {"r": oid}
+
+    def text(self, v):
+        try:
+            raw = bytes(int(v[i]) & 0xFF for i in range(v.type.strip_typedefs().sizeof))
+            return {"p": json.dumps(raw.split(b"\0")[0].decode("utf-8", "replace"))}
+        except (gdb.MemoryError, gdb.error):
+            return {"p": "?"}
 
     def array(self, v):
         t = v.type.strip_typedefs()
@@ -221,29 +255,37 @@ class Step:
 # ---- frames and locals ----
 
 def locals_of(frame, line, step):
-    """The variables in scope, outer blocks first, leaving out those whose declaration hasn't run yet."""
+    names = {}
+    for name, sym in visible_symbols(frame, line):
+        try:
+            names[name] = step.value(sym.value(frame))
+        except (gdb.error, RuntimeError):
+            pass
+    return names
+
+
+def visible_symbols(frame, line):
+    """The variables in scope (name, symbol), outer blocks first, leaving out those whose
+    declaration hasn't run yet."""
     blocks = []
     try:
         block = frame.block()
     except RuntimeError:
-        return {}
+        return []
     while block is not None:
         blocks.append(block)
         if block.function is not None:
             break
         block = block.superblock
-    names = {}
+    found = {}
     for block in reversed(blocks):
         for sym in block:
             if not (sym.is_variable or sym.is_argument) or sym.addr_class == gdb.SYMBOL_LOC_TYPEDEF:
                 continue
             if not sym.is_argument and sym.line >= line:
                 continue  # declared on this line or later: not there yet, as in Java
-            try:
-                names[sym.name] = step.value(sym.value(frame))
-            except (gdb.error, RuntimeError):
-                pass
-    return names
+            found[sym.name] = sym  # an inner block's variable hides an outer one's
+    return list(found.items())
 
 
 def frames_now(step):
@@ -253,6 +295,23 @@ def frames_now(step):
     while f is not None and student_file(f.find_sal().symtab) is None:
         f = f.older()  # a crash inside the C library: start at the student's code that called it
     top = f
+    # First where every variable is, so a pointer to one in any frame can be named (&x).
+    g, walked = f, 0
+    while g is not None and walked < MAX_FRAMES and student_file(g.find_sal().symtab) is not None:
+        walked += 1
+        for name, sym in visible_symbols(g, g.find_sal().line):
+            try:
+                step.place(name, sym.value(g))
+            except (gdb.error, RuntimeError):
+                pass
+        if g.name() == "main":
+            break
+        g = g.older()
+    for name, sym in global_symbols():
+        try:
+            step.place(name, sym.value())
+        except (gdb.error, RuntimeError):
+            pass
     while f is not None and len(frames) < MAX_FRAMES:
         sal = f.find_sal()
         rel = student_file(sal.symtab)
@@ -266,20 +325,29 @@ def frames_now(step):
     return frames, top
 
 
-def globals_now(step):
-    """The global and file-level variables of the running file."""
-    result = {}
+def global_symbols():
+    """The global and file-level variables of the running file: (name, symbol)."""
+    found = []
     seen = set()
     try:
-        frame = gdb.selected_frame()
-        block = frame.block().global_block
-        for static in (block, frame.block().static_block):
+        block = gdb.selected_frame().block()
+        for static in (block.global_block, block.static_block):
             for sym in static:
                 if sym.is_variable and sym.name not in seen and student_file(sym.symtab) is not None:
                     seen.add(sym.name)
-                    result[sym.name] = step.value(sym.value())
+                    found.append((sym.name, sym))
     except (gdb.error, RuntimeError, AttributeError):
         pass
+    return found
+
+
+def globals_now(step):
+    result = {}
+    for name, sym in global_symbols():
+        try:
+            result[name] = step.value(sym.value())
+        except (gdb.error, RuntimeError):
+            pass
     return result
 
 

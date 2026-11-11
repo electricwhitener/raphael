@@ -152,6 +152,34 @@ class SceneBuilderTest {
         assertEquals(scene.getNode("#1[2]").x(), scene.getNode("focus:1:1").x(), 0.01);
     }
 
+    // A C pointer into an array (its value reads "&arr[2]") is a marker on that cell, also when the
+    // array belongs to a caller: swap(&arr[0], &arr[2]) marks main's arr.
+    @Test
+    void cPointersIntoAnArrayAreMarkers() {
+        String source = """
+                void swap(int *a, int *b) {
+                    int t = *a;
+                }
+                int main(void) {
+                    int arr[3] = {5, 2, 9};
+                    swap(&arr[0], &arr[2]);
+                    int *end = arr + 3;
+                }
+                """;
+        Map<Long, HeapObject> heap = Map.of(1L, intArray(1, 5, 2, 9));
+        Snapshot inSwap = new Snapshot(List.of(
+                new FrameSnapshot("main", "swap", 2, Map.of("a", new PrimitiveValue("&arr[0]"), "b", new PrimitiveValue("&arr[2]"))),
+                new FrameSnapshot("main", "main", 6, Map.of("arr", ref(1)))), heap, Map.of(), 0, null);
+        Snapshot atEnd = new Snapshot(List.of(
+                new FrameSnapshot("main", "main", 8, Map.of("arr", ref(1), "end", new PrimitiveValue("&arr[3]")))),
+                heap, Map.of(), 0, null);
+        List<Scene> scenes = build(source, inSwap, atEnd);
+
+        assertEquals(scenes.get(0).getNode("#1[0]").centerX(), scenes.get(0).getNode("idx:1:ROW:a").centerX(), 0.01);
+        assertEquals(scenes.get(0).getNode("#1[2]").centerX(), scenes.get(0).getNode("idx:1:ROW:b").centerX(), 0.01);
+        assertNotNull(scenes.get(1).getNode("idx:1:ROW:end"), "one past the end is marked too, outside the cells");
+    }
+
     @Test
     void aCopyBetweenCellsIsRememberedAsAMove() {
         String source = """

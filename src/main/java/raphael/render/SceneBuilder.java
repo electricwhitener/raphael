@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import raphael.detect.ArrayStructure;
 import raphael.detect.BinaryTreeStructure;
 import raphael.detect.GenericStructure;
@@ -430,8 +431,37 @@ public class SceneBuilder {
                         columnsOf(array, snapshot));
             }
         }
+        addPointerMarkers(markers, snapshot, visible);
         markers.values().removeIf(List::isEmpty);
         return markers;
+    }
+
+    // The array a name means: the running function's, else the nearest caller's (swap(&arr[0], …)
+    // points into main's arr).
+    private ArrayNode arrayNamed(Snapshot snapshot, Map<String, Value> visible, String name) {
+        ArrayNode array = arrayOf(snapshot, visible.get(name));
+        for (int f = 1; array == null && f < snapshot.getFrames().size(); f++) {
+            array = arrayOf(snapshot, snapshot.getFrames().get(f).getLocals().get(name));
+        }
+        return array;
+    }
+
+    private static final Pattern POINTER_INTO = Pattern.compile("^&(\\w+)\\[(\\d+)\\]$");
+
+    // A C pointer into an array (p = &arr[2], shown as that text) is a marker on that cell, like an index.
+    private void addPointerMarkers(Map<Long, List<RenderContext.Marker>> markers, Snapshot snapshot, Map<String, Value> visible) {
+        for (Map.Entry<String, Value> named : visible.entrySet()) {
+            if (!(named.getValue() instanceof PrimitiveValue)) {
+                continue;
+            }
+            Matcher into = POINTER_INTO.matcher(named.getValue().display());
+            ArrayNode array = into.find() ? arrayNamed(snapshot, visible, into.group(1)) : null;
+            if (array != null) {
+                int index = Integer.parseInt(into.group(2));
+                markers.computeIfAbsent(array.getId(), k -> new ArrayList<>())
+                        .add(new RenderContext.Marker(named.getKey(), index, RenderContext.Axis.ROW, index < array.getLength()));
+            }
+        }
     }
 
     private void addMarkers(List<RenderContext.Marker> list, Map<String, Value> visible, Set<String> variables,
