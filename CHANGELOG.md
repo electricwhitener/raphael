@@ -2,6 +2,11 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**The workspace**
+- Ctrl + and Ctrl − zoom the whole window, as VS Code does: menus, toolbar, icons, panels, text and the picture. Ctrl 0 goes back to 100%. The zoom is remembered, and never goes past what the screen has room for. The code's own text size is in Settings.
+
 ## 1.3.1 (2026-11-11)
 
 **Fixes**
