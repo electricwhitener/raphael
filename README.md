@@ -45,11 +45,11 @@ Raphael comes as an installer for each system, with its own Java inside, so ther
 
 | System | Download | Notes |
 |---|---|---|
-| Windows 10 and 11 | `Raphael-1.1.1-windows-x64.msi` | The installer isn't signed yet, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**. |
-| macOS, Apple Silicon | `Raphael-1.1.1-mac-arm64.dmg` | Not signed yet: the first time, right-click Raphael in Applications and choose **Open**. |
-| macOS, Intel | `Raphael-1.1.1-mac-x64.dmg` | The same. |
-| Ubuntu 24.04 and newer | `Raphael-1.1.1-linux-x64.deb` | `sudo apt install ./Raphael-1.1.1-linux-x64.deb` |
-| Any other Linux | `Raphael-1.1.1-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
+| Windows 10 and 11 | `Raphael-1.2.0-windows-x64.msi` | The installer isn't signed yet, so Windows may say "Windows protected your PC". Click **More info**, then **Run anyway**. |
+| macOS, Apple Silicon | `Raphael-1.2.0-mac-arm64.dmg` | Not signed yet: the first time, right-click Raphael in Applications and choose **Open**. |
+| macOS, Intel | `Raphael-1.2.0-mac-x64.dmg` | The same. |
+| Ubuntu 24.04 and newer | `Raphael-1.2.0-linux-x64.deb` | `sudo apt install ./Raphael-1.2.0-linux-x64.deb` |
+| Any other Linux | `Raphael-1.2.0-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. |
 
 They're all on the [latest release](https://github.com/electricwhitener/raphael/releases/latest) page. Raphael says in its status bar when a newer version is out (it checks once a day; you can turn that off in Settings).
 

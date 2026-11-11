@@ -2,7 +2,7 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
-## Unreleased
+## 1.2.0 (2026-11-11)
 
 **Key moments**
 - Raphael explains what your program is doing at its key moments, with the run's own values, and playing pauses there:

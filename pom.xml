@@ -7,7 +7,7 @@
     <!-- Coordinates: who made it, what it's called, which version -->
     <groupId>raphael</groupId>
     <artifactId>raphael</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
     <name>Raphael</name>
     <description>See data structures change while Java code runs</description>
     <url>https://github.com/electricwhitener/raphael</url>
