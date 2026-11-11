@@ -4,8 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.awt.Window;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -48,7 +46,7 @@ import raphael.trace.Tracer;
 // OOP: composition (a Workbench is made of panels that each do one job); the Observer pattern
 // (each panel listens to this program's TraceModel); an interface (Host) as the only way back to
 // the window, so a Workbench doesn't depend on MainWindow and can be tested on its own.
-public class Workbench extends JPanel {
+public class Workbench extends JPanel implements PanelLayout.Watcher {
 
     // What a Workbench needs from the window around it.
     public interface Host {
@@ -84,6 +82,7 @@ public class Workbench extends JPanel {
 
     private static final Logger LOG = Logger.getLogger(Workbench.class.getName());
     private static final int COLLAPSED_ROW_H = 28; // the bottom panels with only their headings showing
+    private static final int RIGHT_COLUMN_W = 340; // the panels down the right, at 100% zoom
     // The examples the empty picture offers with one click; the rest are in the Examples menu.
     private static final String[] FEATURED = {"BubbleSort", "ReverseList", "BSTInsert", "Inheritance", "BFS", "MergeSort"};
 
@@ -107,7 +106,10 @@ public class Workbench extends JPanel {
     private final CardLayout pictureCards = new CardLayout();
     private final JPanel pictureArea = new JPanel(pictureCards);
     private final EmptyState emptyState;
-    private final JSplitPane top;    // the code on the left, the picture on the right
+    private final JSplitPane top;    // the code on the left, the picture on the right (or below, by the layout)
+    private final JPanel bottom = new JPanel(new BorderLayout()); // the panels' row (or column, by the layout)
+    private JSplitPane bottomRow;    // the call stack | the variables | the console tabs | the files
+    private JPanel pictureSide;
     private final JSplitPane middle; // that above; the call stack, variables and console below
 
     private RunFile.Saved lastRun; // the run on show, with the code and input it ran with, for Save recording
@@ -202,11 +204,8 @@ public class Workbench extends JPanel {
         top = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codeSide, pictureSide);
         top.setResizeWeight(0.4);
         top.setBorder(BorderFactory.createEmptyBorder());
-        JPanel bottom = new JPanel(new GridBagLayout());
         bottom.setBackground(Style.BACKGROUND);
         bottom.setBorder(Section.hairline(1, 0, 0, 0));
-        addBottomPanel(bottom, callStack, 0.25);
-        addBottomPanel(bottom, locals, 0.35); // values can be long
         console.hideHeading(); // the tab says what it is
         bottomTabs.addTab("Console", console);
         bottomTabs.addTab("Key moments", momentsPanel);
@@ -217,10 +216,22 @@ public class Workbench extends JPanel {
         bottomTabs.putClientProperty("JTabbedPane.tabHeight", Style.FILE_TAB_H);
         bottomTabs.setFocusable(false);
         bottomTabs.setBorder(Section.hairline(0, 1, 0, 0));
-        addBottomPanel(bottom, bottomTabs, 0.40); // the console, the key moments and the trace table
         controls.setOnPausedAtMoment(() -> say("paused at a key moment · space goes on · the moments box (or the Run menu) stops the pausing", Style.INK_SOFT));
-        addBottomPanel(bottom, files, 0.30);
         files.setVisible(false);
+        // The panels side by side, each divider draggable: the call stack, the variables (values can
+        // be long), the console tabs, and the files (when the program uses some).
+        JSplitPane filesSplit = panelSplit(bottomTabs, files, 0.6);
+        JSplitPane localsSplit = panelSplit(locals, filesSplit, 0.4);
+        bottomRow = panelSplit(callStack, localsSplit, 0.25);
+        bottom.add(bottomRow, BorderLayout.CENTER);
+        Section.addClose(callStack, "Close the call stack (View → Panels brings it back)",
+                () -> PanelLayout.show(PanelLayout.Panel.CALL_STACK, false));
+        Section.addClose(locals, "Close the variables (View → Panels brings them back)",
+                () -> PanelLayout.show(PanelLayout.Panel.VARIABLES, false));
+        bottomTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the console, key moments and trace table (View → Panels brings them back)",
+                () -> PanelLayout.show(PanelLayout.Panel.OUTPUT, false)));
+        viewTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the picture (View → Panels brings it back)",
+                () -> PanelLayout.show(PanelLayout.Panel.PICTURE, false)));
         Zoom.size(bottom, 100, Style.BOTTOM_ROW_H);
         Zoom.minimum(bottom, 0, COLLAPSED_ROW_H);
         middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
@@ -234,10 +245,13 @@ public class Workbench extends JPanel {
         });
         middle.setBorder(Section.hairline(1, 0, 0, 0));
         add(middle, BorderLayout.CENTER);
+        this.pictureSide = pictureSide;
+        PanelLayout.watch(this);
+        layoutChanged();
 
         // Scroll panes and split panes take the arrow keys, Home and End for themselves whenever
         // something inside them has focus. Without these lines the window's shortcuts would never hear them.
-        for (JComponent claimsKeys : new JComponent[] {picture, top, middle}) {
+        for (JComponent claimsKeys : new JComponent[] {picture, top, middle, bottomRow, localsSplit, filesSplit}) {
             claimsKeys.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
         }
 
@@ -326,15 +340,88 @@ public class Workbench extends JPanel {
         return nothing;
     }
 
-    // Adds a panel that takes this share of the row's width. With no preferred width of its own,
-    // the share is all it gets, so long values can't push its neighbours around.
-    private static void addBottomPanel(JPanel row, JComponent panel, double share) {
-        GridBagConstraints constraints = new GridBagConstraints();
-        constraints.fill = GridBagConstraints.BOTH;
-        constraints.weightx = share;
-        constraints.weighty = 1;
-        panel.setPreferredSize(new Dimension(0, 0));
-        row.add(panel, constraints);
+    // Two neighbouring panels with a draggable divider. Neither has a preferred size of its own, so
+    // long values can't push the divider; share: how much of any extra room the first one gets.
+    private static JSplitPane panelSplit(JComponent first, JComponent second, double share) {
+        first.setPreferredSize(new Dimension(0, 0));
+        second.setPreferredSize(new Dimension(0, 0));
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, first, second);
+        split.setResizeWeight(share);
+        split.setContinuousLayout(true);
+        split.setDividerSize(3);
+        split.setBorder(BorderFactory.createEmptyBorder());
+        return split;
+    }
+
+    private static javax.swing.JButton closeButton(String tip, Runnable close) {
+        javax.swing.JButton button = new javax.swing.JButton(Icons.of(Icons.Glyph.CLOSE, Icons.Role.TOOL));
+        button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.setToolTipText(tip);
+        button.getAccessibleContext().setAccessibleName(tip);
+        button.setRequestFocusEnabled(false);
+        button.addActionListener(e -> close.run());
+        return button;
+    }
+
+    // The layout chosen in View → Panels and View → Layout (for every tab): which panels show, the
+    // picture beside or below the code, the panels along the bottom or down the right. A split
+    // with a hidden side gives all its room to the other and hides its divider; a split whose
+    // two sides are hidden hides itself, so its neighbours take its room.
+    @Override
+    public void layoutChanged() {
+        pictureSide.setVisible(PanelLayout.shown(PanelLayout.Panel.PICTURE));
+        callStack.setVisible(PanelLayout.shown(PanelLayout.Panel.CALL_STACK));
+        locals.setVisible(PanelLayout.shown(PanelLayout.Panel.VARIABLES));
+        bottomTabs.setVisible(PanelLayout.shown(PanelLayout.Panel.OUTPUT));
+        boolean right = PanelLayout.panelsRight();
+        top.setOrientation(PanelLayout.pictureBelow() ? JSplitPane.VERTICAL_SPLIT : JSplitPane.HORIZONTAL_SPLIT);
+        middle.setOrientation(right ? JSplitPane.HORIZONTAL_SPLIT : JSplitPane.VERTICAL_SPLIT);
+        bottom.setBorder(right ? Section.hairline(0, 1, 0, 0) : Section.hairline(1, 0, 0, 0));
+        refreshRow(bottomRow, right);
+        bottom.setVisible(bottomRow.isVisible());
+        revalidate();
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            placeTopDivider();
+            fitBottomRow();
+        });
+    }
+
+    // Whether a panel shows in this tab (for tests).
+    boolean panelShowing(PanelLayout.Panel panel) {
+        return switch (panel) {
+            case PICTURE -> pictureSide.isVisible();
+            case CALL_STACK -> callStack.isVisible();
+            case VARIABLES -> locals.isVisible();
+            case OUTPUT -> bottomTabs.isVisible();
+        };
+    }
+
+    // Sets a chain of panel splits to the orientation and hides the splits with nothing to show.
+    private static void refreshRow(JSplitPane split, boolean stacked) {
+        split.setOrientation(stacked ? JSplitPane.VERTICAL_SPLIT : JSplitPane.HORIZONTAL_SPLIT);
+        for (java.awt.Component side : new java.awt.Component[] {split.getLeftComponent(), split.getRightComponent()}) {
+            if (side instanceof JSplitPane) {
+                refreshRow((JSplitPane) side, stacked);
+            }
+        }
+        split.setVisible(split.getLeftComponent().isVisible() || split.getRightComponent().isVisible());
+    }
+
+    // Beside the picture, the code gets more room if its longest line now needs it (never less).
+    private void widenCodeIfNeeded() {
+        if (top.getOrientation() == JSplitPane.HORIZONTAL_SPLIT && top.getWidth() > 0
+                && top.getDividerLocation() < dividerForCode()) {
+            top.setDividerLocation(dividerForCode());
+        }
+    }
+
+    // The code beside the picture gets the room its longest line needs; below it, half the height.
+    private void placeTopDivider() {
+        if (top.getOrientation() == JSplitPane.HORIZONTAL_SPLIT) {
+            top.setDividerLocation(dividerForCode());
+        } else if (top.getHeight() > 0) {
+            top.setDividerLocation(top.getHeight() / 2);
+        }
     }
 
     public TraceModel getModel() {
@@ -431,7 +518,7 @@ public class Workbench extends JPanel {
         fileTabs.removeAll();
         folder = null;
         code.setCode(text);
-        top.setDividerLocation(dividerForCode());
+        placeTopDivider();
         currentFile = file;
         documentName = name;
         tabTitle = null;
@@ -460,7 +547,7 @@ public class Workbench extends JPanel {
         fillingTabs = false;
         code.setFiles(files, first);
         titleFileTabs();
-        top.setDividerLocation(dividerForCode());
+        placeTopDivider();
         host.stateChanged(this);
     }
 
@@ -550,9 +637,7 @@ public class Workbench extends JPanel {
     public void textSizeChanged() {
         code.applyFont();
         code.restoreMarks(); // a zoom reinstalls the editor's look, and with it a new highlighter
-        if (top.getWidth() > 0 && top.getDividerLocation() < dividerForCode()) {
-            top.setDividerLocation(dividerForCode());
-        }
+        widenCodeIfNeeded();
     }
 
     // ---- running ----
@@ -577,9 +662,7 @@ public class Workbench extends JPanel {
         if (folder != null) {
             tracer.setInputFiles(folderInputs()); // the folder's text files are there for the program to read
         }
-        if (top.getDividerLocation() < dividerForCode()) {
-            top.setDividerLocation(dividerForCode()); // the code may have grown since it was loaded
-        }
+        widenCodeIfNeeded(); // the code may have grown since it was loaded
         tracer.setLimits(host.limits()); // the settings may have changed since the last run
         running = true;
         visual.setRecording(true);
@@ -671,7 +754,11 @@ public class Workbench extends JPanel {
     // 200% scaling): then the empty panels shrink to their headings so the guide fits. Not while
     // the stdin box is showing, which is needed before running.
     void fitBottomRow() {
-        if (middle == null || middle.getHeight() == 0) {
+        if (middle == null || middle.getHeight() == 0 || !this.bottom.isVisible()) {
+            return;
+        }
+        if (PanelLayout.panelsRight()) { // a column down the right, as wide as the bottom row is high, roughly
+            middle.setDividerLocation(middle.getWidth() - middle.getDividerSize() - Zoom.px(RIGHT_COLUMN_W));
             return;
         }
         int bottom = Zoom.px(Style.BOTTOM_ROW_H);
@@ -951,6 +1038,8 @@ public class Workbench extends JPanel {
         boolean used = !inputFiles.isEmpty() || language.usesFiles(allCode());
         if (files.isVisible() != used) {
             files.setVisible(used);
+            refreshRow(bottomRow, PanelLayout.panelsRight());
+            bottom.setVisible(bottomRow.isVisible());
             files.getParent().revalidate();
         }
     }

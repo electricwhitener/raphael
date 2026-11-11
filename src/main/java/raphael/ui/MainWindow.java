@@ -67,7 +67,7 @@ import raphael.trace.RunLimits;
 // goes to the program in front, through active(); the window itself never holds a program's state.
 // OOP: inheritance (extends JFrame); composition (the window is made of parts that each do one
 // job); an inner class implements Workbench.Host, the interface a Workbench talks back through.
-public class MainWindow extends JFrame implements MomentMode.Watcher {
+public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayout.Watcher {
 
     private static final String HELP = """
             run and stop
@@ -133,6 +133,11 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
     private JToolBar toolBar;
     private javax.swing.JToggleButton examplesButton; // pressed while the side bar is wanted
     private JMenuItem examplesItem;                     // View → Examples
+    private final java.util.Map<PanelLayout.Panel, javax.swing.JCheckBoxMenuItem> panelChecks = new java.util.EnumMap<>(PanelLayout.Panel.class);
+    private javax.swing.JRadioButtonMenuItem pictureBeside;
+    private javax.swing.JRadioButtonMenuItem pictureBelow;
+    private javax.swing.JRadioButtonMenuItem panelsBottom;
+    private javax.swing.JRadioButtonMenuItem panelsRight;
     private JButton helpButton;
     private final java.util.Map<MomentMode, javax.swing.JRadioButtonMenuItem> momentChoices = new java.util.EnumMap<>(MomentMode.class);
 
@@ -915,6 +920,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         view.add(item("Quick Open…", "control P", this::quickOpen));
         examplesItem = item("Examples", "control B", this::toggleExamples);
         view.add(examplesItem);
+        view.add(panelsMenu());
         view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
         view.add(item(Shortcuts.label("Zoom in  (Ctrl +)"), null, () -> zoom(1)));
@@ -1426,6 +1432,62 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         showPosition();
         say("this program is " + language.name() + " now"
                 + (language.cantRun() != null ? " · " + language.cantRun() : Shortcuts.label(" · press run (ctrl+enter)")), Style.INK_SOFT);
+    }
+
+    // ---- the layout of a program's tab ----
+
+    // View → Panels: a check for each panel that can be closed; View → Layout: where they go.
+    // One layout for every tab and window, remembered (PanelLayout); an × on a panel unchecks it here.
+    private JMenu panelsMenu() {
+        JMenu panels = new JMenu("Panels");
+        for (PanelLayout.Panel panel : PanelLayout.Panel.values()) {
+            javax.swing.JCheckBoxMenuItem item = new javax.swing.JCheckBoxMenuItem(panel.label(), PanelLayout.shown(panel));
+            item.setToolTipText(panel.description());
+            item.addActionListener(e -> PanelLayout.show(panel, item.isSelected()));
+            panelChecks.put(panel, item);
+            needsProgram.add(item);
+            panels.add(item);
+        }
+        panels.addSeparator();
+        javax.swing.ButtonGroup picture = new javax.swing.ButtonGroup();
+        javax.swing.ButtonGroup row = new javax.swing.ButtonGroup();
+        pictureBeside = radio("Picture beside the code", !PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(false));
+        pictureBelow = radio("Picture below the code", PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(true));
+        panelsBottom = radio("Panels along the bottom", !PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(false));
+        panelsRight = radio("Panels down the right", PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(true));
+        for (JMenuItem item : new JMenuItem[] {pictureBeside, pictureBelow, null, panelsBottom, panelsRight}) {
+            if (item == null) {
+                panels.addSeparator();
+            } else {
+                needsProgram.add(item);
+                panels.add(item);
+            }
+        }
+        panels.addSeparator();
+        JMenuItem reset = item("Reset layout", null, PanelLayout::reset);
+        needsProgram.add(reset);
+        panels.add(reset);
+        PanelLayout.watch(this); // the window itself: the watchers are weak, so a lambda would be dropped
+        return panels;
+    }
+
+    javax.swing.JCheckBoxMenuItem panelCheck(PanelLayout.Panel panel) { // for tests
+        return panelChecks.get(panel);
+    }
+
+    private static javax.swing.JRadioButtonMenuItem radio(String text, boolean selected, javax.swing.ButtonGroup group, Runnable chosen) {
+        javax.swing.JRadioButtonMenuItem item = new javax.swing.JRadioButtonMenuItem(text, selected);
+        item.addActionListener(e -> chosen.run());
+        group.add(item);
+        return item;
+    }
+
+    // The menu shows the layout chosen (here, by an ×, or in another window).
+    @Override
+    public void layoutChanged() {
+        panelChecks.forEach((panel, item) -> item.setSelected(PanelLayout.shown(panel)));
+        (PanelLayout.pictureBelow() ? pictureBelow : pictureBeside).setSelected(true);
+        (PanelLayout.panelsRight() ? panelsRight : panelsBottom).setSelected(true);
     }
 
     // ---- the examples side bar ----

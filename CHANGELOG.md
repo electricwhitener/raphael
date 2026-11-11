@@ -5,6 +5,7 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 ## Unreleased
 
 **The workspace**
+- Close any panel with the × on its heading (the picture, the call stack, the variables, the console tabs) and bring it back from View → Panels. The panels have dividers between them to drag. The picture can go below the code, and the panels down the right instead of along the bottom; Reset layout puts everything back. The layout is remembered.
 - Ctrl + and Ctrl − zoom the whole window, as VS Code does: menus, toolbar, icons, panels, text and the picture. Ctrl 0 goes back to 100%. The zoom is remembered, and never goes past what the screen has room for. The code's own text size is in Settings.
 
 ## 1.3.1 (2026-11-11)

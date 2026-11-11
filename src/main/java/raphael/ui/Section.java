@@ -48,6 +48,34 @@ public final class Section {
         return panel;
     }
 
+    // An × at the right of a panel's heading (a panel built with wrap(), or one that holds one).
+    public static void addClose(JComponent panel, String tip, Runnable close) {
+        JComponent wrapped = headed(panel) ? panel
+                : panel.getComponentCount() > 0 && panel.getComponent(0) instanceof JComponent && headed((JComponent) panel.getComponent(0))
+                ? (JComponent) panel.getComponent(0) : null;
+        if (wrapped == null) {
+            throw new IllegalArgumentException("no heading to put the close button on in " + panel.getClass().getSimpleName());
+        }
+        java.awt.Component heading = ((BorderLayout) wrapped.getLayout()).getLayoutComponent(BorderLayout.NORTH);
+        javax.swing.JButton button = new javax.swing.JButton(Icons.of(Icons.Glyph.CLOSE, Icons.Role.TOOL));
+        button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.setToolTipText(tip);
+        button.getAccessibleContext().setAccessibleName(tip);
+        button.setRequestFocusEnabled(false);
+        button.addActionListener(e -> close.run());
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        wrapped.remove(heading);
+        row.add(heading, BorderLayout.CENTER);
+        row.add(button, BorderLayout.EAST);
+        wrapped.add(row, BorderLayout.NORTH);
+    }
+
+    private static boolean headed(JComponent panel) {
+        return panel.getLayout() instanceof BorderLayout
+                && ((BorderLayout) panel.getLayout()).getLayoutComponent(BorderLayout.NORTH) != null;
+    }
+
     // A thin grey line on the chosen sides (1 = draw, 0 = don't).
     public static Border hairline(int top, int left, int bottom, int right) {
         return new Hairline(top, left, bottom, right);

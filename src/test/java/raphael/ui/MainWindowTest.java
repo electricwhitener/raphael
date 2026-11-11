@@ -179,4 +179,39 @@ class MainWindowTest {
             window.dispose();
         }
     }
+
+    // A panel closed (by its × or View → Panels) is closed in every tab, and the menu says so;
+    // the layout is remembered; Reset layout brings everything back.
+    @Test
+    void panelsCloseAndComeBackInEveryTab() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        PanelLayout.reset();
+        MainWindow window = new MainWindow();
+        try {
+            window.newProgram();
+            Workbench first = window.active();
+            window.newProgram();
+            Workbench second = window.active();
+            PanelLayout.show(PanelLayout.Panel.CALL_STACK, false);
+            PanelLayout.show(PanelLayout.Panel.PICTURE, false);
+            for (Workbench tab : java.util.List.of(first, second)) {
+                assertFalse(tab.panelShowing(PanelLayout.Panel.CALL_STACK));
+                assertFalse(tab.panelShowing(PanelLayout.Panel.PICTURE));
+                assertTrue(tab.panelShowing(PanelLayout.Panel.VARIABLES));
+            }
+            assertFalse(window.panelCheck(PanelLayout.Panel.CALL_STACK).isSelected(), "the menu follows");
+            assertFalse(raphael.App.SETTINGS.getBoolean("panel.call_stack", true), "remembered");
+            PanelLayout.setPanelsRight(true);
+            assertTrue(PanelLayout.panelsRight());
+            PanelLayout.reset();
+            for (PanelLayout.Panel panel : PanelLayout.Panel.values()) {
+                assertTrue(second.panelShowing(panel), panel + " is back");
+                assertTrue(window.panelCheck(panel).isSelected());
+            }
+            assertFalse(PanelLayout.panelsRight());
+        } finally {
+            PanelLayout.reset();
+            window.dispose();
+        }
+    }
 }
