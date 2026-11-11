@@ -31,8 +31,8 @@ import raphael.model.Trace;
 import raphael.model.Value;
 import raphael.toolchain.Toolchains;
 
-// Traces a C program (compiled by CCompiler) through gdb. A Python script inside gdb
-// (resources/c/raphael_gdb.py) stops before every line of the student's files and prints each
+// Traces a C program (compiled by CCompiler) through gdb (lldb on a Mac). A Python script inside it
+// (resources/c/raphael_gdb.py, or raphael_lldb.py) stops before every line of the student's files and prints each
 // step as a line of JSON; this class reads those lines and builds the same Snapshots as Java's
 // tracer, so every picture, view and panel works for C unchanged.
 // The program's input and output go through files (the runtime shim opens them), and a watchdog
@@ -81,14 +81,14 @@ public class CTracer implements Tracer {
         stopRequested = false;
         steps = 0;
         RunLimits runLimits = limits;
-        Path gdb = Toolchains.find("gdb");
-        if (gdb == null) {
-            throw new TraceException(Toolchains.howToInstall("gdb to run C"), null);
+        Path debugger = Toolchains.find(Toolchains.debugger());
+        if (debugger == null) {
+            throw new TraceException(Toolchains.howToInstall(Toolchains.debugger() + " to run C"), null);
         }
         Path build = program.classDir();
         try (RunFolder folder = new RunFolder(inputFiles)) {
-            Path script = build.resolve("raphael_gdb.py");
-            try (InputStream in = CTracer.class.getResourceAsStream("/c/raphael_gdb.py")) {
+            Path script = build.resolve("raphael_" + Toolchains.debugger() + ".py");
+            try (InputStream in = CTracer.class.getResourceAsStream("/c/" + script.getFileName())) {
                 Files.write(script, in.readAllBytes());
             }
             Path stdin = build.resolve("stdin.txt");
@@ -98,9 +98,13 @@ public class CTracer implements Tracer {
             Files.deleteIfExists(stdout);
             Files.deleteIfExists(stopFile);
 
-            ProcessBuilder builder = new ProcessBuilder(gdb.toString(), "-q", "-batch", "-nx", "-x", script.toString(),
-                    build.resolve(program.mainClass()).toString()).directory(folder.path().toFile());
+            String exe = build.resolve(program.mainClass()).toString();
+            List<String> command = Toolchains.MAC
+                    ? List.of(debugger.toString(), "--batch", "--no-lldbinit", "-o", "command script import \"" + script + "\"")
+                    : List.of(debugger.toString(), "-q", "-batch", "-nx", "-x", script.toString(), exe);
+            ProcessBuilder builder = new ProcessBuilder(command).directory(folder.path().toFile());
             Map<String, String> env = builder.environment();
+            env.put("RAPHAEL_EXE", exe);
             env.put("RAPHAEL_SRC", build.resolve("src").toString());
             env.put("RAPHAEL_RUN", folder.path().toString());
             env.put("RAPHAEL_STDIN", stdin.toString());
@@ -114,7 +118,7 @@ public class CTracer implements Tracer {
             Process process = builder.start();
             process.getOutputStream().close();
             StringBuffer gdbErrors = new StringBuffer();
-            new OutputDrainer(process.getErrorStream(), gdbErrors, "gdb stderr").start();
+            new OutputDrainer(process.getErrorStream(), gdbErrors, "debugger stderr").start();
             Run run = new Run(program, process, stopFile, stdout, runLimits);
             try {
                 run.read();
@@ -123,12 +127,12 @@ public class CTracer implements Tracer {
             }
             byte[] printed = Files.exists(stdout) ? Files.readAllBytes(stdout) : new byte[0];
             if (run.failed != null) {
-                throw new TraceException("gdb couldn't run the program: " + run.failed
+                throw new TraceException(Toolchains.debugger() + " couldn't run the program: " + run.failed
                         + (gdbErrors.length() > 0 ? "\n" + gdbErrors.toString().strip() : ""), null);
             }
             return run.trace(printed);
         } catch (IOException e) {
-            throw new TraceException("Raphael couldn't start gdb to run the program.", e);
+            throw new TraceException("Raphael couldn't start " + Toolchains.debugger() + " to run the program.", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TraceException("The run was interrupted.", e);

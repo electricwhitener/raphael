@@ -36,28 +36,35 @@ public final class Toolchains {
         return null;
     }
 
-    private static Boolean gdbHasPython; // asked once per run of Raphael
+    private static Boolean debuggerHasPython; // asked once per run of Raphael
 
-    // Whether gdb is there and can run Python, which Raphael's C tracer is written in.
-    public static synchronized boolean gdbHasPython() {
-        if (gdbHasPython == null) {
-            gdbHasPython = false;
-            Path gdb = find("gdb");
-            if (gdb != null) {
+    // The debugger Raphael traces C with here: lldb on a Mac (Apple's tools have no gdb), gdb elsewhere.
+    public static String debugger() {
+        return MAC ? "lldb" : "gdb";
+    }
+
+    // Whether that debugger is there and can run Python, which Raphael's C tracer is written in.
+    public static synchronized boolean debuggerHasPython() {
+        if (debuggerHasPython == null) {
+            debuggerHasPython = false;
+            Path debugger = find(debugger());
+            if (debugger != null) {
+                java.util.List<String> command = MAC
+                        ? java.util.List.of(debugger.toString(), "--batch", "--no-lldbinit", "-o", "script print('raphael' + '-ok')")
+                        : java.util.List.of(debugger.toString(), "-q", "-batch", "-nx", "-ex", "python print('raphael' + '-ok')");
                 try {
-                    Process p = new ProcessBuilder(gdb.toString(), "-q", "-batch", "-nx", "-ex", "python print('raphael' + '-ok')")
-                            .redirectErrorStream(true).start();
+                    Process p = new ProcessBuilder(command).redirectErrorStream(true).start();
                     p.getOutputStream().close();
                     String said = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                    gdbHasPython = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) && said.contains("raphael-ok");
+                    debuggerHasPython = p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS) && said.contains("raphael-ok");
                 } catch (java.io.IOException e) {
-                    gdbHasPython = false;
+                    debuggerHasPython = false;
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             }
         }
-        return gdbHasPython;
+        return debuggerHasPython;
     }
 
     // What to do when a tool is missing, in a sentence for this system.

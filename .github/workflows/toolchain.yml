@@ -64,7 +64,7 @@ jobs:
           cc -O1 -c ../../../src/main/resources/c/raphael_rt.c -o rt.o
           (cd src && cc -g -O0 -fno-inline -std=gnu17 -include ../../../../src/main/resources/c/raphael_rt.h list.c ../rt.o -o ../list)
           RAPHAEL_EXE=$PWD/list RAPHAEL_SRC=$PWD/src RAPHAEL_RUN=$PWD/run RAPHAEL_STDOUT=$PWD/out.txt \
-            lldb --batch --no-lldbinit -o "command script import $GITHUB_WORKSPACE/src/main/resources/c/raphael_lldb.py" > raw.txt 2>&1 || true
+            perl -e 'alarm 120; exec @ARGV' lldb --batch --no-lldbinit -o "command script import $GITHUB_WORKSPACE/src/main/resources/c/raphael_lldb.py" > raw.txt 2>&1 || true
           grep '@@R ' raw.txt | sed 's/.*@@R //' | python3 -c "
           import json, sys
           lines = [json.loads(l) for l in sys.stdin]

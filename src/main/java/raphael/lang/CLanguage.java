@@ -71,15 +71,15 @@ public class CLanguage extends Language {
         return code.matches("(?s).*\\bfopen\\s*\\(.*");
     }
 
-    // Null when gcc and a gdb with Python are here. On a Mac, C runs through lldb (coming next).
+    // Null when the compiler and a debugger with Python are here (gcc and gdb; on a Mac, Apple's
+    // clang, which answers to gcc too, and lldb).
     @Override
     public String cantRun() {
         if (Toolchains.find("gcc") == null) {
             return Toolchains.howToInstall("gcc to compile C");
         }
-        if (!Toolchains.gdbHasPython()) {
-            return Toolchains.MAC ? "Running C on a Mac comes in the next update of Raphael, which uses lldb there."
-                    : Toolchains.howToInstall("gdb (with Python) to run C");
+        if (!Toolchains.debuggerHasPython()) {
+            return Toolchains.howToInstall(Toolchains.debugger() + " (with Python) to run C");
         }
         return null;
     }

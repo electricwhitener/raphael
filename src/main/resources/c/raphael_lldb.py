@@ -459,6 +459,11 @@ def student_depth(thread):
     return depth
 
 
+def student_depth_anywhere(thread):
+    """Whether any of the student's functions is on the stack."""
+    return any(frame_file(thread.GetFrameAtIndex(k)) is not None for k in range(thread.GetNumFrames()))
+
+
 def returns_value(frame):
     rtype = frame.GetFunction().GetType().GetFunctionReturnType()
     return rtype.IsValid() and canonical(rtype).GetBasicType() != lldb.eBasicTypeVoid
@@ -609,6 +614,7 @@ def run(debugger):
     send({"kind": "start", "pid": Run.process.GetProcessID()})
     steps = 0
     last_text = {}
+    last_line_of = {}  # a frame (its CFA) → the (file, line) of its last step
     while True:
         state = Run.process.GetState()
         if state in (lldb.eStateExited, lldb.eStateDetached, lldb.eStateInvalid):
@@ -625,13 +631,16 @@ def run(debugger):
             finish("crash", signal=signal, step={"frames": frames, "heap": step.heap, "globals": globals_now(step),
                                                   "exits": exits[:], "out": output_size(), "files": files_now()})
             return
-        if thread.GetStopReason() == lldb.eStopReasonBreakpoint:
-            returned(thread)
         frame = thread.GetFrameAtIndex(0)
+        if frame.GetPC() in return_points:
+            returned(thread)  # whether lldb calls it a breakpoint hit or the end of a step
         entry = frame.GetLineEntry()
         rel = student_file(entry.GetFileSpec())
         if rel is None:
-            thread.StepOut()  # inside the C library: leave it
+            if student_depth_anywhere(thread):
+                thread.StepOut()  # inside the C library: leave it
+            else:
+                Run.process.Continue()  # main has returned: let the program end
             continue
         at_start = frame.GetPC() == entry.GetStartAddress().GetLoadAddress(Run.target)
         if at_start:
@@ -644,7 +653,14 @@ def run(debugger):
                 closing = False
             start_line = frame.GetFunction().GetStartAddress().GetLineEntry().GetLine()
             opening = line == start_line and text.endswith("{")
-            if not closing and not opening:
+            # Apple's compiler starts a new line-table row where a call returns, so lldb can stop
+            # twice on one line; a frame's step on the line it last stopped on is skipped.
+            cfa = frame.GetCFA()
+            again = last_line_of.get(cfa) == (rel, line)
+            if not closing and not opening and not again:
+                last_line_of[cfa] = (rel, line)
+                for deeper in [c for c in last_line_of if c < cfa]:  # the stack grows down: those calls are over
+                    del last_line_of[deeper]
                 watch_return(thread)
                 step = Step()
                 frames = frames_now(step, thread)
