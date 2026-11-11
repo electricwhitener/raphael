@@ -237,14 +237,17 @@ class CCompilerTest {
                 main.c:3:14: error: use of undeclared identifier 'totl'
                 main.c:2:5: error: call to undeclared function 'printf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
                 main.c:2:5: note: include the header <stdio.h> or explicitly provide a declaration for 'printf'
+                main.c:3:14: error: call to undeclared library function 'malloc' with type 'void *(unsigned long)'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+                main.c:3:14: note: include the header <stdlib.h> or explicitly provide a declaration for 'malloc'
                 Undefined symbols for architecture arm64:
                   "_helper", referenced from:
                       _main in main-1a2b.o
                 ld: symbol(s) not found for architecture arm64
                 """, false);
-        assertEquals(3, errors.size());
+        assertEquals(4, errors.size());
         assertTrue(GccHints.hint(errors.get(0).message()).contains("totl"));
         assertTrue(GccHints.hint(errors.get(1).message()).contains("#include <stdio.h>"));
-        assertEquals("undefined reference to helper", errors.get(2).message());
+        assertTrue(GccHints.hint(errors.get(2).message()).contains("#include <stdlib.h>"));
+        assertEquals("undefined reference to helper", errors.get(3).message());
     }
 }

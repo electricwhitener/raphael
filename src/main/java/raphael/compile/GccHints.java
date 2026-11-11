@@ -23,7 +23,7 @@ public final class GccHints {
         if (first.contains("expected declaration or statement at end of input") || first.equals("expected '}'")) {
             return "A { has no matching }. Count the braces of the function above.";
         }
-        String function = find(first, "(?:implicit declaration of function|call to undeclared function) '(\\w+)'");
+        String function = find(first, "(?:implicit declaration of function|call to undeclared (?:library )?function) '(\\w+)'");
         if (function != null) {
             String header = find(message, "<(\\w+\\.h)>");
             return header != null
