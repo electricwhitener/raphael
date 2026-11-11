@@ -1,6 +1,6 @@
 // Reading input with a Scanner: nextInt() reads a number but leaves the end of its line behind,
 // so a nextLine() straight after it reads nothing. Open the Files view and watch the input
-// being read word by word. (Its input is in the stdin box; change it and run again.)
+// being read word by word. (The stdin line below is typed for you in the terminal; change it, or delete it and type your own.)
 // stdin: 3 | Asha 19 | Ben 21 | Chen 20
 import java.util.Scanner;
 

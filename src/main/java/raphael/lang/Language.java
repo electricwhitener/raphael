@@ -42,8 +42,12 @@ public abstract class Language {
 
     public abstract List<Token> tokens(String code);
 
-    // Whether the code reads what's typed into the stdin box.
+    // Whether the code reads what's typed into the terminal.
     public abstract boolean readsInput(String code);
+
+    // Whether this one line asks for input (nextInt, scanf…): a program that stays on it is
+    // waiting for the user to type in the terminal.
+    public abstract boolean readsInputOn(String line);
 
     // Whether the code works with files.
     public abstract boolean usesFiles(String code);

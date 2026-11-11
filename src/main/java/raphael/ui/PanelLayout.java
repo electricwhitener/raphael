@@ -14,7 +14,7 @@ public final class PanelLayout {
         PICTURE("Picture", "the picture and its views (Calls, Objects, Files)"),
         CALL_STACK("Call stack", "the methods running, newest first"),
         VARIABLES("Variables", "the running method's variables"),
-        OUTPUT("Console", "the console, the key moments and the trace table");
+        OUTPUT("Terminal", "the terminal, the key moments and the trace table");
 
         private final String label;
         private final String description;

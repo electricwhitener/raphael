@@ -68,6 +68,7 @@ public class JdiTracer implements Tracer {
 
     private volatile Run current; // the run in progress, or null; volatile because the window's thread reads it
     private volatile RunLimits limits = RunLimits.DEFAULTS;
+    private volatile LiveInput liveInput; // the next run's terminal, or null
     private volatile List<Path> inputFiles = List.of();
     private static final int START_TIMEOUT_MS = 20_000; // a program that hasn't connected by then never will
     // The program's side: its connection to Raphael, counted from when it tries (milliseconds when
@@ -118,6 +119,7 @@ public class JdiTracer implements Tracer {
             current = new Run(launched.vm(), launched.process(), folder, runLimits, remember, program.sourceFiles());
             current.recordExits = recordExits;
             current.facts = program.facts();
+            current.live = liveInput;
             try {
                 return current.record(input);
             } finally {
@@ -155,6 +157,17 @@ public class JdiTracer implements Tracer {
     public int stepsSoFar() {
         Run run = current;
         return run == null ? 0 : run.steps;
+    }
+
+    @Override
+    public void setLiveInput(LiveInput input) {
+        liveInput = input;
+    }
+
+    @Override
+    public String outputSoFar() {
+        Run run = current;
+        return run == null ? "" : run.output.toString();
     }
 
     // True for classes that belong to Java itself rather than to the student.
@@ -272,6 +285,7 @@ public class JdiTracer implements Tracer {
         private ThreadReference firstThread; // the thread of the first step
         private ThrownException justCaught;  // shown on the next step, the first line of its catch
         boolean recordExits = true;
+        LiveInput live; // the terminal's input, or null: the input is all given at the start
         raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
         // Method-exit events make Java run the program without its fast compiled code, Java's
         // own library included, while they're on. So they're off while the JVM starts, and off
@@ -306,7 +320,13 @@ public class JdiTracer implements Tracer {
             OutputDrainer stderr = new OutputDrainer(process.getErrorStream(), output, "stderr");
             stdout.start();
             stderr.start();
-            sendInput(process.getOutputStream(), input);
+            Thread pump = null;
+            if (live == null) {
+                sendInput(process.getOutputStream(), input);
+            } else {
+                live.attach(() -> steps, output::length);
+                pump = live.pump(over -> process.getOutputStream(), () -> !process.isAlive());
+            }
 
             // Tell us when each of the student's classes is loaded...
             ClassPrepareRequest classLoaded = requests.createClassPrepareRequest();
@@ -346,7 +366,10 @@ public class JdiTracer implements Tracer {
             }
             waitFor(stdout);
             waitFor(stderr);
-            return new Trace(snapshots, output.toString(), endReason, endMessage);
+            if (pump != null) {
+                waitFor(pump);
+            }
+            return new Trace(snapshots, output.toString(), endReason, endMessage, live == null ? List.of() : live.typed());
         }
 
         private void handleEvents() throws InterruptedException {
@@ -360,6 +383,11 @@ public class JdiTracer implements Tracer {
                 }
                 EventSet events = queue.remove(POLL_MS);
                 if (events == null) {
+                    if (waitsForInput(System.currentTimeMillis() - lastEvent)) {
+                        live.programWaits();
+                        lastEvent = System.currentTimeMillis(); // the timeout doesn't count the time spent waiting for typing
+                        continue;
+                    }
                     if (System.currentTimeMillis() - lastEvent >= limits.timeoutSeconds() * 1000L) {
                         end(EndReason.TIMEOUT, "Stopped: the program did nothing for "
                                 + limits.timeoutSeconds() + " seconds.");
@@ -369,6 +397,9 @@ public class JdiTracer implements Tracer {
                     continue;
                 }
                 lastEvent = System.currentTimeMillis();
+                if (live != null) {
+                    live.programMoved();
+                }
                 for (Event event : events) {
                     if (event instanceof VMDisconnectEvent) {
                         return;
@@ -644,6 +675,16 @@ public class JdiTracer implements Tracer {
             } catch (VMDisconnectedException e) {
                 // It had already ended.
             }
+        }
+
+        // With the terminal: no step for a while, on a line that reads input (nextInt, readLine…),
+        // means the program is waiting for the user to type.
+        private boolean waitsForInput(long idle) {
+            if (live == null || idle < LiveInput.WAIT_MS || snapshots.isEmpty()) {
+                return false;
+            }
+            List<raphael.model.FrameSnapshot> frames = snapshots.get(snapshots.size() - 1).getFrames();
+            return !frames.isEmpty() && live.readsAt(frames.get(0).getFile(), frames.get(0).getLine());
         }
 
         // Types the input into the program's System.in, then closes it. Closing means "no more

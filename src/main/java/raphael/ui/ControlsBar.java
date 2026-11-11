@@ -80,6 +80,10 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         this.model = model;
         setOpaque(false);
         speed.setSelectedIndex(1);
+        // A click chooses without taking the keyboard: Space and the arrows still step the program
+        // (a focused box would take the arrows to change its choice). Tab still reaches them.
+        speed.setRequestFocusEnabled(false);
+        moments.setRequestFocusEnabled(false);
         speed.setToolTipText("playing speed");
         speed.getAccessibleContext().setAccessibleName("Playback speed");
         slider.getAccessibleContext().setAccessibleName("Step position");

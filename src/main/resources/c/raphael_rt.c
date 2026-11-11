@@ -3,6 +3,9 @@
    - When Raphael names them (RAPHAEL_STDIN, RAPHAEL_STDOUT), the program reads its input from a
      file and writes its output (stdout and stderr) to another, so the debugger's own messages
      never mix with what the program prints.
+   - With the terminal (RAPHAEL_STDIN_PIPE), the input comes through a pipe instead, which the
+     shim makes and Raphael writes each typed line into, so a read waits for the user as in a
+     terminal: a FIFO on Linux and macOS, a named pipe on Windows.
    - stdout's buffer is turned off, so what the program prints shows up at the step that printed
      it, even before a crash. (On Windows, line buffering is full buffering, so the buffer is
      turned off rather than set to lines.)
@@ -14,10 +17,14 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+#include <windows.h>
+#include <fcntl.h>
 #include <io.h>
 #define dup2 _dup2
 #define fileno _fileno
 #else
+#include <errno.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -35,10 +42,42 @@ struct raphael_block raphael_blocks[RAPHAEL_MAX_BLOCKS];
 int raphael_block_count;
 static size_t kept; /* bytes of freed blocks not given back */
 
+/* stdin from a pipe Raphael writes into; 0 when it's open. Waits for Raphael to connect. */
+static int raphael_pipe_input(const char *name) {
+#ifdef _WIN32
+    HANDLE pipe = CreateNamedPipeA(name, PIPE_ACCESS_INBOUND, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                   1, 0, 1 << 16, 0, NULL);
+    if (pipe == INVALID_HANDLE_VALUE) {
+        return -1;
+    }
+    if (!ConnectNamedPipe(pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
+        CloseHandle(pipe);
+        return -1;
+    }
+    int fd = _open_osfhandle((intptr_t) pipe, _O_RDONLY | _O_TEXT);
+    if (fd < 0 || _dup2(fd, 0) != 0) {
+        return -1;
+    }
+    _close(fd);
+    clearerr(stdin);
+    return 0;
+#else
+    if (mkfifo(name, 0600) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return freopen(name, "r", stdin) == NULL ? -1 : 0; /* opens once Raphael has opened its end */
+#endif
+}
+
 __attribute__((constructor)) static void raphael_start(void) {
     const char *in = getenv("RAPHAEL_STDIN");
+    const char *pipe = getenv("RAPHAEL_STDIN_PIPE");
     const char *out = getenv("RAPHAEL_STDOUT");
-    if (in != NULL && freopen(in, "r", stdin) == NULL) {
+    if (pipe != NULL) {
+        if (raphael_pipe_input(pipe) != 0) {
+            fclose(stdin); /* no pipe: reading finds the end at once */
+        }
+    } else if (in != NULL && freopen(in, "r", stdin) == NULL) {
         fclose(stdin); /* the input file is missing: reading finds the end at once */
     }
     if (out != NULL && freopen(out, "w", stdout) != NULL) {

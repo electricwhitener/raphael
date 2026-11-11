@@ -67,6 +67,11 @@ public class CLanguage extends Language {
     }
 
     @Override
+    public boolean readsInputOn(String line) {
+        return line.matches("(?s).*\\b(scanf|getchar|fgets|gets|getline|getc|fgetc|fscanf|fread|getdelim)\\s*\\(.*");
+    }
+
+    @Override
     public boolean usesFiles(String code) {
         return code.matches("(?s).*\\bfopen\\s*\\(.*");
     }

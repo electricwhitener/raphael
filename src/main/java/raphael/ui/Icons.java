@@ -154,6 +154,14 @@ public final class Icons {
                 g.draw(new java.awt.geom.Line2D.Float(3.8f, 7.5f, 5.2f, 7.5f));
             }
         },
+        LAYOUT { // a window split into the code, the picture and a row of panels: the layout menu
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(new RoundRectangle2D.Float(2.5f, 3, 11, 10, 2, 2));
+                g.draw(new java.awt.geom.Line2D.Float(2.5f, 9.5f, 13.5f, 9.5f));
+                g.draw(new java.awt.geom.Line2D.Float(7.5f, 3, 7.5f, 9.5f));
+            }
+        },
         PASTE { // a clipboard
             @Override
             void draw(Graphics2D g) {

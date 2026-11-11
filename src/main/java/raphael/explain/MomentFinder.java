@@ -33,7 +33,7 @@ public class MomentFinder {
         return find(trace, facts, "");
     }
 
-    // input: what was typed into the program's stdin box, for the moments about reading it.
+    // input: what was typed into the program's terminal, for the moments about reading it.
     public List<Moment> find(Trace trace, CodeFacts facts, String input) {
         List<Moment> all = new ArrayList<>();
         for (Concept concept : concepts) {

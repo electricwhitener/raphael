@@ -25,6 +25,7 @@ import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import raphael.RaphaelException;
 import raphael.compile.CompileResult;
+import raphael.io.ExampleCatalog;
 import raphael.io.RunFile;
 import raphael.io.SafeFiles;
 import raphael.io.StepLog;
@@ -78,6 +79,10 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
 
         // The limits the next run should use (from the settings).
         RunLimits limits();
+
+        // A right-click on a panel's heading: the layout's choices there (closed panels to bring back).
+        default void showLayoutMenu(java.awt.Component on, int x, int y) {
+        }
     }
 
     private static final Logger LOG = Logger.getLogger(Workbench.class.getName());
@@ -93,11 +98,12 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
     private final ControlsBar controls = new ControlsBar(model);
     private final CallStackPanel callStack = new CallStackPanel();
     private final LocalsPanel locals = new LocalsPanel();
-    private final ConsolePanel console = new ConsolePanel();
+    private final TerminalPanel console = new TerminalPanel();
+    private String givenInput = ""; // a recording's input, typed for the user when the program asks
     private final FilesPanel files = new FilesPanel(this::addInputFile, this::clearInputFiles);
     private final MomentsPanel momentsPanel = new MomentsPanel(model);
     private final TraceTablePanel traceTable = new TraceTablePanel(model);
-    // The console, the key moments and the trace table share one place in the bottom row, as tabs.
+    // The terminal, the key moments and the trace table share one place in the bottom row, as tabs.
     private final javax.swing.JTabbedPane bottomTabs = new javax.swing.JTabbedPane();
     private final List<File> inputFiles = new ArrayList<>(); // copied into the program's folder for each run
     private raphael.lang.Language language = raphael.lang.Languages.JAVA; // what the code is written in
@@ -207,7 +213,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         bottom.setBackground(Style.BACKGROUND);
         bottom.setBorder(Section.hairline(1, 0, 0, 0));
         console.hideHeading(); // the tab says what it is
-        bottomTabs.addTab("Console", console);
+        bottomTabs.addTab("Terminal", console);
         bottomTabs.addTab("Key moments", momentsPanel);
         bottomTabs.addTab("Trace table", traceTable);
         bottomTabs.putClientProperty("JTabbedPane.tabType", "underlined");
@@ -224,14 +230,34 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         JSplitPane localsSplit = panelSplit(locals, filesSplit, 0.4);
         bottomRow = panelSplit(callStack, localsSplit, 0.25);
         bottom.add(bottomRow, BorderLayout.CENTER);
-        Section.addClose(callStack, "Close the call stack (View → Panels brings it back)",
-                () -> PanelLayout.show(PanelLayout.Panel.CALL_STACK, false));
-        Section.addClose(locals, "Close the variables (View → Panels brings them back)",
-                () -> PanelLayout.show(PanelLayout.Panel.VARIABLES, false));
-        bottomTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the console, key moments and trace table (View → Panels brings them back)",
-                () -> PanelLayout.show(PanelLayout.Panel.OUTPUT, false)));
-        viewTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the picture (View → Panels brings it back)",
-                () -> PanelLayout.show(PanelLayout.Panel.PICTURE, false)));
+        JComponent stackHeading = Section.addClose(callStack, "Close the call stack (the layout button brings it back)",
+                () -> close(PanelLayout.Panel.CALL_STACK));
+        JComponent localsHeading = Section.addClose(locals, "Close the variables (the layout button brings them back)",
+                () -> close(PanelLayout.Panel.VARIABLES));
+        bottomTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the terminal, key moments and trace table (the layout button brings them back)",
+                () -> close(PanelLayout.Panel.OUTPUT)));
+        viewTabs.putClientProperty("JTabbedPane.trailingComponent", closeButton("Close the picture (the layout button brings it back)",
+                () -> close(PanelLayout.Panel.PICTURE)));
+        // A right-click on a panel's heading or tabs offers the layout's choices, closed panels included.
+        for (JComponent heading : new JComponent[] {stackHeading, localsHeading, bottomTabs, viewTabs}) {
+            heading.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mousePressed(java.awt.event.MouseEvent e) {
+                    offer(e);
+                }
+
+                @Override
+                public void mouseReleased(java.awt.event.MouseEvent e) {
+                    offer(e); // Windows opens a menu on the release, the others on the press
+                }
+
+                private void offer(java.awt.event.MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        host.showLayoutMenu(e.getComponent(), e.getX(), e.getY());
+                    }
+                }
+            });
+        }
         Zoom.size(bottom, 100, Style.BOTTOM_ROW_H);
         Zoom.minimum(bottom, 0, COLLAPSED_ROW_H);
         middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
@@ -255,15 +281,9 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             claimsKeys.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
         }
 
-        // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
             if (code.isDirty()) {
                 setPreview(false); // edited: no longer just a preview
-            }
-            boolean input = language.readsInput(allCode());
-            console.showInput(input);
-            if (input) {
-                bottomTabs.setSelectedIndex(0); // the stdin box is in the console
             }
             titleFileTabs();
             showFilesIfUsed();
@@ -351,6 +371,13 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         split.setDividerSize(3);
         split.setBorder(BorderFactory.createEmptyBorder());
         return split;
+    }
+
+    // An × closed a panel: the status bar says how to bring it back.
+    private void close(PanelLayout.Panel panel) {
+        PanelLayout.show(panel, false);
+        say(panel.label().toLowerCase(Locale.ROOT) + " closed · the layout button in the toolbar (or View → Panels) brings it back",
+                Style.INK_SOFT);
     }
 
     private static javax.swing.JButton closeButton(String tip, Runnable close) {
@@ -525,10 +552,6 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         host.stateChanged(this);
     }
 
-    // The text in the stdin box, for the next run.
-    public void setInput(String input) {
-        console.setInput(input);
-    }
 
     // A program of several files: each file gets a tab, and first (or the first file) is shown.
     // folder is where they're saved (null for a recording's files, which aren't in any folder yet).
@@ -658,7 +681,12 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         String source = code.getCode();
         List<SourceFile> files = fileTabs.getTabCount() > 0 ? code.getFiles() : null; // a program of several files
         String preferred = classInFront();
-        String input = console.getInput();
+        // Input typed for the user in the terminal, a line each time the program asks: the code's
+        // "// stdin: 3 | Asha 19" line (an example's), or else the input of the recording opened.
+        String fromCode = ExampleCatalog.input(allCode());
+        String input = fromCode.isEmpty() ? givenInput : fromCode;
+        raphael.trace.LiveInput live = language.readsInput(allCode()) ? new raphael.trace.LiveInput(input, readsAt(source, files)) : null;
+        tracer.setLiveInput(live);
         if (folder != null) {
             tracer.setInputFiles(folderInputs()); // the folder's text files are there for the program to read
         }
@@ -669,7 +697,14 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         showPictureOrGuide();
         progress = new Timer(200, e -> {
             int steps = tracer.stepsSoFar(); // 0 once recording has finished and drawing has begun
-            if (steps > 0) {
+            if (console.refresh()) {
+                waitingForInput();
+            }
+            boolean waiting = live != null && live.isWaiting();
+            visual.setWaitingForInput(waiting);
+            if (waiting) {
+                say("waiting for input · type it in the terminal and press enter · esc stops", Style.ACCENT);
+            } else if (steps > 0) {
                 visual.setRecordedSteps(steps);
                 say("recording your program: " + steps + " steps · esc stops", Style.INK_SOFT);
             }
@@ -677,6 +712,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         progress.start();
         code.setEditable(false);
         model.clear();
+        console.startRun(live, tracer::outputSoFar);
         visual.clearMessage();
         say("compiling…", Style.INK_SOFT); // also tells the window that the run button is now Stop
 
@@ -689,12 +725,13 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
                 if (!program.success()) {
                     return new RunResult(program, null, null, source, input, files, List.of());
                 }
-                Trace trace = tracer.trace(program, input);
+                Trace trace = tracer.trace(program, live != null ? "" : input);
+                String given = live != null ? live.text() : input; // with the terminal: what was typed
                 recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
                 SceneBuilder builder = files != null ? new SceneBuilder(files) : new SceneBuilder(source);
-                List<raphael.explain.Moment> moments = new raphael.explain.MomentFinder().find(trace, program.facts(), input);
-                return new RunResult(program, trace, builder.build(trace), source, input, files, moments);
+                List<raphael.explain.Moment> moments = new raphael.explain.MomentFinder().find(trace, program.facts(), given);
+                return new RunResult(program, trace, builder.build(trace), source, given, files, moments);
             }
 
             @Override
@@ -707,6 +744,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             protected void done() {
                 running = false;
                 progress.stop();
+                console.endRun();
                 visual.setRecording(false);
                 code.setEditable(true);
                 try {
@@ -720,6 +758,43 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
                 host.stateChanged(Workbench.this);
             }
         }.execute();
+    }
+
+    // The program started waiting for input: the terminal comes into sight, with the keyboard.
+    private void waitingForInput() {
+        if (!PanelLayout.shown(PanelLayout.Panel.OUTPUT)) {
+            PanelLayout.show(PanelLayout.Panel.OUTPUT, true); // closed, but it's where the input goes
+        }
+        bottomTabs.setSelectedComponent(console);
+        if (isShowing()) {
+            console.focusInput();
+        }
+    }
+
+    // Whether a line of the program asks for input (nextInt, scanf…): the tracer's test for
+    // "waiting for input". file is the frame's file (null or unknown: the only file).
+    private java.util.function.BiPredicate<String, Integer> readsAt(String source, List<SourceFile> files) {
+        java.util.Map<String, String[]> lines = new java.util.HashMap<>();
+        if (files == null) {
+            lines.put("", source.split("\n", -1));
+        } else {
+            for (SourceFile file : files) {
+                lines.put(file.path().replace('\\', '/'), file.text().split("\n", -1));
+            }
+        }
+        raphael.lang.Language runs = language;
+        return (file, line) -> {
+            String[] text = lines.size() == 1 ? lines.values().iterator().next() : null;
+            if (file != null) {
+                String name = file.replace('\\', '/');
+                for (java.util.Map.Entry<String, String[]> entry : lines.entrySet()) {
+                    if (entry.getKey().equals(name) || entry.getKey().endsWith("/" + name) || name.endsWith("/" + entry.getKey())) {
+                        text = entry.getValue();
+                    }
+                }
+            }
+            return text != null && line >= 1 && line <= text.length && runs.readsInputOn(text[line - 1]);
+        };
     }
 
     // Esc: stop a recording, or pause the playing.
@@ -751,8 +826,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
     }
 
     // The bottom row keeps its height, except before the first run in a small window (or at
-    // 200% scaling): then the empty panels shrink to their headings so the guide fits. Not while
-    // the stdin box is showing, which is needed before running.
+    // 200% scaling): then the empty panels shrink to their headings so the guide fits.
     void fitBottomRow() {
         if (middle == null || middle.getHeight() == 0 || !this.bottom.isVisible()) {
             return;
@@ -763,7 +837,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         }
         int bottom = Zoom.px(Style.BOTTOM_ROW_H);
         boolean guide = !model.hasSteps() && !running && !visual.hasMessage();
-        if (guide && !console.isInputShown()
+        if (guide
                 && middle.getHeight() - bottom < emptyState.getPreferredSize().height + 2 * Zoom.px(Style.SPACE_6)) {
             bottom = Zoom.px(COLLAPSED_ROW_H);
         }
@@ -806,9 +880,9 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         if (trace.getEndReason() == EndReason.FINISHED) {
             say("[ok] " + steps + (chose == null ? "" : " · " + chose), Style.INK);
         } else if (trace.getEndMessage().startsWith("NoSuchElementException") && language.readsInput(allCode())) {
-            visual.setMessage("needs input", "This program reads input, and it ran out.", null,
-                    "Type its input into the stdin box below, then press run.");
-            say("[needs input] type it into the stdin box, then run again", Style.ERROR);
+            visual.setMessage("needs input", "This program reads input, and its input ended before it was done.", null,
+                    "Run it again, and type its input in the terminal below when it asks (Ctrl+D ends the input).");
+            say("[needs input] its input ended · run again and type it in the terminal", Style.ERROR);
         } else {
             say("[" + trace.getEndReason().name().toLowerCase(Locale.ROOT).replace('_', ' ') + "] " + trace.getEndMessage()
                     + " · " + steps, Style.ERROR);
@@ -817,7 +891,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
 
     private void showCompileErrors(List<CompileResult.CompileError> errors) {
         LOG.info("Didn't compile: " + errors.size() + " error(s)");
-        bottomTabs.setSelectedIndex(0); // the errors are listed in the console
+        bottomTabs.setSelectedIndex(0); // the errors are listed in the terminal
         code.showErrors(errors);
         StringBuilder text = new StringBuilder();
         for (CompileResult.CompileError error : errors) {
@@ -833,12 +907,12 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         CompileResult.CompileError first = errors.get(0);
         String where = (first.file() != null ? first.file().substring(first.file().lastIndexOf('/') + 1) + ", " : "")
                 + (first.line() > 0 ? "line " + first.line() + ": " : "") + first.message();
-        String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the console)" : "";
+        String more = errors.size() > 1 ? " (+" + (errors.size() - 1) + " more in the terminal)" : "";
         String next = null;
         if (errors.size() > 1) {
             CompileResult.CompileError second = errors.get(1);
             next = "next: " + (second.line() > 0 ? "line " + second.line() + " · " : "")
-                    + second.message().lines().findFirst().orElse("") + " (see the console)";
+                    + second.message().lines().findFirst().orElse("") + " (see the terminal)";
         }
         visual.setMessage("didn't compile · " + errors.size() + (errors.size() == 1 ? " error" : " errors"),
                 where.lines().findFirst().orElse(""), next, language.hint(first.message()));
@@ -854,7 +928,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         } else {
             showCode(saved.source(), null, file.getName());
         }
-        console.setInput(saved.input());
+        givenInput = saved.input() == null ? "" : saved.input();
         SceneList scenes = (saved.files() != null ? new SceneBuilder(saved.files()) : new SceneBuilder(saved.source()))
                 .build(saved.trace());
         lastRun = saved;
@@ -1136,7 +1210,6 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         if (language.cantRun() == null) {
             tracer = language.newTracer();
         }
-        console.showInput(language.readsInput(allCode()));
         showFilesIfUsed();
         host.stateChanged(this);
     }

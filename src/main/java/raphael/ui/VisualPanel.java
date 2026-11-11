@@ -71,6 +71,7 @@ public class VisualPanel extends JPanel implements TraceListener, Zoom.Aware {
     private double zoom = 1; // the user's zoom, on top of that
     private boolean recording;
     private int recordedSteps; // shown while recording
+    private boolean waitingForInput; // the program being recorded waits for the user to type
     private Note message;        // a message from the window (a compile error…), or null
     private int reserve;         // room kept at the bottom, for the whole run, for its tallest card
     private boolean compact;     // cards leave out their explanation, so the reserve stays small
@@ -337,14 +338,24 @@ public class VisualPanel extends JPanel implements TraceListener, Zoom.Aware {
     public void setRecording(boolean recording) {
         this.recording = recording;
         this.recordedSteps = 0;
+        this.waitingForInput = false;
         repaint();
+    }
+
+    public void setWaitingForInput(boolean waiting) {
+        if (waiting != waitingForInput) {
+            waitingForInput = waiting;
+            repaint();
+        }
     }
 
     // "Recording… 1,284 steps", and how to stop, in the middle of the picture area.
     private void recordingCard(Graphics2D g) {
         Rectangle visible = zoomedVisible();
-        String title = recordedSteps == 0 ? "Recording…" : String.format(java.util.Locale.ENGLISH, "Recording…  %,d steps", recordedSteps);
-        String detail = "Press Esc or Stop to end the recording here.";
+        String title = waitingForInput ? "Waiting for input"
+                : recordedSteps == 0 ? "Recording…" : String.format(java.util.Locale.ENGLISH, "Recording…  %,d steps", recordedSteps);
+        String detail = waitingForInput ? "Type it in the terminal below and press Enter."
+                : "Press Esc or Stop to end the recording here.";
         g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setFont(Style.sans(true, 16f));
         g.setColor(Style.INK);

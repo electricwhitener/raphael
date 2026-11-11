@@ -74,6 +74,11 @@ public class JavaLanguage extends Language {
         return code.contains("System.in");
     }
 
+    @Override
+    public boolean readsInputOn(String line) {
+        return line.matches("(?s).*\\b(next\\w*|hasNext\\w*|readLine|read)\\s*\\(.*");
+    }
+
     // It names one of Java's file classes. Not just "java.io", which an import of IOException alone
     // would match, or "Path", which a graph program may call a class.
     @Override

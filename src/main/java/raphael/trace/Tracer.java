@@ -24,6 +24,16 @@ public interface Tracer {
     default void setInputFiles(java.util.List<java.nio.file.Path> files) {
     }
 
+    // For the next run: input typed into the terminal while it runs, instead of all at the start
+    // (then trace()'s input is ignored). Null: the input is given at the start and then ends.
+    default void setLiveInput(LiveInput input) {
+    }
+
+    // What the run in progress has printed so far ("" if none is running).
+    default String outputSoFar() {
+        return "";
+    }
+
     // How many steps the run in progress has recorded so far (0 if none is running).
     default int stepsSoFar() {
         return 0;

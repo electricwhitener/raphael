@@ -16,12 +16,18 @@ public class Trace implements Serializable {
     private final String output;
     private final EndReason endReason;
     private final String endMessage;
+    private final List<TypedLine> typed; // null in a recording saved before the terminal (1.4.0)
 
     public Trace(List<Snapshot> snapshots, String output, EndReason endReason, String endMessage) {
+        this(snapshots, output, endReason, endMessage, List.of());
+    }
+
+    public Trace(List<Snapshot> snapshots, String output, EndReason endReason, String endMessage, List<TypedLine> typed) {
         this.snapshots = List.copyOf(snapshots);
         this.output = output;
         this.endReason = endReason;
         this.endMessage = endMessage;
+        this.typed = List.copyOf(typed);
     }
 
     public int size() {
@@ -47,6 +53,11 @@ public class Trace implements Serializable {
             return output;
         }
         return output.substring(0, Math.min(output.length(), get(step).getOutputLength()));
+    }
+
+    // The lines typed into the terminal while it ran, in the order they were typed.
+    public List<TypedLine> getTyped() {
+        return typed == null ? List.of() : typed;
     }
 
     public EndReason getEndReason() {

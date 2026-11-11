@@ -86,7 +86,7 @@ public final class ExampleCatalog {
 
     // The example's code.
     // The input an example comes with, from its "// stdin: 3 | Asha 19" line (one line of
-    // input between each |), for the stdin box. "" if it has none.
+    // input between each |), typed for the user in the terminal. "" if it has none.
     public static String input(String source) {
         for (String line : source.split("\n")) {
             for (String start : new String[] {"// stdin: ", "# stdin: "}) { // a Python example's comment starts with #

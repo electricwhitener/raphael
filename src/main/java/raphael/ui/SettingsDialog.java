@@ -65,7 +65,7 @@ public class SettingsDialog extends JDialog {
         row(form, y++, "Time a program may do nothing", "For example a long Thread.sleep, or waiting for input.", timeout, "seconds");
         row(form, y++, "Memory for the program", "Past this, the program ends with OutOfMemoryError.", memory, "MB");
         group(form, y++, "Appearance", true);
-        row(form, y++, "Text size", "The code, the variables and the console.", textSize, "pt");
+        row(form, y++, "Text size", "The code, the variables and the terminal.", textSize, "pt");
         JPanel segments = new JPanel(new GridLayout(1, 3, 0, 0)); // one row that never wraps
         segments.setOpaque(false);
         segments.add(system);

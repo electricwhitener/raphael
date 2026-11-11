@@ -214,4 +214,84 @@ class MainWindowTest {
             window.dispose();
         }
     }
+
+    // A closed panel comes back from the toolbar's layout button (or a right-click on a heading):
+    // the same choices as View → Panels, made fresh each time, so they show the layout now.
+    @Test
+    void theLayoutMenuBringsAClosedPanelBack() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        try {
+            window.newProgram();
+            PanelLayout.show(PanelLayout.Panel.VARIABLES, false);
+            javax.swing.JCheckBoxMenuItem variables = null;
+            for (java.awt.Component item : window.layoutItems(false)) {
+                if (item instanceof javax.swing.JCheckBoxMenuItem
+                        && ((javax.swing.JCheckBoxMenuItem) item).getText().equals(PanelLayout.Panel.VARIABLES.label())) {
+                    variables = (javax.swing.JCheckBoxMenuItem) item;
+                }
+            }
+            assertTrue(variables != null && !variables.isSelected(), "the closed panel is listed, unchecked");
+            variables.doClick();
+            assertTrue(window.active().panelShowing(PanelLayout.Panel.VARIABLES));
+            assertTrue(window.panelCheck(PanelLayout.Panel.VARIABLES).isSelected(), "the menu bar's check follows");
+        } finally {
+            PanelLayout.reset();
+            window.dispose();
+        }
+    }
+
+    // Space plays and pauses, whatever was clicked last: a focused button isn't pressed again.
+    // In the code it types a space. Enter presses a button reached with Tab.
+    @Test
+    void spaceAlwaysPlaysAndPauses() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        MainWindow window = new MainWindow();
+        try {
+            window.loadExample("BubbleSort");
+            Workbench program = window.active();
+            javax.swing.SwingUtilities.invokeAndWait(program::run);
+            for (int i = 0; i < 300 && program.isRunning(); i++) {
+                Thread.sleep(50);
+            }
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                ControlsBar controls = program.getControls();
+                controls.pause();
+                program.getModel().setStep(2);
+                javax.swing.JButton forward = (javax.swing.JButton) find(controls, "Step forward");
+                assertTrue(window.spaceOrEnter(key(forward, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_SPACE, ' ')));
+                assertTrue(window.spaceOrEnter(key(forward, java.awt.event.KeyEvent.KEY_RELEASED, java.awt.event.KeyEvent.VK_SPACE, ' ')));
+                assertTrue(controls.isPlaying(), "Space played");
+                controls.pause();
+                assertEquals(2, program.getModel().getStep(), "and didn't press the button");
+                assertTrue(window.spaceOrEnter(key(forward, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_ENTER, '\n')));
+                assertEquals(3, program.getModel().getStep(), "Enter pressed it");
+                javax.swing.JComponent editor = program.getCode().getEditor();
+                assertFalse(window.spaceOrEnter(key(editor, java.awt.event.KeyEvent.KEY_PRESSED, java.awt.event.KeyEvent.VK_SPACE, ' ')),
+                        "the code types its space");
+                assertFalse(controls.isPlaying());
+            });
+        } finally {
+            window.dispose();
+        }
+    }
+
+    private static java.awt.event.KeyEvent key(java.awt.Component on, int id, int code, char typed) {
+        return new java.awt.event.KeyEvent(on, id, System.currentTimeMillis(), 0, code, typed);
+    }
+
+    private static java.awt.Component find(Container in, String accessibleName) {
+        for (java.awt.Component child : in.getComponents()) {
+            if (accessibleName.equals(child.getAccessibleContext().getAccessibleName())) {
+                return child;
+            }
+            if (child instanceof Container) {
+                java.awt.Component found = find((Container) child, accessibleName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
 }

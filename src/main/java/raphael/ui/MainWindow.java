@@ -74,6 +74,10 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
               Ctrl+Enter or F5   run; while recording, stop
               Esc                pause, or stop recording
 
+            the terminal (while a program runs)
+              Enter              send the line typed to the program
+              Ctrl+D             end the input
+
             moving through the steps
               Space              play / pause
               Right, Left        step forward, back
@@ -107,6 +111,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
               Ctrl+D             dark or light
               Ctrl+,             settings
               F6, Shift+F6       move between toolbar, code and picture
+              Tab, then Enter    press a toolbar button with the keyboard
             """;
     // One tab per open program, plus the Welcome tab. Each program is a Workbench.
     private final javax.swing.JTabbedPane tabs = new javax.swing.JTabbedPane();
@@ -156,6 +161,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
+    private final JButton layoutButton = ControlsBar.button(Icons.Glyph.LAYOUT, "Panels and layout",
+            "Panels and layout: show the panels you closed, move the picture and the panels");
     private final ExamplesPanel examplesPanel = new ExamplesPanel(new ExamplesPanel.Actions() {
         @Override
         public void preview(ExampleCatalog.Example example) {
@@ -297,6 +304,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
 
         bindKeys();
         switchTabsWithCtrlTab();
+        spaceAlwaysPlays();
         // The usable part of the screen (without the taskbar), so the window always fits.
         Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
         setSize(Math.min(Zoom.px(1300), screen.width), Math.min(Zoom.px(840), screen.height));
@@ -644,6 +652,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         examples.putClientProperty("JButton.buttonType", "toolBarButton");
         examples.addActionListener(e -> toggleExamples());
         themeButton.addActionListener(e -> toggleTheme());
+        layoutButton.addActionListener(e -> showLayoutMenu(layoutButton, 0, layoutButton.getHeight()));
         JButton settings = ControlsBar.button(Icons.Glyph.SETTINGS, "Settings", "Settings: steps, time, memory, text size, theme  (Ctrl+,)");
         settings.addActionListener(e -> showSettings());
         JButton help = ControlsBar.button(Icons.Glyph.HELP, "Keyboard shortcuts", "Keyboard shortcuts  (F1)");
@@ -665,6 +674,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         bar.add(divider());
         bar.add(controlsSlot);
         bar.add(divider());
+        bar.add(layoutButton);
         bar.add(themeButton);
         bar.add(settings);
         bar.add(help);
@@ -1436,39 +1446,65 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
 
     // ---- the layout of a program's tab ----
 
-    // View → Panels: a check for each panel that can be closed; View → Layout: where they go.
-    // One layout for every tab and window, remembered (PanelLayout); an × on a panel unchecks it here.
+    // View → Panels: a check for each panel that can be closed, then where the picture and the
+    // panels go. One layout for every tab and window, remembered (PanelLayout); an × on a panel
+    // unchecks it here. The same choices open from the toolbar's layout button and from a
+    // right-click on a panel's heading (layoutMenu).
     private JMenu panelsMenu() {
         JMenu panels = new JMenu("Panels");
+        for (java.awt.Component item : layoutItems(true)) {
+            panels.add(item);
+        }
+        PanelLayout.watch(this); // the window itself: the watchers are weak, so a lambda would be dropped
+        return panels;
+    }
+
+    // The layout's menu items. For the menu bar they're kept (and follow the layout chosen
+    // elsewhere, in layoutChanged); a pop-up menu makes its own each time it opens.
+    List<java.awt.Component> layoutItems(boolean menuBar) {
+        List<java.awt.Component> items = new java.util.ArrayList<>();
         for (PanelLayout.Panel panel : PanelLayout.Panel.values()) {
             javax.swing.JCheckBoxMenuItem item = new javax.swing.JCheckBoxMenuItem(panel.label(), PanelLayout.shown(panel));
             item.setToolTipText(panel.description());
             item.addActionListener(e -> PanelLayout.show(panel, item.isSelected()));
-            panelChecks.put(panel, item);
-            needsProgram.add(item);
-            panels.add(item);
+            if (menuBar) {
+                panelChecks.put(panel, item);
+            }
+            items.add(item);
         }
-        panels.addSeparator();
         javax.swing.ButtonGroup picture = new javax.swing.ButtonGroup();
         javax.swing.ButtonGroup row = new javax.swing.ButtonGroup();
-        pictureBeside = radio("Picture beside the code", !PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(false));
-        pictureBelow = radio("Picture below the code", PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(true));
-        panelsBottom = radio("Panels along the bottom", !PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(false));
-        panelsRight = radio("Panels down the right", PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(true));
-        for (JMenuItem item : new JMenuItem[] {pictureBeside, pictureBelow, null, panelsBottom, panelsRight}) {
-            if (item == null) {
-                panels.addSeparator();
-            } else {
-                needsProgram.add(item);
-                panels.add(item);
-            }
-        }
-        panels.addSeparator();
+        javax.swing.JRadioButtonMenuItem beside = radio("Picture beside the code", !PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(false));
+        javax.swing.JRadioButtonMenuItem below = radio("Picture below the code", PanelLayout.pictureBelow(), picture, () -> PanelLayout.setPictureBelow(true));
+        javax.swing.JRadioButtonMenuItem bottom = radio("Panels along the bottom", !PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(false));
+        javax.swing.JRadioButtonMenuItem right = radio("Panels down the right", PanelLayout.panelsRight(), row, () -> PanelLayout.setPanelsRight(true));
         JMenuItem reset = item("Reset layout", null, PanelLayout::reset);
-        needsProgram.add(reset);
-        panels.add(reset);
-        PanelLayout.watch(this); // the window itself: the watchers are weak, so a lambda would be dropped
-        return panels;
+        if (menuBar) {
+            pictureBeside = beside;
+            pictureBelow = below;
+            panelsBottom = bottom;
+            panelsRight = right;
+            for (java.awt.Component item : items) {
+                needsProgram.add((JMenuItem) item);
+            }
+            needsProgram.addAll(List.of(beside, below, bottom, right, reset));
+        }
+        items.addAll(List.of(new javax.swing.JPopupMenu.Separator(), beside, below, new javax.swing.JPopupMenu.Separator(),
+                bottom, right, new javax.swing.JPopupMenu.Separator(), reset));
+        return items;
+    }
+
+    // The layout's choices as a pop-up menu at (x, y) on a component: under the toolbar's layout
+    // button, or where a panel's heading was right-clicked.
+    void showLayoutMenu(java.awt.Component on, int x, int y) {
+        if (current == null) {
+            return; // the Welcome tab has no panels
+        }
+        javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+        for (java.awt.Component item : layoutItems(false)) {
+            menu.add(item);
+        }
+        menu.show(on, x, y);
     }
 
     javax.swing.JCheckBoxMenuItem panelCheck(PanelLayout.Panel panel) { // for tests
@@ -1534,6 +1570,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
             examplesButton.setSelected(show); // not pressed (and off) on the Welcome tab
             examplesButton.setEnabled(current != null);
         }
+        layoutButton.setEnabled(current != null); // the Welcome tab has no panels
         if (examplesItem != null) {
             examplesItem.setEnabled(current != null);
         }
@@ -1600,7 +1637,6 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         program.setLanguage(example.language());
         program.showCode(source, null, example.name() + example.language().endings().get(0) + " (example)");
         program.setExample(example);
-        program.setInput(ExampleCatalog.input(source)); // an example that reads input comes with some
         program.setTabTitle(example.title()); // "Bubble sort"; the tooltip says it's an example
         host.stateChanged(program);
         examplesPanel.select(example);
@@ -1836,6 +1872,49 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
                 current.getVisual().requestFocusInWindow();
             }
         }
+    }
+
+    // Space plays and pauses wherever the keyboard is, except where text is typed (the code, the
+    // terminal, a search box). Swing would otherwise give Space to the control clicked last (a
+    // button presses again, a box opens). A button reached with Tab is pressed with Enter instead,
+    // and a box opened with Enter (or Alt+↓), as in a web page's controls.
+    private void spaceAlwaysPlays() {
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(
+                event -> isActive() && spaceOrEnter(event));
+    }
+
+    // True if the key was used up here: Space played or paused, or Enter pressed a button.
+    boolean spaceOrEnter(KeyEvent event) {
+        java.awt.Component owner = event.getComponent();
+        if (owner == null || SwingUtilities.getWindowAncestor(owner) != this
+                || event.isControlDown() || event.isAltDown() || event.isMetaDown()
+                || javax.swing.MenuSelectionManager.defaultManager().getSelectedPath().length > 0) {
+            return false; // another window, a shortcut, or a menu or a box's list is open: theirs
+        }
+        boolean space = event.getKeyCode() == KeyEvent.VK_SPACE || event.getKeyChar() == ' ';
+        if (space && !typesText(owner)) {
+            if (event.getID() == KeyEvent.KEY_PRESSED) {
+                togglePlay();
+            }
+            event.consume();
+            return true; // pressed, typed and released: none of it reaches the control
+        }
+        if (event.getID() == KeyEvent.KEY_PRESSED && event.getKeyCode() == KeyEvent.VK_ENTER) {
+            if (owner instanceof javax.swing.JComboBox && owner.isEnabled()) {
+                ((javax.swing.JComboBox<?>) owner).showPopup();
+                return true;
+            }
+            if (owner instanceof javax.swing.AbstractButton && owner.isEnabled()) {
+                ((javax.swing.AbstractButton) owner).doClick();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // A place to type: an editable text component, whose Space is a space.
+    static boolean typesText(java.awt.Component component) {
+        return component instanceof javax.swing.text.JTextComponent && ((javax.swing.text.JTextComponent) component).isEditable();
     }
 
     // Ctrl+Tab normally moves the keyboard focus out of the editor before any shortcut hears it, so
@@ -2305,6 +2384,11 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
     // How the open program talks back to the window.
     // OOP: an inner class implementing an interface; it can use the window's private methods.
     private class Host implements Workbench.Host {
+        @Override
+        public void showLayoutMenu(java.awt.Component on, int x, int y) {
+            MainWindow.this.showLayoutMenu(on, x, y);
+        }
+
         @Override
         public void stateChanged(Workbench workbench) {
             int index = tabs.indexOfComponent(workbench);

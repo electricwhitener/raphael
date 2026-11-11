@@ -56,6 +56,8 @@ public class CTracer implements Tracer {
     private volatile List<Path> inputFiles = List.of();
     private volatile boolean stopRequested;
     private volatile int steps;
+    private volatile LiveInput liveInput; // the next run's terminal, or null
+    private volatile Path printing;       // the run in progress's output file, or null
 
     @Override
     public void setLimits(RunLimits limits) {
@@ -78,6 +80,53 @@ public class CTracer implements Tracer {
     }
 
     @Override
+    public void setLiveInput(LiveInput input) {
+        liveInput = input;
+    }
+
+    @Override
+    public String outputSoFar() {
+        Path file = printing;
+        return file == null ? "" : printed(file);
+    }
+
+    private static String printed(Path file) {
+        try {
+            return Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "";
+        } catch (IOException | RuntimeException e) {
+            return ""; // half a character, or the file just went
+        }
+    }
+
+    // Where the program's stdin pipe is: a FIFO the shim makes in the build folder (Linux, macOS),
+    // or a Windows named pipe, which the shim makes and Raphael connects to.
+    private static String pipeName(Path build) {
+        return Toolchains.WINDOWS ? "\\\\.\\pipe\\raphael-" + ProcessHandle.current().pid() + "-" + System.nanoTime()
+                : build.resolve("stdin.pipe").toString();
+    }
+
+    // Opens the pipe for writing once the program has made it (it does at its start).
+    private static java.io.OutputStream openPipe(String name, java.util.function.BooleanSupplier over)
+            throws IOException, InterruptedException {
+        while (!over.getAsBoolean()) {
+            if (Toolchains.WINDOWS) {
+                try {
+                    return new java.io.FileOutputStream(name); // fails until the program has made the pipe
+                } catch (java.io.FileNotFoundException notYet) {
+                    // try again
+                }
+            } else {
+                Path fifo = Path.of(name);
+                if (Files.exists(fifo) && !Files.isRegularFile(fifo)) {
+                    return new java.io.FileOutputStream(fifo.toFile()); // waits for the program to open its end: it's about to
+                }
+            }
+            Thread.sleep(20);
+        }
+        return null;
+    }
+
+    @Override
     public Trace trace(CompileResult program, String input) throws TraceException {
         stopRequested = false;
         steps = 0;
@@ -95,7 +144,12 @@ public class CTracer implements Tracer {
             Path stdin = build.resolve("stdin.txt");
             Path stdout = build.resolve("stdout.txt");
             Path stopFile = build.resolve("stop");
-            Files.writeString(stdin, input == null ? "" : input);
+            LiveInput live = liveInput;
+            String pipe = live == null ? null : pipeName(build);
+            if (pipe != null && !Toolchains.WINDOWS) {
+                Files.deleteIfExists(Path.of(pipe));
+            }
+            Files.writeString(stdin, input == null || live != null ? "" : input);
             Files.deleteIfExists(stdout);
             Files.deleteIfExists(stopFile);
 
@@ -109,6 +163,9 @@ public class CTracer implements Tracer {
             env.put("RAPHAEL_SRC", build.resolve("src").toString());
             env.put("RAPHAEL_RUN", folder.path().toString());
             env.put("RAPHAEL_STDIN", stdin.toString());
+            if (pipe != null) {
+                env.put("RAPHAEL_STDIN_PIPE", pipe); // the terminal: the shim reads stdin from this pipe instead
+            }
             env.put("RAPHAEL_STDOUT", stdout.toString());
             env.put("RAPHAEL_STOP", stopFile.toString());
             env.put("RAPHAEL_MAX_STEPS", String.valueOf(runLimits.maxSteps()));
@@ -122,17 +179,28 @@ public class CTracer implements Tracer {
             StringBuffer gdbErrors = new StringBuffer();
             new OutputDrainer(process.getErrorStream(), gdbErrors, "debugger stderr").start();
             Run run = new Run(program, process, stopFile, stdout, runLimits);
+            run.live = live;
+            printing = stdout;
+            Thread pump = null;
+            if (live != null) {
+                live.attach(() -> steps, () -> printed(stdout).length());
+                pump = live.pump(over -> openPipe(pipe, over), () -> !process.isAlive());
+            }
             try {
                 run.read();
             } finally {
                 run.kill();
+                printing = null;
+                if (pump != null) {
+                    release(pipe, pump);
+                }
             }
             byte[] printed = Files.exists(stdout) ? Files.readAllBytes(stdout) : new byte[0];
             if (run.failed != null) {
                 throw new TraceException(Toolchains.debugger() + " couldn't run the program: " + run.failed
                         + (gdbErrors.length() > 0 ? "\n" + gdbErrors.toString().strip() : ""), null);
             }
-            return run.trace(printed);
+            return run.trace(printed, live == null ? List.of() : live.typed());
         } catch (IOException e) {
             throw new TraceException("Raphael couldn't start " + Toolchains.debugger() + " to run the program.", e);
         } catch (InterruptedException e) {
@@ -140,6 +208,27 @@ public class CTracer implements Tracer {
             throw new TraceException("The run was interrupted.", e);
         } finally {
             steps = 0;
+        }
+    }
+
+    // After the run: the pump thread ends by itself once the program has gone, unless it's still
+    // opening a FIFO the program made but never opened (killed at its start); opening the other
+    // end lets it go.
+    private static void release(String pipe, Thread pump) throws InterruptedException {
+        pump.join(500);
+        if (pump.isAlive() && !Toolchains.WINDOWS) {
+            try (java.io.FileInputStream unblock = new java.io.FileInputStream(pipe)) {
+                pump.join(500);
+            } catch (IOException ignored) {
+                // it has gone
+            }
+        }
+        if (!Toolchains.WINDOWS) {
+            try {
+                Files.deleteIfExists(Path.of(pipe));
+            } catch (IOException ignored) {
+                // the build folder is deleted with the program
+            }
         }
     }
 
@@ -159,6 +248,7 @@ public class CTracer implements Tracer {
         private String failed;
         private boolean forced; // the watchdog ended the run, not the script
         private boolean ended;
+        LiveInput live; // the terminal's input, or null
 
         Run(CompileResult program, Process process, Path stopFile, Path stdout, RunLimits limits) {
             this.build = program.classDir();
@@ -212,9 +302,16 @@ public class CTracer implements Tracer {
                                     + limits.timeoutSeconds() + " seconds without reaching another line. Is it an infinite loop?");
                     return;
                 }
+                if (waitsForInput(now - lastLine)) {
+                    live.programWaits();
+                    lastLine = now; // the watchdog doesn't count the time spent waiting for typing
+                }
                 String line = lines.poll(POLL_MS, TimeUnit.MILLISECONDS);
                 if (line == null) {
                     continue;
+                }
+                if (live != null) {
+                    live.programMoved();
                 }
                 if (line.isEmpty()) { // gdb ended without saying how the run ended
                     if (!ended && failed == null) {
@@ -229,6 +326,16 @@ public class CTracer implements Tracer {
                     return;
                 }
             }
+        }
+
+        // With the terminal: no step for a while, on a line that reads input (scanf, fgets…),
+        // means the program is waiting for the user to type.
+        private boolean waitsForInput(long idle) {
+            if (live == null || idle < LiveInput.WAIT_MS || recorded.isEmpty()) {
+                return false;
+            }
+            Step last = recorded.get(recorded.size() - 1);
+            return !last.frames().isEmpty() && live.readsAt(last.frames().get(0).getFile(), last.line());
         }
 
         // One line from the script; true once the run is over.
@@ -387,14 +494,14 @@ public class CTracer implements Tracer {
         }
 
         // The whole run. printed: everything the program wrote, to turn each step's byte count into characters.
-        Trace trace(byte[] printed) {
+        Trace trace(byte[] printed, List<raphael.model.TypedLine> typed) {
             String output = new String(printed, StandardCharsets.UTF_8);
             List<Snapshot> snapshots = new ArrayList<>();
             for (Step step : recorded) {
                 int bytes = Math.min(step.outputBytes(), printed.length);
                 snapshots.add(step.snapshot(new String(printed, 0, bytes, StandardCharsets.UTF_8).length()));
             }
-            return new Trace(snapshots, output, endReason, endMessage);
+            return new Trace(snapshots, output, endReason, endMessage, typed);
         }
     }
 

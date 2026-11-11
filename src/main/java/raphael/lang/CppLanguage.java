@@ -64,6 +64,11 @@ public class CppLanguage extends NotRunnableYet {
     }
 
     @Override
+    public boolean readsInputOn(String line) {
+        return line.matches("(?s).*(\\bcin\\b|\\b(getline|scanf|getchar)\\s*\\().*");
+    }
+
+    @Override
     public boolean usesFiles(String code) {
         return code.matches("(?s).*\\b(ifstream|ofstream|fstream|fopen)\\b.*");
     }

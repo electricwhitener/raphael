@@ -49,7 +49,7 @@ public final class Section {
     }
 
     // An × at the right of a panel's heading (a panel built with wrap(), or one that holds one).
-    public static void addClose(JComponent panel, String tip, Runnable close) {
+    public static JComponent addClose(JComponent panel, String tip, Runnable close) {
         JComponent wrapped = headed(panel) ? panel
                 : panel.getComponentCount() > 0 && panel.getComponent(0) instanceof JComponent && headed((JComponent) panel.getComponent(0))
                 ? (JComponent) panel.getComponent(0) : null;
@@ -69,6 +69,7 @@ public final class Section {
         row.add(heading, BorderLayout.CENTER);
         row.add(button, BorderLayout.EAST);
         wrapped.add(row, BorderLayout.NORTH);
+        return row; // the heading's row, for a right-click menu
     }
 
     private static boolean headed(JComponent panel) {

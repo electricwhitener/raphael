@@ -49,7 +49,7 @@ public class TraceModel {
         load(trace, scenes, runSize, moments, new raphael.analysis.CodeFacts());
     }
 
-    // The text typed into the stdin box for this run (the files view shows what was read of it).
+    // The text typed into the terminal for this run (the files view shows what was read of it).
     // Set before load(), so the views see it when they hear of the new run.
     public void setInput(String input) {
         this.input = input == null ? "" : input;

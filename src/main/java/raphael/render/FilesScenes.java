@@ -13,7 +13,7 @@ import raphael.model.ThrownException;
 import raphael.model.Trace;
 
 // The files view, for programs that read input or use files. On top, the input (what was typed
-// into the stdin box), word by word: what the program has read is faded, what it read just now
+// into the terminal), word by word: what the program has read is faded, what it read just now
 // says which variable it went into, and what the next line will read is outlined in blue. Each
 // line ends in \n, so a nextLine() that only reads the end of a line can be seen. Below, the
 // program's folder, a card per file with its lines: read lines faded, new lines flashing as they

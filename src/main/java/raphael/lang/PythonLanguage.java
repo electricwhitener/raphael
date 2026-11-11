@@ -60,6 +60,11 @@ public class PythonLanguage extends NotRunnableYet {
     }
 
     @Override
+    public boolean readsInputOn(String line) {
+        return line.matches("(?s).*(\\binput\\s*\\(|\\bsys\\.stdin\\b).*");
+    }
+
+    @Override
     public boolean usesFiles(String code) {
         return code.matches("(?s).*\\bopen\\s*\\(.*");
     }

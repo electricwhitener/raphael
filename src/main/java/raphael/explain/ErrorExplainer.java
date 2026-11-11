@@ -160,7 +160,7 @@ public abstract class ErrorExplainer {
         @Override
         String describe(String type, String message) {
             return "The input had something else where the program expected a number (for example, Scanner's nextInt() "
-                    + "read a word). Check what's typed in the stdin box.";
+                    + "read a word). Check what was typed in the terminal.";
         }
     }
 
@@ -173,7 +173,7 @@ public abstract class ErrorExplainer {
         @Override
         String describe(String type, String message) {
             return "The program asked for more input than it was given, or for the next item when there wasn't one. "
-                    + "If it reads with Scanner, type all its input in the stdin box before running.";
+                    + "If it reads with Scanner, type its input in the terminal when it asks, and don't end it (Ctrl+D) early.";
         }
     }
 

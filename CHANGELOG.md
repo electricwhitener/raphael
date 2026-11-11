@@ -2,13 +2,18 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
-## Unreleased
+## 1.4.0 (2026-11-11)
+
+**The terminal**
+- The console is now a terminal. What the program prints shows up as it's printed, and a program that reads input asks for it there: type the line and press Enter, as in any terminal. The recording waits while the program waits for you, and Ctrl+D ends the input. This works for Java and C on Windows, macOS and Linux.
+- Playing the run back, the terminal shows each line you typed where you typed it, from the step that read it on.
+- The stdin box is gone. An example's input (its `// stdin:` line) is typed for you, one line each time the program asks; change or delete that line to type your own.
 
 **The workspace**
-- Close any panel with the × on its heading (the picture, the call stack, the variables, the console tabs) and bring it back from View → Panels. The panels have dividers between them to drag. The picture can go below the code, and the panels down the right instead of along the bottom; Reset layout puts everything back. The layout is remembered.
+- Close any panel with the × on its heading (the picture, the call stack, the variables, the terminal tabs). The new layout button in the toolbar brings a closed panel back, and so do a right-click on any panel's heading and View → Panels. Drag the dividers between panels. The picture can go below the code, and the panels down the right instead of along the bottom; Reset layout puts everything back. The layout is remembered.
 - Ctrl + and Ctrl − zoom the whole window, as VS Code does: menus, toolbar, icons, panels, text and the picture. Ctrl 0 goes back to 100%. The zoom is remembered, and never goes past what the screen has room for. The code's own text size is in Settings.
-
-## 1.3.1 (2026-11-11)
+- Space always plays and pauses. It used to press whichever button was clicked last. A button reached with Tab is pressed with Enter.
+- Choosing in the moments or speed box gives the keyboard back, so Space and the arrow keys step the program at once; before, the box kept the keyboard and Space opened it again.
 
 **Fixes**
 - A C program with a node struct opens on the picture, as a Java one does (the binary search tree example opened on the calls view).
