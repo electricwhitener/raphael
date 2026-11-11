@@ -214,7 +214,7 @@ public class JdiTracer implements Tracer {
                         "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
                         "-Xmx" + runLimits.memoryMb() + "m"));
                 try {
-                    command.add("-javaagent:" + ParentWatch.jar());
+                    command.add("-javaagent:" + ParentWatch.jar() + "=" + ProcessHandle.current().pid()); // Raphael's own pid
                 } catch (IOException e) {
                     // Without the agent the program still runs; only the "Raphael was killed" safety net is missing.
                     LOG.log(Level.WARNING, "Couldn't write the ParentWatch agent jar", e);

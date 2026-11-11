@@ -26,12 +26,24 @@ public final class ParentWatch {
     private ParentWatch() {
     }
 
-    // Runs inside the student's program, before its main.
+    // Runs inside the student's program, before its main. args: Raphael's process id.
+    // Raphael is named by its id, not found as this program's parent: if Raphael died while the
+    // program was starting, the system has already made another process (launchd, init) its
+    // parent, which never ends. A Raphael that's already gone ends the program at once.
     // Raphael isn't this program's child's parent in Java's eyes (Java can only wait on its own
     // children), so ProcessHandle.onExit() would only poll, waiting longer and longer between
     // looks. A small thread of our own looks five times a second instead.
     public static void premain(String args) {
-        ProcessHandle.current().parent().ifPresent(raphael -> {
+        java.util.Optional<ProcessHandle> named;
+        try {
+            named = args == null || args.isBlank() ? ProcessHandle.current().parent() : ProcessHandle.of(Long.parseLong(args.trim()));
+        } catch (NumberFormatException e) {
+            named = ProcessHandle.current().parent();
+        }
+        if (named.isEmpty() || !named.get().isAlive()) {
+            Runtime.getRuntime().halt(1); // Raphael is already gone
+        }
+        named.ifPresent(raphael -> {
             Thread watch = new Thread(() -> {
                 while (raphael.isAlive()) {
                     try {
