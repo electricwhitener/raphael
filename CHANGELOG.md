@@ -2,6 +2,17 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
+## Unreleased
+
+**Fixes**
+- A C program with a node struct opens on the picture, as a Java one does (the binary search tree example opened on the calls view).
+- The welcome page shows the examples of the language you're learning, or says it has none yet, instead of Java's.
+- The examples side bar stays out of the welcome page, which has its own example browser, and comes back with your program.
+
+**Key moments**
+- Fewer: a moment that only repeats an earlier one (every later call of a recursion, every malloc of a loop) is left out. Your own `// moment:` notes always stay.
+- They no longer stop playing by default. A box in the playback bar, and the Run menu, choose: Moments off, Show moments, or Pause at moments.
+
 ## 1.3.0 (2026-11-11)
 
 **C runs**
