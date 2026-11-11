@@ -182,7 +182,11 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         if (current != null) {
             current.getCode().showFile(path);
         }
-    });
+    }, () -> {
+        if (current != null) {
+            current.focusEditor();
+        }
+    }, path -> current != null && current.getCode().isDirty(path));
     private Workbench explorerFor; // the program the Explorer last showed, to open on it once
     private final JMenu recentMenu = new JMenu("Open recent");
     private JMenuItem saveRecordingItem;
@@ -1727,7 +1731,9 @@ public class MainWindow extends JFrame implements MomentMode.Watcher, PanelLayou
         }
         if (explorerFor != current) {
             explorerFor = current;
-            sideBar.setSelectedComponent(explorerPanel);
+            if (folder != null) { // a folder of the user's own; an example keeps the list being browsed (its tab appears beside it)
+                sideBar.setSelectedComponent(explorerPanel);
+            }
         }
     }
 

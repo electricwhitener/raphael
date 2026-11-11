@@ -1068,10 +1068,11 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             }
             if (code.isDirty(path)) {
                 String answer = Dialogs.question(this, file.getName() + " changed on disk")
-                        .body("Another program changed it since it was opened here, and you have changes here that aren't saved.")
-                        .buttons("Reload it", null, "Keep mine")
+                        .body("Another program saved a new version of this file. Reloading replaces the changes you haven't "
+                                + "saved here; keeping yours means your next save overwrites the other program's version.")
+                        .buttons("Keep mine", null, "Reload from disk") // Enter keeps the user's work: the safe choice
                         .ask();
-                if (!"Reload it".equals(answer)) {
+                if (!"Reload from disk".equals(answer)) {
                     continue; // the next save writes this version over the other
                 }
             }

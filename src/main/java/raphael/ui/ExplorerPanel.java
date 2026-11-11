@@ -16,7 +16,8 @@ import javax.swing.tree.TreeSelectionModel;
 import raphael.render.Style;
 
 // The Explorer: the files of a program of several files (a folder) as a tree of its folders, as
-// in VS Code. A click on a file shows it in the editor; the file in the editor is the one chosen.
+// in VS Code, under the folder's name. A click on a file shows it in the editor; Enter, a double
+// click or Esc go on into the code. The file in the editor is the one chosen; an unsaved one has a dot.
 // OOP: inheritance (extends JPanel); composition (a RowTree in a scroll pane); a Consumer passed
 // in is how it asks for a file to be shown, so it knows nothing about tabs or editors; a nested
 // node class (encapsulation: a file's path, or a folder's name).
@@ -31,20 +32,46 @@ public class ExplorerPanel extends JPanel {
     }
 
     private final RowTree tree = new RowTree(node -> pathOf(node) != null); // a file opens; a folder only folds
+    private final javax.swing.JLabel heading = Section.header("");
     private final DefaultMutableTreeNode root = new DefaultMutableTreeNode();
     private final DefaultTreeModel model = new DefaultTreeModel(root);
     private List<String> shownPaths = List.of();
     private String shownFolder = "";
     private boolean choosing; // the tree is being set to the file in the editor: not a click
 
-    public ExplorerPanel(Consumer<String> show) {
+    // show: put a file in the editor; intoCode: give the keyboard to the editor; unsaved: whether a file has unsaved changes.
+    public ExplorerPanel(Consumer<String> show, Runnable intoCode, java.util.function.Predicate<String> unsaved) {
         super(new BorderLayout());
         setBackground(Style.BACKGROUND);
         tree.setModel(model);
-        tree.setRootVisible(true); // the folder's own name on top, as VS Code shows it
+        tree.setRootVisible(false); // the folder's name is the heading above, so the files start at the left
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         Zoom.rowHeight(tree, Style.PALETTE_ROW_H - 4);
-        tree.setCellRenderer(new Renderer());
+        tree.setCellRenderer(new Renderer(unsaved));
+        Runnable openSelected = () -> {
+            String path = tree.getSelectionPath() == null ? null : pathOf(tree.getSelectionPath().getLastPathComponent());
+            if (path != null) {
+                show.accept(path);
+                intoCode.run();
+            }
+        };
+        for (String key : new String[] {"ENTER", "ESCAPE"}) {
+            tree.getInputMap().put(javax.swing.KeyStroke.getKeyStroke(key), "intoCode");
+        }
+        tree.getActionMap().put("intoCode", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                openSelected.run();
+            }
+        });
+        tree.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && tree.getPathForLocation(e.getX(), e.getY()) != null) {
+                    openSelected.run();
+                }
+            }
+        });
         tree.addTreeSelectionListener(e -> {
             String path = e.getPath() == null ? null : pathOf(e.getPath().getLastPathComponent());
             if (!choosing && path != null) {
@@ -55,6 +82,7 @@ public class ExplorerPanel extends JPanel {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setOpaque(false);
         scroll.setOpaque(false);
+        add(heading, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
     }
 
@@ -64,6 +92,8 @@ public class ExplorerPanel extends JPanel {
         if (!paths.equals(shownPaths) || !folderName.equals(shownFolder)) {
             shownPaths = List.copyOf(paths);
             shownFolder = folderName;
+            heading.setText(folderName.toUpperCase(java.util.Locale.ROOT));
+            heading.setToolTipText(folderName);
             root.removeAllChildren();
             root.setUserObject(new Entry(folderName, null));
             List<String> sorted = paths.stream().sorted(ExplorerPanel::foldersFirst).toList();
@@ -76,6 +106,7 @@ public class ExplorerPanel extends JPanel {
             }
         }
         choose(shown);
+        tree.repaint(); // the unsaved dots may have changed
     }
 
     // The file in the editor is the chosen row.
@@ -156,8 +187,15 @@ public class ExplorerPanel extends JPanel {
         return value instanceof Entry ? ((Entry) value).path() : null;
     }
 
-    // Folders in the sans font's bold, files in the plain weight, each with its icon.
+    // Folders in the sans font's bold, files in the plain weight, each with its icon; a file with
+    // unsaved changes has a dot before its name, as its tab has.
     private static final class Renderer extends DefaultTreeCellRenderer {
+        private final java.util.function.Predicate<String> unsaved;
+
+        Renderer(java.util.function.Predicate<String> unsaved) {
+            this.unsaved = unsaved;
+        }
+
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected, boolean expanded,
                                                       boolean leaf, int row, boolean focused) {
@@ -169,6 +207,9 @@ public class ExplorerPanel extends JPanel {
             setIconTextGap(Style.SPACE_2);
             Zoom.font(this, Style.sans(!file, file ? 12.5f : 12f));
             setForeground(Style.INK);
+            if (file && unsaved.test(pathOf(value))) {
+                setText("● " + getText());
+            }
             return this;
         }
     }
