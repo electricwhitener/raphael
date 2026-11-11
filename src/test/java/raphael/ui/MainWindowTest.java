@@ -122,4 +122,39 @@ class MainWindowTest {
         window.newProgram(raphael.lang.Languages.JAVA); // leaves Java as the last one, for the other tests
         window.dispose();
     }
+
+    // The examples side bar stays off the Welcome tab, which has its own example browser, and
+    // comes back, as it was, when a program is in front.
+    @Test
+    void theSideBarIsOnlyBesideAProgram() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        raphael.App.SETTINGS.put("language", "java"); // a language chosen, so the side bar is offered
+        raphael.App.SETTINGS.putBoolean("examplesShown", true);
+        MainWindow window = new MainWindow();
+        assertFalse(window.examplesShowing(), "the Welcome tab is in front");
+        window.toggleExamples(); // Ctrl+B does nothing there
+        assertTrue(raphael.App.SETTINGS.getBoolean("examplesShown", false), "the choice is kept");
+        window.newProgram();
+        assertTrue(window.examplesShowing());
+        window.showWelcome();
+        assertFalse(window.examplesShowing());
+        window.toggleExamples();
+        window.newProgram();
+        assertTrue(window.examplesShowing(), "Ctrl+B on the Welcome tab didn't change the choice");
+        window.toggleExamples();
+        assertFalse(window.examplesShowing());
+        window.dispose();
+    }
+
+    // The Welcome tab shows the examples of the language chosen, or says it has none yet.
+    @Test
+    void theWelcomePageShowsEachLanguagesOwnExamples() {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
+        WelcomePage page = new WelcomePage(new WelcomePage.Actions(() -> { }, () -> { }, () -> { }, e -> { }, f -> { }, l -> { }));
+        page.showExamplesOf(raphael.lang.Languages.byId("cpp"));
+        assertEquals("cpp", page.shownLanguage().id());
+        assertFalse(page.showsExampleList(), "C++ has no examples yet: a note, not Java's list");
+        page.showExamplesOf(raphael.lang.Languages.byId("c"));
+        assertTrue(page.showsExampleList());
+    }
 }

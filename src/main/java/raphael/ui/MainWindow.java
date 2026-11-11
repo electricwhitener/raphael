@@ -131,7 +131,8 @@ public class MainWindow extends JFrame {
     private final JButton updateNotice = new JButton();
     private final JPanel statusBar = new JPanel(new BorderLayout());
     private JToolBar toolBar;
-    private javax.swing.JToggleButton examplesButton; // pressed while the side bar is open
+    private javax.swing.JToggleButton examplesButton; // pressed while the side bar is wanted
+    private JMenuItem examplesItem;                     // View → Examples
     // A thin moving bar under the toolbar while a program is being recorded.
     private final javax.swing.JProgressBar busy = new javax.swing.JProgressBar();
     private final JButton themeButton = ControlsBar.button(Icons.Glyph.THEME, "Dark mode", "Dark mode  (Ctrl+D)");
@@ -204,8 +205,8 @@ public class MainWindow extends JFrame {
                 this::loadExample, this::openFile, language -> {
                     App.SETTINGS.put("lastNewLanguage", language.id());
                     examplesPanel.showLanguage(language);
-                    if (!examplesPanel.isVisible() && !App.SETTINGS.getBoolean("examplesOpenedOnce", false)) {
-                        App.SETTINGS.putBoolean("examplesOpenedOnce", true); // the first answer opens the side bar, once
+                    if (!App.SETTINGS.getBoolean("examplesOpenedOnce", false)) {
+                        App.SETTINGS.putBoolean("examplesOpenedOnce", true); // the first answer opens the side bar (with the first program), once
                         showExamplesPanel(true);
                     }
                     say("New programs and the examples are in " + language.name() + " now", Style.INK_SOFT);
@@ -223,11 +224,12 @@ public class MainWindow extends JFrame {
                 App.SETTINGS.putInt("examplesWidth", sideSplit.getDividerLocation());
             }
         });
-        // On the first run the welcome page asks the language first; the side bar opens on the answer.
-        examplesPanel.setVisible(App.SETTINGS.getBoolean("examplesShown", true) && raphael.lang.Languages.chosen());
+        // Hidden until a program is in front (placeSideBar): the window opens on the Welcome tab.
+        examplesPanel.setVisible(false);
         examplesPanel.setMinimumSize(new Dimension(180, 0));
         sideSplit.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null); // the arrow keys step the program
         add(sideSplit, BorderLayout.CENTER);
+        placeSideBar();
 
         status.setFont(Style.UI_FONT.deriveFont(12f));
         status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
@@ -818,7 +820,8 @@ public class MainWindow extends JFrame {
             focusWorkArea();
         }));
         view.add(item("Quick Open…", "control P", this::quickOpen));
-        view.add(item("Examples", "control B", this::toggleExamples));
+        examplesItem = item("Examples", "control B", this::toggleExamples);
+        view.add(examplesItem);
         view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
         view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
@@ -1335,23 +1338,50 @@ public class MainWindow extends JFrame {
     // ---- the examples side bar ----
 
     // Shows the side bar if it's hidden, else hides it (Ctrl+B, the toolbar's Examples, View → Examples).
+    // Not on the Welcome tab, which has its own example browser.
     void toggleExamples() {
-        showExamplesPanel(!examplesPanel.isVisible());
+        if (current != null) {
+            showExamplesPanel(!examplesPanel.isVisible());
+        }
     }
 
+    boolean examplesShowing() {
+        return examplesPanel.isVisible();
+    }
+
+    // Whether the user wants the side bar (remembered); it shows while a program is in front.
     void showExamplesPanel(boolean show) {
-        examplesPanel.setVisible(show);
-        if (examplesButton != null) {
-            examplesButton.setSelected(show);
-        }
         App.SETTINGS.putBoolean("examplesShown", show);
-        if (show) {
-            sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+        placeSideBar();
+        if (show && current != null) {
             examplesPanel.focusSearch();
         } else if (current != null) {
             current.focusEditor();
         }
-        sideSplit.revalidate();
+    }
+
+    // The side bar is open when it's wanted and a program is in front: the Welcome tab has the
+    // full example browser already. Leaving the Welcome tab brings it back as it was.
+    private void placeSideBar() {
+        if (sideSplit == null) {
+            return; // the tabs are being built; it's placed once the split exists
+        }
+        boolean wanted = App.SETTINGS.getBoolean("examplesShown", true) && raphael.lang.Languages.chosen();
+        boolean show = wanted && current != null;
+        if (examplesPanel.isVisible() != show) {
+            examplesPanel.setVisible(show);
+            if (show) {
+                sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+            }
+            sideSplit.revalidate();
+        }
+        if (examplesButton != null) {
+            examplesButton.setSelected(show); // not pressed (and off) on the Welcome tab
+            examplesButton.setEnabled(current != null);
+        }
+        if (examplesItem != null) {
+            examplesItem.setEnabled(current != null);
+        }
     }
 
     // One click on an example: it opens in the preview tab (italic title), which the next click
@@ -1478,7 +1508,7 @@ public class MainWindow extends JFrame {
     }
 
     // The Welcome tab, in front: opened again if it was closed.
-    private void showWelcome() {
+    void showWelcome() {
         if (tabs.indexOfComponent(welcome) < 0) {
             tabs.insertTab("Welcome", null, welcome, "Start a program, open a file, or pick an example", 0);
         }
@@ -1558,6 +1588,7 @@ public class MainWindow extends JFrame {
             item.setEnabled(!welcome);
         }
         saveButton.setEnabled(!welcome);
+        placeSideBar();
         showLegendIfRoom();
     }
 

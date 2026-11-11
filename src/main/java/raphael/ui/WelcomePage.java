@@ -51,6 +51,10 @@ public class WelcomePage extends JPanel {
     private final Consumer<File> onRecent;
     private final JList<ExampleCatalog.Group> groups;
     private final JList<ExampleCatalog.Example> examples;
+    private final JLabel examplesHeading = heading("Examples");
+    private final JLabel noneText = label("", Style.sans(false, 13f), () -> Style.INK); // follows the theme
+    private final JPanel exampleCards = new JPanel(new java.awt.CardLayout());
+    private raphael.lang.Language shownLanguage;
 
     // The actions behind the page's buttons, given by the window.
     public record Actions(Runnable newProgram, Runnable open, Runnable paste, Consumer<ExampleCatalog.Example> example,
@@ -86,7 +90,7 @@ public class WelcomePage extends JPanel {
         showRecent(List.of());
 
         // Right: the examples. The groups on the left, the chosen group's examples beside them.
-        groups = new JList<>(ExampleCatalog.groups(examplesLanguage()).toArray(new ExampleCatalog.Group[0])) {
+        groups = new JList<>(new ExampleCatalog.Group[0]) {
             @Override
             public Color getBackground() {
                 return Style.BAR;
@@ -202,9 +206,25 @@ public class WelcomePage extends JPanel {
         browser.add(scroll(examples), BorderLayout.CENTER);
         JPanel right = new JPanel(new BorderLayout(0, Style.SPACE_2));
         right.setOpaque(false);
-        JLabel examplesHeading = heading("Examples · " + ExampleCatalog.all().size() + " programs · click one, then press Run");
         right.add(examplesHeading, BorderLayout.NORTH);
-        right.add(browser, BorderLayout.CENTER);
+        // A language with no examples yet says so, as the side bar does, and offers Java's.
+        JPanel none = new JPanel();
+        none.setOpaque(false);
+        none.setLayout(new javax.swing.BoxLayout(none, javax.swing.BoxLayout.Y_AXIS));
+        none.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
+        noneText.setAlignmentX(Component.LEFT_ALIGNMENT);
+        none.add(noneText);
+        javax.swing.JButton showJava = new javax.swing.JButton("Show Java examples");
+        showJava.putClientProperty("JButton.buttonType", "borderless");
+        showJava.setForeground(Style.ACCENT);
+        showJava.setAlignmentX(Component.LEFT_ALIGNMENT);
+        showJava.addActionListener(e -> showExamplesOf(raphael.lang.Languages.JAVA));
+        none.add(showJava);
+        exampleCards.setOpaque(false);
+        exampleCards.add(browser, "list");
+        exampleCards.add(none, "none");
+        right.add(exampleCards, BorderLayout.CENTER);
+        showExamplesOf(raphael.lang.Languages.preferred());
         page.add(right, BorderLayout.CENTER);
 
         add(page);
@@ -324,16 +344,29 @@ public class WelcomePage extends JPanel {
         return box;
     }
 
-    // The examples shown here: the language being learned if it has some yet, else Java's.
-    private static raphael.lang.Language examplesLanguage() {
-        raphael.lang.Language language = raphael.lang.Languages.preferred();
-        return ExampleCatalog.groups(language).isEmpty() ? raphael.lang.Languages.JAVA : language;
+    // One language's examples, or, for a language that has none yet, a note saying so.
+    void showExamplesOf(raphael.lang.Language language) {
+        List<ExampleCatalog.Group> found = ExampleCatalog.groups(language);
+        groups.setListData(found.toArray(new ExampleCatalog.Group[0]));
+        groups.setSelectedIndex(0);
+        int count = found.stream().mapToInt(group -> group.examples().size()).sum();
+        examplesHeading.setText(("Examples · " + (found.isEmpty() ? language.name()
+                : count + " " + language.name() + (count == 1 ? " program" : " programs") + " · click one, then press Run"))
+                .toUpperCase(java.util.Locale.ROOT));
+        noneText.setText("<html><b>No " + language.name() + " examples yet</b><br>They're coming. For now you can write and save "
+                + language.name() + " programs.</html>");
+        ((java.awt.CardLayout) exampleCards.getLayout()).show(exampleCards, found.isEmpty() ? "none" : "list");
+        shownLanguage = language;
     }
 
-    private void showExamplesOf(raphael.lang.Language language) {
-        raphael.lang.Language shown = ExampleCatalog.groups(language).isEmpty() ? raphael.lang.Languages.JAVA : language;
-        groups.setListData(ExampleCatalog.groups(shown).toArray(new ExampleCatalog.Group[0]));
-        groups.setSelectedIndex(0);
+    // Whether the list of examples shows (not the "none yet" note). For tests.
+    boolean showsExampleList() {
+        return exampleCards.getComponent(0).isVisible();
+    }
+
+    // The language whose examples are showing (for tests).
+    raphael.lang.Language shownLanguage() {
+        return shownLanguage;
     }
 
     private static JLabel heading(String text) {

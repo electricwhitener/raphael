@@ -21,7 +21,20 @@ import raphael.ui.SystemTheme;
 public class App {
 
     // Remembered between runs: dark mode and text size. This is a JDK class.
-    public static final Preferences SETTINGS = Preferences.userNodeForPackage(App.class);
+    // The user's settings. The tests (raphael.test, set by Maven) get a node of their own, so
+    // running them never changes the settings of the Raphael the developer uses.
+    public static final Preferences SETTINGS = Boolean.getBoolean("raphael.test")
+            ? Preferences.userRoot().node("raphael-tests") : Preferences.userNodeForPackage(App.class);
+
+    static {
+        if (Boolean.getBoolean("raphael.test")) {
+            try {
+                SETTINGS.clear(); // each test run starts from the defaults
+            } catch (java.util.prefs.BackingStoreException e) {
+                // a settings store that can't be cleared: the tests set what they rely on
+            }
+        }
+    }
 
     public static void main(String[] args) {
         if (args.length > 0 && args[0].equals("--self-test")) { // used to check the installers
