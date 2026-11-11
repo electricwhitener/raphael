@@ -101,9 +101,9 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
               Tab, Shift+Tab     move lines in, out
 
             the view
-              Ctrl + and Ctrl -  text size (or Ctrl + wheel on the code)
-              Ctrl + wheel       zoom the picture (over the picture)
-              Ctrl+0             normal text size and zoom
+              Ctrl + and Ctrl -  zoom the whole window in and out
+              Ctrl + wheel       the code's text size (over the code), the picture's zoom (over the picture)
+              Ctrl+0             100% zoom, and the picture's zoom back
               Ctrl+D             dark or light
               Ctrl+,             settings
               F6, Shift+F6       move between toolbar, code and picture
@@ -133,6 +133,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
     private JToolBar toolBar;
     private javax.swing.JToggleButton examplesButton; // pressed while the side bar is wanted
     private JMenuItem examplesItem;                     // View → Examples
+    private JButton helpButton;
     private final java.util.Map<MomentMode, javax.swing.JRadioButtonMenuItem> momentChoices = new java.util.EnumMap<>(MomentMode.class);
 
     javax.swing.JRadioButtonMenuItem momentChoice(MomentMode mode) { // for tests
@@ -206,7 +207,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         toolBar = buildToolBar();
         busy.setIndeterminate(true);
         busy.setBorder(BorderFactory.createEmptyBorder());
-        busy.setPreferredSize(new Dimension(0, 2));
+        Zoom.size(busy, 0, 2);
         busy.setVisible(false);
         JPanel north = new JPanel(new BorderLayout());
         north.add(toolBar, BorderLayout.CENTER);
@@ -232,45 +233,46 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         sideSplit.setBorder(BorderFactory.createEmptyBorder());
         sideSplit.setDividerSize(5);
         sideSplit.setContinuousLayout(true);
-        sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+        sideSplit.setDividerLocation(sideBarWidth());
         sideSplit.addPropertyChangeListener(javax.swing.JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
-            if (examplesPanel.isVisible() && sideSplit.getDividerLocation() > 120) {
-                App.SETTINGS.putInt("examplesWidth", sideSplit.getDividerLocation());
+            if (examplesPanel.isVisible() && sideSplit.getDividerLocation() > Zoom.px(120)) {
+                // kept at 100% zoom, so it grows and shrinks with the zoom
+                App.SETTINGS.putInt("examplesWidth", Math.round(sideSplit.getDividerLocation() / Zoom.factor()));
             }
         });
         // Hidden until a program is in front (placeSideBar): the window opens on the Welcome tab.
         examplesPanel.setVisible(false);
-        examplesPanel.setMinimumSize(new Dimension(180, 0));
+        Zoom.minimum(examplesPanel, 180, 0);
         sideSplit.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null); // the arrow keys step the program
         add(sideSplit, BorderLayout.CENTER);
         placeSideBar();
 
-        status.setFont(Style.UI_FONT.deriveFont(12f));
-        status.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
+        Zoom.font(status, Style.UI_FONT.deriveFont(12f));
+        status.setBorder(Zoom.gap(0, Style.SPACE_3, 0, Style.SPACE_3));
         statusBar.setBorder(Section.hairline(1, 0, 0, 0));
-        statusBar.setPreferredSize(new Dimension(0, Style.STATUS_H));
+        Zoom.size(statusBar, 0, Style.STATUS_H);
         statusBar.add(status, BorderLayout.CENTER);
         JPanel statusRight = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, Style.SPACE_3, 0));
         statusRight.setOpaque(false);
         updateNotice.putClientProperty("JButton.buttonType", "borderless");
-        updateNotice.setFont(Style.UI_FONT.deriveFont(12f));
+        Zoom.font(updateNotice, Style.UI_FONT.deriveFont(12f));
         updateNotice.setRequestFocusEnabled(false);
         updateNotice.setVisible(false);
         updateNotice.addActionListener(e -> openReleasePage(App.SETTINGS.get("newerPage", UpdateCheck.RELEASES_PAGE)));
         recordingChip.setToolTipText("These steps were recorded earlier. Press Run to record this code again.");
         recordingChip.setVisible(false);
         position.putClientProperty("JButton.buttonType", "borderless");
-        position.setFont(Style.CODE_FONT.deriveFont(12f)); // monospace, so the numbers don't jitter as the cursor moves
+        Zoom.font(position, Style.CODE_FONT.deriveFont(12f)); // monospace, so the numbers don't jitter as the cursor moves
         position.setRequestFocusEnabled(false);
         position.setToolTipText(Shortcuts.label("Go to line  (Ctrl+G)"));
         position.addActionListener(e -> goToLine());
         position.getAccessibleContext().setAccessibleName("Line and column. Go to line.");
-        positionDivider.setPreferredSize(new Dimension(1, 16));
+        Zoom.size(positionDivider, 1, 16);
         statusRight.add(recordingChip);
         statusRight.add(updateNotice);
         statusRight.add(legend);
         languageChip.putClientProperty("JButton.buttonType", "borderless");
-        languageChip.setFont(Style.UI_FONT.deriveFont(12f));
+        Zoom.font(languageChip, Style.UI_FONT.deriveFont(12f));
         languageChip.setRequestFocusEnabled(false);
         languageChip.setToolTipText("The program's language: click to change it");
         languageChip.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
@@ -292,8 +294,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         switchTabsWithCtrlTab();
         // The usable part of the screen (without the taskbar), so the window always fits.
         Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-        setSize(Math.min(1300, screen.width), Math.min(840, screen.height));
-        setMinimumSize(new Dimension(Math.min(960, screen.width), Math.min(600, screen.height)));
+        setSize(Math.min(Zoom.px(1300), screen.width), Math.min(Zoom.px(840), screen.height));
+        setMinimumSize(new Dimension(Math.min(Zoom.px(Zoom.MIN_WIDTH), screen.width), Math.min(Zoom.px(Zoom.MIN_HEIGHT), screen.height)));
         setLocationRelativeTo(null);
         applyTheme();
         applyTextSize();
@@ -414,20 +416,37 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
 
     // Makes the code and panel text bigger or smaller, for a projector, and remembers it.
     private void changeTextSize(int change) {
-        Style.setCodeSize(Style.CODE_FONT.getSize() + change);
-        App.SETTINGS.putInt("textSize", Style.CODE_FONT.getSize());
+        Style.setCodeSize(Style.codeSize() + change);
+        App.SETTINGS.putInt("textSize", Style.codeSize());
         Windows.forEach(MainWindow::applyTextSize); // every window, this one included
         if (!Windows.all().contains(this)) {
             applyTextSize();
         }
-        say("text size " + Style.CODE_FONT.getSize() + Shortcuts.label(" · ctrl+0 for normal"), Style.INK_SOFT);
+        say("text size " + Style.codeSize(), Style.INK_SOFT);
     }
 
-    private void resetView() {
-        changeTextSize(Style.DEFAULT_CODE_SIZE - Style.CODE_FONT.getSize());
-        if (current != null) {
+    // Ctrl +, Ctrl −, Ctrl 0: the whole interface bigger or smaller (in every window), as VS Code
+    // does; the code's own text size is in Settings. Ctrl 0 also puts the picture's zoom back.
+    private void zoom(int direction) {
+        if (direction > 0 && !Zoom.fitsAt(Zoom.next(), screen())) {
+            say("zoom " + Math.round(Zoom.factor() * 100) + "% is the largest this screen has room for", Style.INK_SOFT);
+            return;
+        }
+        boolean changed = direction > 0 ? Zoom.in() : direction < 0 ? Zoom.out() : Zoom.reset();
+        if (direction == 0 && current != null) {
             current.getVisual().resetZoom();
         }
+        if (changed) {
+            Style.rezoomCode();
+            Windows.forEach(window -> {
+                window.fitMinimumSize();
+                window.applyTextSize();
+                window.sideSplit.setDividerLocation(sideBarWidth());
+                window.fitToolBar();
+            });
+        }
+        say("zoom " + Math.round(Zoom.factor() * 100) + "%" + (Zoom.factor() != 1f ? Shortcuts.label(" · ctrl+0 for 100%") : ""),
+                Style.INK_SOFT);
     }
 
     private void applyTextSize() {
@@ -537,7 +556,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
                 c.gridwidth = 2;
                 c.insets = new java.awt.Insets(Style.SPACE_1, 0, 0, 0);
                 JLabel note = new JLabel(row[1]);
-                note.setFont(Style.sans(false, 12f));
+                Zoom.font(note, Style.sans(false, 12f));
                 note.setForeground(Style.MUTED);
                 list.add(note, c);
             } else {
@@ -549,7 +568,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
                 c.fill = GridBagConstraints.HORIZONTAL;
                 c.insets = new java.awt.Insets(Style.SPACE_1, 0, Style.SPACE_1, 0);
                 JLabel what = new JLabel(row[2]);
-                what.setFont(Style.sans(false, 13f));
+                Zoom.font(what, Style.sans(false, 13f));
                 what.setForeground(Style.INK);
                 list.add(what, c);
             }
@@ -601,7 +620,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         controlsSlot.setOpaque(false);
         idleControls.setSpeedEnabled(false);
         bar.setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_2, Style.SPACE_3)));
+                Zoom.gap(Style.SPACE_2, Style.SPACE_3, Style.SPACE_2, Style.SPACE_3)));
         // A toolbar normally moves the keyboard focus with the arrow keys; here they step the program.
         bar.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
 
@@ -623,9 +642,10 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         JButton settings = ControlsBar.button(Icons.Glyph.SETTINGS, "Settings", "Settings: steps, time, memory, text size, theme  (Ctrl+,)");
         settings.addActionListener(e -> showSettings());
         JButton help = ControlsBar.button(Icons.Glyph.HELP, "Keyboard shortcuts", "Keyboard shortcuts  (F1)");
+        helpButton = help;
         help.addActionListener(e -> showHelp());
         runButton.setRequestFocusEnabled(false);
-        runButton.setFont(Style.sans(true, Style.UI_SIZE));
+        Zoom.font(runButton, Style.sans(true, Style.UI_SIZE));
         runButton.setIconTextGap(Style.SPACE_2);
         runButton.addActionListener(e -> run());
 
@@ -662,20 +682,45 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         return bar;
     }
 
+    private java.awt.Rectangle screen() {
+        return getGraphicsConfiguration() != null ? getGraphicsConfiguration().getBounds()
+                : new java.awt.Rectangle(java.awt.Toolkit.getDefaultToolkit().getScreenSize());
+    }
+
+    // The smallest the window may be: 960 × 600 at 100%, as big as the zoom (within the screen). A
+    // window smaller than that grows, so nothing is squeezed below the sizes it's laid out for.
+    void fitMinimumSize() {
+        java.awt.Rectangle screen = screen();
+        Dimension minimum = new Dimension(Math.min(Zoom.px(Zoom.MIN_WIDTH), screen.width), Math.min(Zoom.px(Zoom.MIN_HEIGHT), screen.height));
+        setMinimumSize(minimum);
+        if (getWidth() < minimum.width || getHeight() < minimum.height) {
+            setSize(Math.max(getWidth(), minimum.width), Math.max(getHeight(), minimum.height));
+        }
+    }
+
+    // The side bar's width: remembered at 100% zoom, shown at the zoom now.
+    private static int sideBarWidth() {
+        return Zoom.px(App.SETTINGS.getInt("examplesWidth", 270));
+    }
+
     // A narrow window makes the toolbar give way, a little at a time, before anything is cut off:
     // first the moments box shortens and Examples becomes an icon, then Skip and Finish call go
-    // (they're in the Run menu too). Asked when the window resizes and when a tab's controls come in.
+    // (they're in the Run menu too), then the theme and help buttons (View → Switch light or dark,
+    // Help → Keyboard shortcuts). Asked when the window resizes, when a tab's controls come in, and
+    // after a zoom.
     private void fitToolBar() {
         if (toolBar == null || toolBar.getWidth() == 0) {
             return;
         }
         ControlsBar controls = controlsSlot.getComponentCount() == 1 && controlsSlot.getComponent(0) instanceof ControlsBar
                 ? (ControlsBar) controlsSlot.getComponent(0) : null;
-        for (int level = 0; level <= 2; level++) {
+        for (int level = 0; level <= 3; level++) {
+            themeButton.setVisible(level < 3);
+            helpButton.setVisible(level < 3);
             examplesButton.setText(level > 0 ? null : "Examples");
             examplesButton.setIcon(level > 0 ? Icons.of(Icons.Glyph.SIDE_BAR, Icons.Role.TOOL) : null);
             if (controls != null) {
-                controls.setCompact(level);
+                controls.setCompact(Math.min(level, 2));
             }
             toolBar.doLayout();
             if (toolBar.getPreferredSize().width <= toolBar.getWidth()) {
@@ -726,8 +771,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         // buildMenuBar(). These are the others: plain keys, and second keys for the same command.
         bind("F5", this::run);
         bind("control COMMA", this::showSettings);
-        bind("control EQUALS", () -> changeTextSize(1));
-        bind("control MINUS", () -> changeTextSize(-1));
+        bind("control EQUALS", () -> zoom(1));
+        bind("control MINUS", () -> zoom(-1));
         bind("F6", () -> moveFocus(1));
         bind("shift F6", () -> moveFocus(-1));
         bind("ESCAPE", () -> {
@@ -736,9 +781,9 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
             }
         });
         for (String key : new String[] {"shift control EQUALS", "control PLUS", "control ADD"}) {
-            bind(key, () -> changeTextSize(1));
+            bind(key, () -> zoom(1));
         }
-        bind("control SUBTRACT", () -> changeTextSize(-1));
+        bind("control SUBTRACT", () -> zoom(-1));
         // Only heard when the keyboard is outside the editor; inside it, these keys already work.
         bind("control V", () -> {
             if (current == null) {
@@ -872,9 +917,9 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         view.add(examplesItem);
         view.addSeparator();
         // Swing would show these keys as "Ctrl+Equals" and "Ctrl+Minus", so they're in the text instead.
-        view.add(item(Shortcuts.label("Larger text  (Ctrl +)"), null, () -> changeTextSize(1)));
-        view.add(item(Shortcuts.label("Smaller text  (Ctrl −)"), null, () -> changeTextSize(-1)));
-        view.add(item("Normal size", "control 0", this::resetView));
+        view.add(item(Shortcuts.label("Zoom in  (Ctrl +)"), null, () -> zoom(1)));
+        view.add(item(Shortcuts.label("Zoom out  (Ctrl −)"), null, () -> zoom(-1)));
+        view.add(item("Reset zoom", "control 0", () -> zoom(0)));
         view.addSeparator();
         view.add(item("Switch light or dark", "control D", this::toggleTheme));
         JMenu help = menu("Help", KeyEvent.VK_H);
@@ -1129,7 +1174,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         SettingsDialog.Theme theme = saved == null ? SettingsDialog.Theme.SYSTEM
                 : Boolean.parseBoolean(saved) ? SettingsDialog.Theme.DARK : SettingsDialog.Theme.LIGHT;
         SettingsDialog.Values chosen = SettingsDialog.ask(this,
-                new SettingsDialog.Values(savedLimits(), Style.CODE_FONT.getSize(), theme, App.SETTINGS.getBoolean("checkUpdates", true)));
+                new SettingsDialog.Values(savedLimits(), Style.codeSize(), theme, App.SETTINGS.getBoolean("checkUpdates", true)));
         if (chosen == null) {
             return;
         }
@@ -1148,8 +1193,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         } else {
             App.SETTINGS.putBoolean("dark", wantDark);
         }
-        if (chosen.textSize() != Style.CODE_FONT.getSize()) {
-            changeTextSize(chosen.textSize() - Style.CODE_FONT.getSize());
+        if (chosen.textSize() != Style.codeSize()) {
+            changeTextSize(chosen.textSize() - Style.codeSize());
         }
         say("settings saved · the next run uses them", Style.INK_SOFT);
     }
@@ -1419,7 +1464,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         if (examplesPanel.isVisible() != show) {
             examplesPanel.setVisible(show);
             if (show) {
-                sideSplit.setDividerLocation(App.SETTINGS.getInt("examplesWidth", 270));
+                sideSplit.setDividerLocation(sideBarWidth());
             }
             sideSplit.revalidate();
         }
@@ -1518,8 +1563,8 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
                         return Style.MUTED;
                     }
                 };
-                heading.setFont(Style.sans(true, 10.5f));
-                heading.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+                Zoom.font(heading, Style.sans(true, 10.5f));
+                heading.setBorder(Zoom.gap(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
                 menu.add(heading);
             }
             JMenu submenu = new JMenu(group.name());

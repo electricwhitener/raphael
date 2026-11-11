@@ -52,11 +52,11 @@ public class CommandPalette extends JDialog {
         this.entries = entries;
         setUndecorated(true);
         search.putClientProperty("JTextField.placeholderText", placeholder);
-        search.setFont(Style.sans(false, 14f));
+        Zoom.font(search, Style.sans(false, 14f));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new EntryRenderer());
         list.setFocusable(false);
-        list.setFixedCellHeight(Style.PALETTE_ROW_H);
+        Zoom.rowHeight(list, Style.PALETTE_ROW_H);
         list.setBackground(Style.BAR);
         list.addMouseMotionListener(new MouseAdapter() {
             @Override
@@ -80,12 +80,12 @@ public class CommandPalette extends JDialog {
         JPanel content = new JPanel(new BorderLayout(0, Style.SPACE_2));
         content.setBackground(Style.BAR); // a sheet lifted off the window behind it
         content.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Style.CONTROL_BORDER),
-                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
+                Zoom.gap(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
         content.add(search, BorderLayout.NORTH);
         JScrollPane scroll = new JScrollPane(list);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setBackground(Style.BAR);
-        scroll.setPreferredSize(new Dimension(Style.PALETTE_W, 320));
+        Zoom.size(scroll, Style.PALETTE_W, 320);
         content.add(scroll, BorderLayout.CENTER);
         setContentPane(content);
         search.getDocument().addDocumentListener(new DocumentListener() {
@@ -263,11 +263,11 @@ public class CommandPalette extends JDialog {
         private final JLabel detail = new JLabel();
 
         EntryRenderer() {
-            row.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, 0, Style.SPACE_2));
-            category.setFont(Style.sans(false, 12f));
-            category.setPreferredSize(new Dimension(56, 1));
-            label.setFont(Style.sans(false, 13f));
-            detail.setFont(Style.sans(false, 12f));
+            row.setBorder(Zoom.gap(0, Style.SPACE_2, 0, Style.SPACE_2));
+            Zoom.font(category, Style.sans(false, 12f));
+            category.setPreferredSize(new Dimension(Zoom.px(56), 1));
+            Zoom.font(label, Style.sans(false, 13f));
+            Zoom.font(detail, Style.sans(false, 12f));
             row.add(category, BorderLayout.WEST);
             row.add(label, BorderLayout.CENTER);
             row.add(detail, BorderLayout.EAST);

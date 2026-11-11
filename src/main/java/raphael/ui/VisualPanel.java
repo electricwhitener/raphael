@@ -36,7 +36,7 @@ import raphael.render.Style;
 // A red message at the top says if the program crashed at this step, needs input or didn't compile.
 // OOP: inheritance (extends JPanel) and overriding (paintComponent: Swing calls it whenever the
 // panel needs drawing); implements TraceListener (Observer pattern).
-public class VisualPanel extends JPanel implements TraceListener {
+public class VisualPanel extends JPanel implements TraceListener, Zoom.Aware {
 
     private static final double MIN_ZOOM = 0.5;
     private static final double MAX_ZOOM = 3;
@@ -206,6 +206,12 @@ public class VisualPanel extends JPanel implements TraceListener {
         return view;
     }
 
+    // The interface's zoom changed: the picture and its cards fit again.
+    @Override
+    public void zoomChanged() {
+        fitToRun();
+    }
+
     // Chooses the one scale for this run: as big as fits the room around the panel, within limits.
     private void fitToRun() {
         Dimension run = runSize();
@@ -216,14 +222,17 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (room != null && run.width > 0 && run.height > 0) {
             // The cards (a caught exception, a crash) go in a strip at the bottom, kept for the
             // whole run, so the drawing never jumps and never hides under one.
-            int width = cardWidth(room.getWidth());
-            reserve = tallestCard(width, false);
+            // The cards are drawn at the interface's zoom (overlays()), so they're measured in its units.
+            double z = Zoom.factor();
+            int width = cardWidth((int) (room.getWidth() / z));
+            reserve = (int) Math.ceil(tallestCard(width, false) * z);
             if (reserve > room.getHeight() * 0.4) { // a short window: shorter cards
                 compact = true;
-                reserve = tallestCard(width, true);
+                reserve = (int) Math.ceil(tallestCard(width, true) * z);
             }
             double best = Math.min((room.getWidth() - 2.0) / run.width, (room.getHeight() - 2.0 - reserve) / run.height);
-            fit = Math.max(view.minFit, Math.min(view.maxFit, best));
+            // The picture grows with the interface's zoom too, as far as the room allows.
+            fit = Math.max(view.minFit * z, Math.min(view.maxFit * z, best));
         }
         updateSize();
     }
@@ -254,14 +263,18 @@ public class VisualPanel extends JPanel implements TraceListener {
         if (message != null && !model.hasSteps()) {
             // the message says it all
         } else if (scene == null || !model.hasSteps()) {
+            Graphics2D zoomed = overlays(g);
             if (recording) {
-                recordingCard(g2);
+                recordingCard(zoomed);
             } else {
-                hint(g2, Shortcuts.label("press run (ctrl+enter) to trace the program"));
+                hint(zoomed, Shortcuts.label("press run (ctrl+enter) to trace the program"));
             }
+            zoomed.dispose();
         } else {
             if (scene.getNodes().isEmpty()) {
-                hint(g2, view.empty);
+                Graphics2D zoomed = overlays(g);
+                hint(zoomed, view.empty);
+                zoomed.dispose();
             }
             Dimension run = runSize();
             double scale = fit * zoom;
@@ -273,15 +286,17 @@ public class VisualPanel extends JPanel implements TraceListener {
         }
         g2.dispose();
         Note card = model.hasSteps() ? cardFor(model.getStep()) : null;
+        Graphics2D zoomed = overlays(g);
         if (card != null) {
-            note((Graphics2D) g, card);
+            note(zoomed, card);
         }
         if (message != null) {
-            note((Graphics2D) g, message);
+            note(zoomed, message);
         }
         if (zoom != 1) {
-            badge((Graphics2D) g, Math.round(zoom * 100) + "%");
+            badge(zoomed, Math.round(zoom * 100) + "%");
         }
+        zoomed.dispose();
         Toolkit.getDefaultToolkit().sync(); // show this frame now (stops stutter on Linux)
     }
 
@@ -327,7 +342,7 @@ public class VisualPanel extends JPanel implements TraceListener {
 
     // "Recording… 1,284 steps", and how to stop, in the middle of the picture area.
     private void recordingCard(Graphics2D g) {
-        Rectangle visible = getVisibleRect();
+        Rectangle visible = zoomedVisible();
         String title = recordedSteps == 0 ? "Recording…" : String.format(java.util.Locale.ENGLISH, "Recording…  %,d steps", recordedSteps);
         String detail = "Press Esc or Stop to end the recording here.";
         g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -351,11 +366,25 @@ public class VisualPanel extends JPanel implements TraceListener {
         return message != null;
     }
 
+    // The visible area in the overlays' units: they draw at 100% sizes on a Graphics scaled by the
+    // interface's zoom (see overlays()), so their text and boxes grow with it.
+    private Rectangle zoomedVisible() {
+        Rectangle visible = getVisibleRect();
+        double z = Zoom.factor();
+        return new Rectangle((int) (visible.x / z), (int) (visible.y / z), (int) (visible.width / z), (int) (visible.height / z));
+    }
+
+    private static Graphics2D overlays(Graphics g) {
+        Graphics2D zoomed = (Graphics2D) g.create();
+        zoomed.scale(Zoom.factor(), Zoom.factor());
+        return zoomed;
+    }
+
     private void hint(Graphics2D g, String text) {
         g.setFont(Style.UI_FONT);
         g.setColor(Style.MUTED);
         FontMetrics metrics = g.getFontMetrics();
-        Rectangle visible = getVisibleRect();
+        Rectangle visible = zoomedVisible();
         g.drawString(text, visible.x + (visible.width - metrics.stringWidth(text)) / 2, visible.y + visible.height / 2);
     }
 
@@ -493,7 +522,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     private void note(Graphics2D g, Note card) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        Rectangle visible = getVisibleRect();
+        Rectangle visible = zoomedVisible();
         int width = cardWidth(visible.width);
         List<NoteLine> lines = lines(card, width, card.atBottom() && compact);
         int height = cardHeight(lines);
@@ -556,7 +585,7 @@ public class VisualPanel extends JPanel implements TraceListener {
     private void badge(Graphics2D g, String text) {
         g.setFont(Style.CAPTION_FONT);
         g.setColor(Style.MUTED);
-        Rectangle visible = getVisibleRect();
+        Rectangle visible = zoomedVisible();
         g.drawString(text, visible.x + visible.width - g.getFontMetrics().stringWidth(text) - 10, visible.y + 16);
     }
 }

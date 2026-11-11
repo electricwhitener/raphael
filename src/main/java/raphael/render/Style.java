@@ -140,7 +140,8 @@ public final class Style {
     public static final int DEFAULT_CODE_SIZE = 13;
     public static final int MIN_CODE_SIZE = 10;
     public static final int MAX_CODE_SIZE = 28;
-    public static Font CODE_FONT = new Font(MONO, Font.PLAIN, DEFAULT_CODE_SIZE); // Ctrl +/- changes its size
+    public static Font CODE_FONT = new Font(MONO, Font.PLAIN, DEFAULT_CODE_SIZE); // the code's size (Settings) × the zoom
+    private static int codeSize = DEFAULT_CODE_SIZE; // the size chosen in Settings, at 100% zoom
     public static final Font VALUE_FONT = new Font(MONO, Font.BOLD, 14);
     public static final Font FIELD_FONT = new Font(MONO, Font.PLAIN, 13);
     public static final Font LABEL_FONT = new Font(MONO, Font.BOLD, 13);
@@ -217,9 +218,19 @@ public final class Style {
         return new Color(dark ? darkColor : light);
     }
 
-    // Changes the size of the code and panel text, within sensible limits.
+    // The size of the code and panel text chosen in Settings (at 100% zoom), within sensible limits.
     public static void setCodeSize(int size) {
-        CODE_FONT = CODE_FONT.deriveFont((float) Math.max(MIN_CODE_SIZE, Math.min(MAX_CODE_SIZE, size)));
+        codeSize = Math.max(MIN_CODE_SIZE, Math.min(MAX_CODE_SIZE, size));
+        rezoomCode();
+    }
+
+    public static int codeSize() {
+        return codeSize;
+    }
+
+    // After the interface's zoom changes: the code's font is its size × the zoom.
+    public static void rezoomCode() {
+        CODE_FONT = CODE_FONT.deriveFont(Math.round(codeSize * com.formdev.flatlaf.util.UIScale.getZoomFactor()) * 1f);
     }
 
     public static double textWidth(String text, Font font) {

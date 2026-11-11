@@ -52,7 +52,7 @@ public class FilesPanel extends JPanel implements TraceListener {
         text.setFont(Style.CODE_FONT);
         text.setMargin(new java.awt.Insets(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         tabs.setOpaque(false);
-        tabs.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, Style.SPACE_1, Style.SPACE_2));
+        tabs.setBorder(Zoom.gap(0, Style.SPACE_2, Style.SPACE_1, Style.SPACE_2));
         add.setToolTipText("Copy a file from your computer into the program's folder before each run");
         add.addActionListener(e -> onAddFile.run());
         clear.setToolTipText("Stop copying the input files in");
@@ -71,7 +71,7 @@ public class FilesPanel extends JPanel implements TraceListener {
         top.add(header, BorderLayout.CENTER);
         JPanel links = new JPanel(new java.awt.GridBagLayout()); // centred on the header's line
         links.setOpaque(false);
-        links.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, 0, 0, Style.SPACE_2));
+        links.setBorder(Zoom.gap(Style.SPACE_1, 0, 0, Style.SPACE_2));
         links.add(clear);
         links.add(add);
         top.add(links, BorderLayout.EAST);
@@ -188,8 +188,8 @@ public class FilesPanel extends JPanel implements TraceListener {
         };
         tab.putClientProperty("JButton.buttonType", "borderless");
         tab.setContentAreaFilled(false);
-        tab.setFont(Style.UI_FONT.deriveFont(12f));
-        tab.setBorder(BorderFactory.createEmptyBorder(2, Style.SPACE_2, 2, Style.SPACE_2 + 8));
+        Zoom.font(tab, Style.UI_FONT.deriveFont(12f));
+        tab.setBorder(Zoom.gap(2, Style.SPACE_2, 2, Style.SPACE_2 + 8));
         tab.setRequestFocusEnabled(false);
         tab.setToolTipText(changed ? name + " changed on this step" : name);
         tab.addActionListener(e -> choose.run());
@@ -206,7 +206,7 @@ public class FilesPanel extends JPanel implements TraceListener {
         };
         link.putClientProperty("JButton.buttonType", "borderless");
         link.putClientProperty("FlatLaf.style", "margin: 2,6,2,6");
-        link.setFont(Style.sans(false, 12f));
+        Zoom.font(link, Style.sans(false, 12f));
         link.setRequestFocusEnabled(false);
         return link;
     }

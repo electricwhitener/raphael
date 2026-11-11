@@ -71,7 +71,7 @@ public final class ErrorReporter {
             what.setEditable(false);
             what.setLineWrap(true);
             what.setWrapStyleWord(true);
-            what.setFont(raphael.render.Style.UI_FONT.deriveFont(12f));
+            Zoom.font(what, raphael.render.Style.UI_FONT.deriveFont(12f));
             javax.swing.JPanel extra = new javax.swing.JPanel(new java.awt.BorderLayout(0, raphael.render.Style.SPACE_2));
             extra.setOpaque(false);
             extra.add(new javax.swing.JScrollPane(what), java.awt.BorderLayout.CENTER);
@@ -79,7 +79,7 @@ public final class ErrorReporter {
                 javax.swing.JLabel where = new javax.swing.JLabel("Log: " + shorten(logs.toString(), 60));
                 where.setToolTipText(logs.toString());
                 where.setForeground(raphael.render.Style.MUTED);
-                where.setFont(raphael.render.Style.sans(false, 12f));
+                Zoom.font(where, raphael.render.Style.sans(false, 12f));
                 extra.add(where, java.awt.BorderLayout.SOUTH);
             }
             Dialogs.Question question = Dialogs.question(owner, "Raphael ran into a problem")

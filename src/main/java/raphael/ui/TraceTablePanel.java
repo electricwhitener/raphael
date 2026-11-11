@@ -52,7 +52,7 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
                 setBackground(changed ? Style.CHANGE_TINT : selected ? Style.ACCENT_TINT : Style.BACKGROUND); // a change shows on the selected row too
                 setHorizontalAlignment(column < 2 ? RIGHT : LEFT);
                 setForeground(column < FIXED ? Style.MUTED : Style.INK);
-                setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, 0, Style.SPACE_2));
+                setBorder(Zoom.gap(0, Style.SPACE_2, 0, Style.SPACE_2));
                 String text = value == null ? "" : value.toString();
                 // a cut-off array's cells, in full
                 setToolTipText(column >= FIXED && getFontMetrics(getFont()).stringWidth(text) + 2 * Style.SPACE_2

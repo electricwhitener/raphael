@@ -37,7 +37,7 @@ public class Segmented extends JPanel {
                     g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                     int w = getWidth();
                     int h = getHeight();
-                    int arc = Style.ARC;
+                    int arc = Zoom.px(Style.ARC);
                     java.awt.geom.Area shape = new java.awt.geom.Area(new java.awt.geom.RoundRectangle2D.Double(0, 0, w - 1, h - 1, arc, arc));
                     if (!first) { // square on the left
                         shape.add(new java.awt.geom.Area(new java.awt.Rectangle(0, 0, arc, h - 1)));
@@ -55,7 +55,7 @@ public class Segmented extends JPanel {
                         g2.setStroke(new java.awt.BasicStroke(Style.FOCUS_WIDTH));
                         g2.draw(new java.awt.geom.RoundRectangle2D.Double(1, 1, w - 3, h - 3, arc, arc));
                     }
-                    g2.setFont(Style.sans(isSelected(), 12.5f));
+                    g2.setFont(Zoom.scaled(Style.sans(isSelected(), 12.5f)));
                     java.awt.FontMetrics m = g2.getFontMetrics();
                     g2.setColor(isSelected() ? Style.ON_ACCENT : Style.INK_SOFT);
                     g2.drawString(getText(), (w - m.stringWidth(getText())) / 2, (h - m.getHeight()) / 2 + m.getAscent());
@@ -65,8 +65,8 @@ public class Segmented extends JPanel {
             cell.setRolloverEnabled(true);
             cell.setContentAreaFilled(false);
             cell.setBorderPainted(false);
-            cell.setPreferredSize(new java.awt.Dimension(Math.max(52, (int) Style.textWidth(names.get(i), Style.sans(true, 12.5f)) + 20),
-                    Style.CONTROL_H));
+            // Measured at 100%, and scaled by Zoom (now and after each zoom).
+            Zoom.size(cell, Math.max(52, (int) Style.textWidth(names.get(i), Style.sans(true, 12.5f)) + 20), Style.CONTROL_H);
             cell.addActionListener(e -> chosen.accept(index));
             group.add(cell);
             cells.add(cell);

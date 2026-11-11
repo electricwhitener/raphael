@@ -16,7 +16,7 @@ import raphael.render.Style;
 // Playing uses a Swing Timer that moves one step at a time. Moving to a step any other way (a
 // key, a button, the slider, a line number) pauses it, so you stay on the step you asked for.
 // OOP: inheritance (extends JPanel); implements TraceListener (Observer pattern).
-public class ControlsBar extends JPanel implements TraceListener, MomentMode.Watcher {
+public class ControlsBar extends JPanel implements TraceListener, MomentMode.Watcher, Zoom.Aware {
 
     private static final String[] SPEEDS = {"0.5×", "1×", "2×", "4×", "8×"};
     private static final double[] SPEED_VALUES = {0.5, 1, 2, 4, 8};
@@ -69,7 +69,7 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
     // Key moments: off, shown, or shown and paused at (one choice for every tab; see MomentMode).
     private final JComboBox<MomentMode> moments = new JComboBox<>(MomentMode.values());
     private boolean showingMode; // true while the box is being set to the choice made elsewhere
-    private static final int BOX_EXTRA = 44; // a combo box's arrow and padding, beside its text
+    private static final int BOX_EXTRA = 44; // a combo box's arrow and padding, beside its text (at 100%)
     private int compact; // 0 in a wide window; 1: the moments box shows only its word; 2: Skip and Finish call hidden too
     private final Timer playTimer;
     private boolean movingSlider; // true while we move the slider ourselves
@@ -84,7 +84,7 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         speed.getAccessibleContext().setAccessibleName("Playback speed");
         slider.getAccessibleContext().setAccessibleName("Step position");
         stepLabel.setToolTipText("this step, and how many the run has");
-        stepLabel.setFont(Style.UI_FONT.deriveFont(12f));
+        Zoom.font(stepLabel, Style.UI_FONT.deriveFont(12f));
 
         first.addActionListener(e -> model.first());
         back.addActionListener(e -> model.previous());
@@ -177,7 +177,14 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
 
     // As wide as the longest text the closed box shows, in its own font: nothing is cut off.
     private int momentsWidth() {
-        return moments.getFontMetrics(moments.getFont()).stringWidth(compact > 0 ? "pause" : "Moments: pause") + BOX_EXTRA;
+        return moments.getFontMetrics(moments.getFont()).stringWidth(compact > 0 ? "pause" : "Moments: pause") + Zoom.px(BOX_EXTRA);
+    }
+
+    // After a zoom: the widths worked out from text.
+    @Override
+    public void zoomChanged() {
+        moments.setPreferredSize(new java.awt.Dimension(momentsWidth(), moments.getPreferredSize().height));
+        stepChanged(model);
     }
 
     MomentMode momentChoice() { // what the box shows (for tests)
@@ -278,10 +285,9 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         button.getAccessibleContext().setAccessibleName(name); // what a screen reader says
         button.setRequestFocusEnabled(false);
         button.putClientProperty("JButton.buttonType", "toolBarButton"); // flat, like the toolbar's
-        java.awt.Dimension square = new java.awt.Dimension(32, 32);
-        button.setPreferredSize(square);
-        button.setMinimumSize(square); // a toolbar would otherwise squeeze it to 24 px high
-        button.setMaximumSize(square);
+        Zoom.size(button, 32, 32); // 32 px at 100%, and as big as the zoom
+        Zoom.minimum(button, 32, 32); // a toolbar would otherwise squeeze it to 24 px high
+        Zoom.maximum(button, 32, 32);
         return button;
     }
 

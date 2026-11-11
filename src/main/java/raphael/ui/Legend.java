@@ -23,18 +23,18 @@ public class Legend extends JComponent {
     private static final int SWATCH_GAP = 6; // between a swatch and its name
     private static final int ITEM_GAP = 16;  // between two items
 
-    public Legend() {
-        setFont(Style.UI_FONT.deriveFont(12f));
-    }
+    // Measured and drawn at 100% on a Graphics scaled by the interface's zoom: swatches, gaps and
+    // text grow together.
+    private final Font font = Style.UI_FONT.deriveFont(12f);
 
     @Override
     public Dimension getPreferredSize() {
-        FontMetrics metrics = getFontMetrics(getFont());
+        FontMetrics metrics = getFontMetrics(font);
         int width = 0;
         for (String name : NAMES) {
             width += SWATCH + SWATCH_GAP + metrics.stringWidth(name) + ITEM_GAP;
         }
-        return new Dimension(width - ITEM_GAP + 2 * Style.SPACE_3, Style.STATUS_H);
+        return new Dimension(Zoom.px(width - ITEM_GAP + 2 * Style.SPACE_3), Zoom.px(Style.STATUS_H));
     }
 
     @Override
@@ -42,9 +42,9 @@ public class Legend extends JComponent {
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        Font font = getFont();
+        g.scale(Zoom.factor(), Zoom.factor());
         FontMetrics metrics = g.getFontMetrics(font);
-        int middle = getHeight() / 2;
+        int middle = (int) (getHeight() / Zoom.factor() / 2);
         int x = Style.SPACE_3;
         for (int i = 0; i < NAMES.length; i++) {
             int top = middle - SWATCH / 2;

@@ -85,7 +85,7 @@ public class WelcomePage extends JPanel {
         recentList.setAlignmentX(Component.LEFT_ALIGNMENT);
         start.add(recentList);
         start.add(Box.createVerticalGlue());
-        start.setPreferredSize(new Dimension(START_WIDTH, 0));
+        Zoom.size(start, START_WIDTH, 0);
         page.add(start, BorderLayout.WEST);
         showRecent(List.of());
 
@@ -190,7 +190,7 @@ public class WelcomePage extends JPanel {
         });
 
         JScrollPane groupScroll = scroll(groups);
-        groupScroll.setPreferredSize(new Dimension(224, 0));
+        Zoom.size(groupScroll, 224, 0);
         groupScroll.setBorder(Section.hairline(0, 0, 0, 1));
         JPanel browser = new JPanel(new BorderLayout()) {
             @Override
@@ -201,7 +201,7 @@ public class WelcomePage extends JPanel {
             }
         };
         browser.setOpaque(false);
-        browser.setBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1));
+        browser.setBorder(Zoom.gap(1, 1, 1, 1));
         browser.add(groupScroll, BorderLayout.WEST);
         browser.add(scroll(examples), BorderLayout.CENTER);
         JPanel right = new JPanel(new BorderLayout(0, Style.SPACE_2));
@@ -211,7 +211,7 @@ public class WelcomePage extends JPanel {
         JPanel none = new JPanel();
         none.setOpaque(false);
         none.setLayout(new javax.swing.BoxLayout(none, javax.swing.BoxLayout.Y_AXIS));
-        none.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, 0, Style.SPACE_3, 0)); // left edge = the heading's
+        none.setBorder(Zoom.gap(Style.SPACE_3, 0, Style.SPACE_3, 0)); // left edge = the heading's
         noneText.setAlignmentX(Component.LEFT_ALIGNMENT);
         none.add(noneText);
         none.add(javax.swing.Box.createVerticalStrut(Style.SPACE_2));
@@ -223,7 +223,7 @@ public class WelcomePage extends JPanel {
         };
         showJava.putClientProperty("JButton.buttonType", "borderless");
         showJava.putClientProperty("FlatLaf.style", "margin: 3,0,1,8"); // no left margin: lined up with the note
-        showJava.setFont(Style.sans(false, 13f));
+        Zoom.font(showJava, Style.sans(false, 13f));
         showJava.setAlignmentX(Component.LEFT_ALIGNMENT);
         showJava.addActionListener(e -> showExamplesOf(raphael.lang.Languages.JAVA));
         none.add(showJava);
@@ -267,7 +267,7 @@ public class WelcomePage extends JPanel {
             File folder = file.getParentFile();
             if (folder != null) {
                 JLabel where = label(folder.getName(), Style.sans(false, 11.5f), () -> Style.MUTED);
-                where.setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, Style.SPACE_2, 0));
+                where.setBorder(Zoom.gap(0, Style.SPACE_2, Style.SPACE_2, 0));
                 recentList.add(where);
             }
         }
@@ -340,13 +340,13 @@ public class WelcomePage extends JPanel {
             row.choose(all.indexOf(raphael.lang.Languages.preferred()));
         }
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(START_WIDTH, Style.CONTROL_H));
+        Zoom.maximum(row, START_WIDTH, Style.CONTROL_H);
         box.add(row);
         JLabel note = new JLabel("You can change this any time.");
-        note.setFont(Style.sans(false, 12f));
+        Zoom.font(note, Style.sans(false, 12f));
         note.setForeground(Style.MUTED);
         note.setAlignmentX(Component.LEFT_ALIGNMENT);
-        note.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, 0, 0, 0));
+        note.setBorder(Zoom.gap(Style.SPACE_1, 0, 0, 0));
         box.add(note);
         return box;
     }
@@ -378,7 +378,7 @@ public class WelcomePage extends JPanel {
 
     private static JLabel heading(String text) {
         JLabel heading = label(text.toUpperCase(java.util.Locale.ROOT), Style.sans(true, 11f), () -> Style.MUTED);
-        heading.setBorder(BorderFactory.createEmptyBorder(0, 0, Style.SPACE_2, 0));
+        heading.setBorder(Zoom.gap(0, 0, Style.SPACE_2, 0));
         return heading;
     }
 
@@ -392,12 +392,12 @@ public class WelcomePage extends JPanel {
         };
         button.putClientProperty("JButton.buttonType", "toolBarButton"); // like the toolbar: a focus ring, a hover fill
         button.putClientProperty("FlatLaf.style", "margin: 6,8,6,4; arc: " + Style.ARC);
-        button.setFont(Style.sans(false, 13.5f));
+        Zoom.font(button, Style.sans(false, 13.5f));
         button.setHorizontalAlignment(JButton.LEFT);
         button.setIconTextGap(Style.SPACE_3);
         button.setLayout(new BorderLayout());
         button.add(EmptyState.keyChip(Shortcuts.keycap(keys)), BorderLayout.EAST);
-        button.setMaximumSize(new Dimension(START_WIDTH, 40));
+        Zoom.maximum(button, START_WIDTH, 40);
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
         button.addActionListener(e -> run.run());
         return button;
@@ -412,10 +412,10 @@ public class WelcomePage extends JPanel {
         };
         link.putClientProperty("JButton.buttonType", "toolBarButton");
         link.putClientProperty("FlatLaf.style", "margin: 3,8,1,8; arc: " + Style.ARC);
-        link.setFont(Style.sans(false, 13f));
+        Zoom.font(link, Style.sans(false, 13f));
         link.setHorizontalAlignment(JButton.LEFT);
         link.setAlignmentX(Component.LEFT_ALIGNMENT);
-        link.setMaximumSize(new Dimension(START_WIDTH, 28));
+        Zoom.maximum(link, START_WIDTH, 28);
         link.addActionListener(e -> run.run());
         return link;
     }
@@ -465,13 +465,13 @@ public class WelcomePage extends JPanel {
         GroupRenderer() {
             super(new BorderLayout());
             setOpaque(false);
-            section.setFont(Style.sans(true, 10.5f));
-            section.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
-            name.setFont(Style.sans(false, 13f));
-            count.setFont(Style.sans(false, 11.5f));
+            Zoom.font(section, Style.sans(true, 10.5f));
+            section.setBorder(Zoom.gap(Style.SPACE_3, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+            Zoom.font(name, Style.sans(false, 13f));
+            Zoom.font(count, Style.sans(false, 11.5f));
             JPanel row = new JPanel(new BorderLayout());
             row.setOpaque(false);
-            row.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1 + 1, Style.SPACE_3, Style.SPACE_1 + 1, Style.SPACE_3));
+            row.setBorder(Zoom.gap(Style.SPACE_1 + 1, Style.SPACE_3, Style.SPACE_1 + 1, Style.SPACE_3));
             row.add(name, BorderLayout.CENTER);
             row.add(count, BorderLayout.EAST);
             add(section, BorderLayout.NORTH);
@@ -490,7 +490,7 @@ public class WelcomePage extends JPanel {
             selected = isSelected;
             ringed = isSelected && list.isFocusOwner();
             name.setForeground(isSelected ? Style.ACCENT : Style.INK);
-            name.setFont(Style.sans(isSelected, 13f));
+            Zoom.font(name, Style.sans(isSelected, 13f));
             count.setForeground(Style.MUTED);
             return this;
         }
@@ -526,9 +526,9 @@ public class WelcomePage extends JPanel {
         ExampleRenderer() {
             setOpaque(false);
             setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-            setBorder(BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3 + Style.SPACE_1, Style.SPACE_2, Style.SPACE_3));
-            title.setFont(Style.sans(true, 13f));
-            blurb.setFont(Style.sans(false, 12.5f));
+            setBorder(Zoom.gap(Style.SPACE_2, Style.SPACE_3 + Style.SPACE_1, Style.SPACE_2, Style.SPACE_3));
+            Zoom.font(title, Style.sans(true, 13f));
+            Zoom.font(blurb, Style.sans(false, 12.5f));
             add(title);
             add(Box.createVerticalStrut(2));
             add(blurb);

@@ -61,10 +61,10 @@ public class FindBar extends JPanel {
         this.editor = editor;
         this.edits = edits;
         setBorder(BorderFactory.createCompoundBorder(Section.hairline(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
+                Zoom.gap(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2)));
         find.putClientProperty("JTextField.placeholderText", "Find");
         replace.putClientProperty("JTextField.placeholderText", "Replace");
-        count.setFont(Style.sans(false, 12f));
+        Zoom.font(count, Style.sans(false, 12f));
         count.setForeground(Style.MUTED);
         count.setPreferredSize(new Dimension(72, count.getFontMetrics(count.getFont()).getHeight())); // as tall when empty
         JButton previous = icon(Icons.Glyph.CHEVRON_UP, "Previous match  (Shift+Enter)", () -> next(true));
@@ -80,8 +80,8 @@ public class FindBar extends JPanel {
         c.anchor = java.awt.GridBagConstraints.WEST;
         c.insets = new java.awt.Insets(0, 0, 0, Style.SPACE_1);
         for (JTextField field : new JTextField[] {find, replace}) {
-            field.setPreferredSize(new Dimension(220, Style.CONTROL_H));
-            field.setMinimumSize(new Dimension(120, Style.CONTROL_H));
+            Zoom.size(field, 220, Style.CONTROL_H);
+            Zoom.minimum(field, 120, Style.CONTROL_H);
         }
         c.fill = java.awt.GridBagConstraints.HORIZONTAL;
         c.weightx = 1;

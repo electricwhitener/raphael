@@ -224,6 +224,7 @@ public final class Icons {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
             g.translate(x, y);
+            g.scale(Zoom.factor(), Zoom.factor()); // drawn on a 16-unit grid, as big as the zoom
             g.setColor(switch (role) {
                 case ON_ACCENT -> Style.ON_ACCENT;
                 case ON_INK -> Style.BACKGROUND;
@@ -236,12 +237,12 @@ public final class Icons {
 
         @Override
         public int getIconWidth() {
-            return SIZE;
+            return Math.round(SIZE * Zoom.factor());
         }
 
         @Override
         public int getIconHeight() {
-            return SIZE;
+            return Math.round(SIZE * Zoom.factor());
         }
     }
 }

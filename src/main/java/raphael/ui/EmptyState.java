@@ -116,7 +116,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
         row.add(label(text, Style.sans(false, 13f), () -> Style.INK));
         row.add(Box.createHorizontalGlue());
         row.add(keyChip(keys));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+        Zoom.maximum(row, Integer.MAX_VALUE, 32);
         return left(row);
     }
 
@@ -138,8 +138,8 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
                 return Style.INK_SOFT;
             }
         };
-        chip.setFont(Style.UI_FONT.deriveFont(12f));
-        chip.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+        Zoom.font(chip, Style.UI_FONT.deriveFont(12f));
+        chip.setBorder(Zoom.gap(3, 8, 3, 8));
         return chip;
     }
 
@@ -147,7 +147,7 @@ public class EmptyState extends JPanel implements javax.swing.Scrollable {
     private static JButton chip(String text, Runnable action) {
         JButton chip = new JButton(text);
         chip.putClientProperty("FlatLaf.style", "arc: 999; margin: 4,12,4,12");
-        chip.setFont(Style.sans(false, 13f));
+        Zoom.font(chip, Style.sans(false, 13f));
         chip.addActionListener(e -> action.run());
         return chip;
     }

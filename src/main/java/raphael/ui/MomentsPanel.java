@@ -40,7 +40,7 @@ public class MomentsPanel extends JPanel implements TraceListener {
         this.model = model;
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new Row());
-        list.setFixedCellHeight(ROW_H); // a title and two lines of sentence; more ends in … (the tooltip has it all)
+        Zoom.rowHeight(list, ROW_H); // a title and two lines of sentence; more ends in … (the tooltip has it all)
         javax.swing.ToolTipManager.sharedInstance().registerComponent(list);
         list.getInputMap().put(javax.swing.KeyStroke.getKeyStroke("ENTER"), "go");
         list.getActionMap().put("go", new javax.swing.AbstractAction() {
@@ -62,9 +62,9 @@ public class MomentsPanel extends JPanel implements TraceListener {
         });
         JScrollPane scroll = new JScrollPane(list);
         scroll.setBorder(BorderFactory.createEmptyBorder());
-        empty.setFont(Style.sans(false, 12f));
+        Zoom.font(empty, Style.sans(false, 12f));
         empty.setForeground(Style.MUTED);
-        empty.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, 0, 0));
+        empty.setBorder(Zoom.gap(Style.SPACE_2, Style.SPACE_3, 0, 0));
         add(empty, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
     }
@@ -100,18 +100,24 @@ public class MomentsPanel extends JPanel implements TraceListener {
     private static final int TWO_LINES_FROM = 360; // narrower than this, the sentence gets one line
 
     // One moment: its step and title, and its sentence in muted text, wrapped to two lines.
-    private static final class Row implements ListCellRenderer<Moment> {
+    private static final class Row implements ListCellRenderer<Moment>, Zoom.Aware {
         private final JPanel panel = new JPanel(new BorderLayout());
         private final JLabel title = new JLabel();
         private final JLabel text = new JLabel();
 
         Row() {
-            panel.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
-            title.setFont(Style.sans(true, 12f));
-            text.setFont(Style.sans(false, 12f));
+            panel.setBorder(Zoom.gap(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+            Zoom.font(title, Style.sans(true, 12f));
+            Zoom.font(text, Style.sans(false, 12f));
             panel.add(title, BorderLayout.NORTH);
             panel.add(text, BorderLayout.CENTER);
-            panel.setPreferredSize(new java.awt.Dimension(0, ROW_H)); // as wide as the list: the text wraps to it
+            Zoom.size(panel, 0, ROW_H); // as wide as the list: the text wraps to it
+        }
+
+        // Not in the window's tree, so a zoom tells it directly (see Zoom.reapply).
+        @Override
+        public void zoomChanged() {
+            Zoom.reapply(panel);
         }
 
         @Override
@@ -130,7 +136,7 @@ public class MomentsPanel extends JPanel implements TraceListener {
             panel.setBackground(selected ? Style.ACCENT_TINT : Style.BACKGROUND);
             panel.setBorder(BorderFactory.createCompoundBorder( // a bar at the left: blue where play pauses
                     BorderFactory.createMatteBorder(0, 3, 0, 0, moment.pauses() ? Style.ACCENT : Style.HAIRLINE),
-                    BorderFactory.createEmptyBorder(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
+                    Zoom.gap(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
             return panel;
         }
 

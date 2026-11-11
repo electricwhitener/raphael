@@ -13,6 +13,7 @@ import raphael.render.Style;
 import raphael.ui.ErrorReporter;
 import raphael.ui.MainWindow;
 import raphael.ui.Windows;
+import raphael.ui.Zoom;
 import raphael.ui.Shortcuts;
 import raphael.ui.SystemTheme;
 
@@ -48,6 +49,7 @@ public class App {
         }
         AppLog.setup();          // the log file first, so everything after can write to it
         ErrorReporter.install(); // then the safety net, so even a problem while starting up is caught
+        Zoom.restore(); // the interface's zoom, before the look (FlatLaf sizes its parts with it)
         setupLook();
         SwingUtilities.invokeLater(() -> {
             MainWindow window = Windows.openNew();
@@ -107,7 +109,9 @@ public class App {
                 // A switched-on toolbar toggle (the find bar's Aa, W and .*) is filled grey.
                 Map.entry("ToggleButton.toolbar.selectedBackground", hex(Style.PRESSED))));
         if (Style.defaultUiFont() != null) { // Linux: the bundled Inter; elsewhere FlatLaf's system font
-            UIManager.put("defaultFont", Style.defaultUiFont());
+            // FlatLaf zooms the system font itself, but uses a font it's given as it is: so at the zoom's size.
+            UIManager.put("defaultFont", new javax.swing.plaf.FontUIResource(Style.defaultUiFont()
+                    .deriveFont(Style.UI_SIZE * com.formdev.flatlaf.util.UIScale.getZoomFactor())));
         }
         if (dark) {
             FlatDarkLaf.setup();

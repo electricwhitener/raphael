@@ -33,8 +33,8 @@ public final class Section {
                 return Style.MUTED;
             }
         };
-        label.setFont(Style.SECTION_FONT.deriveFont(Map.of(TextAttribute.TRACKING, 0.08)));
-        label.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
+        Zoom.font(label, Style.SECTION_FONT.deriveFont(Map.of(TextAttribute.TRACKING, 0.08)));
+        label.setBorder(Zoom.gap(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         return label;
     }
 

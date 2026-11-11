@@ -218,11 +218,11 @@ public class Workbench extends JPanel {
         bottomTabs.setFocusable(false);
         bottomTabs.setBorder(Section.hairline(0, 1, 0, 0));
         addBottomPanel(bottom, bottomTabs, 0.40); // the console, the key moments and the trace table
-        controls.setOnPausedAtMoment(() -> say("paused at a key moment · space goes on · Run menu: pause at key moments", Style.INK_SOFT));
+        controls.setOnPausedAtMoment(() -> say("paused at a key moment · space goes on · the moments box (or the Run menu) stops the pausing", Style.INK_SOFT));
         addBottomPanel(bottom, files, 0.30);
         files.setVisible(false);
-        bottom.setPreferredSize(new Dimension(100, Style.BOTTOM_ROW_H));
-        bottom.setMinimumSize(new Dimension(0, COLLAPSED_ROW_H));
+        Zoom.size(bottom, 100, Style.BOTTOM_ROW_H);
+        Zoom.minimum(bottom, 0, COLLAPSED_ROW_H);
         middle = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
         middle.setResizeWeight(1); // the top gets all the spare room
         // Whenever the program's area changes size, including when it first shows, the bottom row keeps its height.
@@ -549,6 +549,7 @@ public class Workbench extends JPanel {
     // The text size changed: the code follows, and the divider makes room for the longest line.
     public void textSizeChanged() {
         code.applyFont();
+        code.restoreMarks(); // a zoom reinstalls the editor's look, and with it a new highlighter
         if (top.getWidth() > 0 && top.getDividerLocation() < dividerForCode()) {
             top.setDividerLocation(dividerForCode());
         }
@@ -673,11 +674,11 @@ public class Workbench extends JPanel {
         if (middle == null || middle.getHeight() == 0) {
             return;
         }
-        int bottom = Style.BOTTOM_ROW_H;
+        int bottom = Zoom.px(Style.BOTTOM_ROW_H);
         boolean guide = !model.hasSteps() && !running && !visual.hasMessage();
         if (guide && !console.isInputShown()
-                && middle.getHeight() - Style.BOTTOM_ROW_H < emptyState.getPreferredSize().height + 2 * Style.SPACE_6) {
-            bottom = COLLAPSED_ROW_H;
+                && middle.getHeight() - bottom < emptyState.getPreferredSize().height + 2 * Zoom.px(Style.SPACE_6)) {
+            bottom = Zoom.px(COLLAPSED_ROW_H);
         }
         middle.setDividerLocation(middle.getHeight() - middle.getDividerSize() - bottom);
     }

@@ -64,7 +64,7 @@ public class ConsolePanel extends JPanel implements TraceListener {
         inputArea.setBackground(Style.BACKGROUND);
         JLabel inputHeader = Section.header("stdin · for Scanner, type before run");
         inputHeader.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
+                Zoom.gap(Style.SPACE_2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
         inputArea.add(inputHeader, BorderLayout.NORTH);
         inputArea.add(inputScroll, BorderLayout.CENTER);
 

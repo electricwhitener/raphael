@@ -149,10 +149,10 @@ public final class Dialogs {
             JPanel content = new JPanel();
             content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
             content.setOpaque(false);
-            content.setBorder(BorderFactory.createEmptyBorder(PADDING, PADDING, PADDING - 4, PADDING));
+            content.setBorder(Zoom.gap(PADDING, PADDING, PADDING - 4, PADDING));
             if (heading != null) { // null when the title bar already says it all
                 JLabel title = new JLabel(heading);
-                title.setFont(Style.sans(true, 15f));
+                Zoom.font(title, Style.sans(true, 15f));
                 title.setForeground(Style.INK);
                 if (error) {
                     title.setIcon(ERROR_SIGN);
@@ -163,7 +163,7 @@ public final class Dialogs {
             if (body != null) {
                 content.add(Box.createVerticalStrut(Style.SPACE_2));
                 JLabel text = new JLabel("<html><div style='width:" + BODY_WIDTH + "px'>" + escape(body) + "</div></html>");
-                text.setFont(Style.sans(false, 13f));
+                Zoom.font(text, Style.sans(false, 13f));
                 text.setForeground(Style.INK_SOFT);
                 content.add(left(text));
             }
@@ -180,7 +180,7 @@ public final class Dialogs {
             JPanel footer = new JPanel(new BorderLayout());
             footer.setBackground(Style.BAR);
             footer.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                    BorderFactory.createEmptyBorder(Style.SPACE_3, PADDING, Style.SPACE_3, PADDING)));
+                    Zoom.gap(Style.SPACE_3, PADDING, Style.SPACE_3, PADDING)));
             JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, Style.SPACE_2, 0));
             left.setOpaque(false);
             for (JButton helper : helpers) {
@@ -234,7 +234,7 @@ public final class Dialogs {
 
     private static JButton sized(JButton button) {
         Dimension size = button.getPreferredSize();
-        button.setPreferredSize(new Dimension(Math.max(88, size.width), 32));
+        button.setPreferredSize(new Dimension(Math.max(Zoom.px(88), size.width), Zoom.px(32)));
         return button;
     }
 

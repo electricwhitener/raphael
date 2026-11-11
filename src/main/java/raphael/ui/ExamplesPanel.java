@@ -99,7 +99,7 @@ public class ExamplesPanel extends JPanel {
         });
         JPanel top = new JPanel(new BorderLayout(0, Style.SPACE_2));
         top.setOpaque(false);
-        top.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2));
+        top.setBorder(Zoom.gap(Style.SPACE_2, Style.SPACE_2, Style.SPACE_2, Style.SPACE_2));
         top.add(switcher, BorderLayout.NORTH);
         top.add(search, BorderLayout.CENTER);
         add(top, BorderLayout.NORTH);
@@ -110,7 +110,7 @@ public class ExamplesPanel extends JPanel {
                 "selectionInactiveBackground:$Tree.selectionBackground;selectionInactiveForeground:$Tree.selectionForeground");
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
-        tree.setRowHeight(Style.PALETTE_ROW_H - 4);
+        Zoom.rowHeight(tree, Style.PALETTE_ROW_H - 4);
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         tree.setCellRenderer(new Renderer());
         ToolTipManager.sharedInstance().registerComponent(tree);
@@ -156,7 +156,7 @@ public class ExamplesPanel extends JPanel {
         // A language with no examples yet: say so, and offer Java's.
         emptyBox.setOpaque(false);
         emptyBox.setLayout(new javax.swing.BoxLayout(emptyBox, javax.swing.BoxLayout.Y_AXIS));
-        emptyBox.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
+        emptyBox.setBorder(Zoom.gap(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
         empty.setAlignmentX(Component.LEFT_ALIGNMENT);
         emptyBox.add(empty);
         javax.swing.JButton showJava = new javax.swing.JButton("Show Java examples");
@@ -317,19 +317,19 @@ public class ExamplesPanel extends JPanel {
             if (example != null) {
                 setText(example.title());
                 setToolTipText(example.blurb());
-                setFont(Style.sans(false, 12.5f));
+                Zoom.font(this, Style.sans(false, 12.5f));
             } else if (node.getLevel() == 1) {
                 setText(String.valueOf(node.getUserObject()).toUpperCase(Locale.ROOT));
-                setFont(Style.sans(true, 10.5f));
+                Zoom.font(this, Style.sans(true, 10.5f));
                 if (!selected) {
                     setForeground(Style.MUTED);
                 }
             } else if (node.getLevel() == 2) { // a category
                 setText(String.valueOf(node.getUserObject()));
-                setFont(Style.sans(true, 13f));
+                Zoom.font(this, Style.sans(true, 13f));
             } else { // a subcategory: lighter than its category, so the levels step down
                 setText(String.valueOf(node.getUserObject()));
-                setFont(Style.sans(false, 13f));
+                Zoom.font(this, Style.sans(false, 13f));
                 if (!selected) {
                     setForeground(Style.INK_SOFT);
                 }

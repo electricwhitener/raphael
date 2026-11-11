@@ -42,7 +42,7 @@ public class LocalsPanel extends JPanel implements TraceListener {
         table.setShowGrid(false);
         table.setTableHeader(null); // the section header already says what this is
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN); // long values get the extra room
-        table.setRowHeight(22);
+        Zoom.rowHeight(table, 22);
         table.getColumnModel().getColumn(0).setPreferredWidth(90);
         table.getColumnModel().getColumn(1).setPreferredWidth(260);
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
@@ -54,7 +54,7 @@ public class LocalsPanel extends JPanel implements TraceListener {
                 setBackground(changed ? Style.CHANGE_TINT : Style.BACKGROUND);
                 setForeground(Style.INK);
                 setFont(table.getFont().deriveFont(changed ? Font.BOLD : Font.PLAIN));
-                setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_3, 0, Style.SPACE_3));
+                setBorder(Zoom.gap(0, Style.SPACE_3, 0, Style.SPACE_3));
                 return this;
             }
         });

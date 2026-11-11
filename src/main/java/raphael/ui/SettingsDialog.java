@@ -58,7 +58,7 @@ public class SettingsDialog extends JDialog {
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
-        form.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_6, Style.SPACE_6, Style.SPACE_3, Style.SPACE_6));
+        form.setBorder(Zoom.gap(Style.SPACE_6, Style.SPACE_6, Style.SPACE_3, Style.SPACE_6));
         int y = 0;
         group(form, y++, "Run limits", false);
         row(form, y++, "Steps before a run stops", "An endless loop stops here. More steps take longer to record.", steps, "steps");
@@ -86,13 +86,13 @@ public class SettingsDialog extends JDialog {
         JPanel footer = new JPanel(new BorderLayout());
         footer.setBackground(Style.BAR);
         footer.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_6, Style.SPACE_3, Style.SPACE_6)));
+                Zoom.gap(Style.SPACE_3, Style.SPACE_6, Style.SPACE_3, Style.SPACE_6)));
         footer.add(defaults, BorderLayout.WEST);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, Style.SPACE_2, 0));
         buttons.setOpaque(false);
         for (String label : Dialogs.order("Save", "Cancel", java.util.List.of(), Shortcuts.isWindows(), Shortcuts.isMac())) {
             JButton button = new JButton(label);
-            button.setPreferredSize(new Dimension(Math.max(88, button.getPreferredSize().width), 32));
+            button.setPreferredSize(new Dimension(Math.max(Zoom.px(88), button.getPreferredSize().width), Zoom.px(32)));
             if (label.equals("Save")) {
                 button.addActionListener(e -> {
                     chosen = read();
@@ -140,16 +140,16 @@ public class SettingsDialog extends JDialog {
 
     private static JSpinner spinner(int min, int max, int step) {
         JSpinner spinner = new JSpinner(new SpinnerNumberModel(min, min, max, step));
-        spinner.setPreferredSize(new Dimension(104, 32));
-        spinner.setFont(Style.UI_FONT);
+        spinner.setPreferredSize(new Dimension(Zoom.px(104), Zoom.px(32)));
+        Zoom.font(spinner, Style.UI_FONT);
         return spinner;
     }
 
     // One part of a three-way switch.
     private static JToggleButton segment(String text) {
         JToggleButton button = new JToggleButton(text);
-        button.setFont(Style.sans(false, 13f));
-        button.setPreferredSize(new Dimension(Math.max(72, button.getPreferredSize().width + Style.SPACE_2), 32));
+        Zoom.font(button, Style.sans(false, 13f));
+        button.setPreferredSize(new Dimension(Math.max(Zoom.px(72), button.getPreferredSize().width + Zoom.px(Style.SPACE_2)), Zoom.px(32)));
         button.putClientProperty("FlatLaf.style", "selectedBackground: " + hex(Style.ACCENT)
                 + "; selectedForeground: " + hex(Style.ON_ACCENT));
         return button;
@@ -158,7 +158,7 @@ public class SettingsDialog extends JDialog {
     private static void group(JPanel form, int y, String name, boolean ruleAbove) {
         JLabel caption = Section.header(name);
         caption.setBorder(BorderFactory.createCompoundBorder(ruleAbove ? Section.hairline(1, 0, 0, 0) : BorderFactory.createEmptyBorder(),
-                BorderFactory.createEmptyBorder(ruleAbove ? Style.SPACE_6 - Style.SPACE_2 : 0, 0, Style.SPACE_1, 0)));
+                Zoom.gap(ruleAbove ? Style.SPACE_6 - Style.SPACE_2 : 0, 0, Style.SPACE_1, 0)));
         GridBagConstraints c = new GridBagConstraints();
         c.gridy = y;
         c.gridwidth = 3;
