@@ -6,8 +6,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 // Finds the programs Raphael runs for languages other than Java: gcc and gdb (lldb on a Mac), and
-// later python. The Windows installer carries its own (WinLibs, in a mingw64 folder next to
-// Raphael's jar), looked for first; elsewhere, and in a copy built from the code, they're the
+// later python. The Windows installer carries its own (WinLibs, in a mingw64 folder beside the
+// folder of Raphael's jar), looked for first; elsewhere, and in a copy built from the code, they're the
 // system's, found on the PATH.
 // OOP: a utility class (static methods, private constructor).
 public final class Toolchains {
@@ -21,8 +21,9 @@ public final class Toolchains {
     // The bin folder of the toolchain that came with Raphael, or null.
     public static Path bundled() {
         try {
+            // jpackage puts an installer's extra content beside the folder of jars (app\ on Windows)
             Path jar = Path.of(Toolchains.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            Path bin = jar.getParent().resolve("mingw64").resolve("bin");
+            Path bin = jar.getParent().getParent().resolve("mingw64").resolve("bin");
             return Files.isDirectory(bin) ? bin : null;
         } catch (java.net.URISyntaxException | RuntimeException e) {
             return null;

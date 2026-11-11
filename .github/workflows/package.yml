@@ -82,7 +82,7 @@ jobs:
           if ($install.ExitCode -ne 0) { Get-Content install.log -Tail 60; exit 1 }
           $test = Start-Process "C:\Program Files\Raphael\Raphael.exe" -ArgumentList "--self-test c" -Wait -PassThru
           Get-Item $msi | ForEach-Object { "installer: {0:N0} MB" -f ($_.Length / 1MB) }
-          "C toolchain installed: {0:N0} MB" -f ((Get-ChildItem "C:\Program Files\Raphael\app\mingw64" -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
+          "C toolchain installed: {0:N0} MB" -f ((Get-ChildItem "C:\Program Files\Raphael\mingw64" -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
           if ($test.ExitCode -ne 0) {
             # Raphael.exe has no console: the installed copy's own java prints why
             & "C:\Program Files\Raphael\runtime\bin\java.exe" -cp "C:\Program Files\Raphael\app\*" raphael.App --self-test c

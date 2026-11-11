@@ -44,6 +44,7 @@ public class CTracer implements Tracer {
     private static final String MARK = "@@R ";
     private static final long POLL_MS = 100;
     private static final long STOP_GRACE_MS = 2000; // how long a stop request may take before gdb is killed
+    private static final long FIRST_LINE_MS = 30_000; // the debugger starting up, on a slow machine
 
     static {
         // If Raphael quits during a run, gdb and the program it's running end too.
@@ -200,10 +201,13 @@ public class CTracer implements Tracer {
                     forced = true;
                     return;
                 }
-                if (now - lastLine >= limits.timeoutSeconds() * 1000L) {
+                // Before the first line, the debugger is still starting (seconds on a cold machine).
+                long allowed = recorded.isEmpty() ? Math.max(FIRST_LINE_MS, limits.timeoutSeconds() * 1000L)
+                        : limits.timeoutSeconds() * 1000L;
+                if (now - lastLine >= allowed) {
                     forced = true;
                     end(EndReason.TIMEOUT, recorded.isEmpty()
-                            ? "Stopped: the program did nothing for " + limits.timeoutSeconds() + " seconds."
+                            ? "Stopped: the program didn't reach its first line in " + allowed / 1000 + " seconds."
                             : "Stopped: line " + recorded.get(recorded.size() - 1).line() + " kept running for "
                                     + limits.timeoutSeconds() + " seconds without reaching another line. Is it an infinite loop?");
                     return;
