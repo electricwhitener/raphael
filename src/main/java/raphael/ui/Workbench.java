@@ -703,7 +703,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
             boolean waiting = live != null && live.isWaiting();
             visual.setWaitingForInput(waiting);
             if (waiting) {
-                say("waiting for input · type it in the terminal and press enter · esc stops", Style.ACCENT);
+                say("waiting for input · esc stops", Style.ACCENT);
             } else if (steps > 0) {
                 visual.setRecordedSteps(steps);
                 say("recording your program: " + steps + " steps · esc stops", Style.INK_SOFT);

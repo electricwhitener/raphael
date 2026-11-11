@@ -354,7 +354,7 @@ public class VisualPanel extends JPanel implements TraceListener, Zoom.Aware {
         Rectangle visible = zoomedVisible();
         String title = waitingForInput ? "Waiting for input"
                 : recordedSteps == 0 ? "Recording…" : String.format(java.util.Locale.ENGLISH, "Recording…  %,d steps", recordedSteps);
-        String detail = waitingForInput ? "Type it in the terminal below and press Enter."
+        String detail = waitingForInput ? "Type it in the Terminal tab and press Enter."
                 : "Press Esc or Stop to end the recording here.";
         g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setFont(Style.sans(true, 16f));

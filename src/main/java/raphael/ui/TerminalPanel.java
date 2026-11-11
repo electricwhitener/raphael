@@ -38,7 +38,23 @@ public class TerminalPanel extends JPanel implements TraceListener {
     private final JTextPane screen = new JTextPane();
     private final StyledDocument document = screen.getStyledDocument();
     private final JLabel heading = Section.header("terminal");
-    private final JLabel hint = new JLabel(); // under the text while a program waits for input
+    // Under the text while a program waits for input: a pale blue strip with a blue line on top,
+    // so where to type is plain. Its colours are read when it paints, so they follow dark mode.
+    private final JLabel hint = new JLabel() {
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            g.setColor(Style.ACCENT_TINT);
+            g.fillRect(0, 0, getWidth(), getHeight());
+            g.setColor(Style.ACCENT);
+            g.fillRect(0, 0, getWidth(), Zoom.px(2));
+            super.paintComponent(g);
+        }
+
+        @Override
+        public java.awt.Color getForeground() {
+            return Style.INK;
+        }
+    };
     private java.util.function.Consumer<String> onLineClicked = line -> { }; // until the program sets it
     private final DefaultHighlighter.DefaultHighlightPainter newOutput =
             new DefaultHighlighter.DefaultHighlightPainter(null) {
@@ -104,9 +120,7 @@ public class TerminalPanel extends JPanel implements TraceListener {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         hint.setVisible(false);
         Zoom.font(hint, Style.UI_FONT.deriveFont(12f));
-        hint.setForeground(Style.ACCENT);
-        hint.setBorder(BorderFactory.createCompoundBorder(Section.hairline(1, 0, 0, 0),
-                Zoom.gap(Style.SPACE_1, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3)));
+        hint.setBorder(Zoom.gap(Style.SPACE_1 + 2, Style.SPACE_3, Style.SPACE_1, Style.SPACE_3));
         JPanel body = new JPanel(new BorderLayout());
         body.add(scroll, BorderLayout.CENTER);
         body.add(hint, BorderLayout.SOUTH);
@@ -204,8 +218,8 @@ public class TerminalPanel extends JPanel implements TraceListener {
         boolean waiting = live != null && live.isWaiting();
         boolean started = waiting && !wasWaiting;
         wasWaiting = waiting;
-        setHint(waiting ? "waiting for input: type a line and press Enter · Ctrl+D ends the input"
-                : live != null && live.isEnded() ? "input ended (Ctrl+D)" : null);
+        setHint(waiting ? "Your turn: type a line and press Enter.   Ctrl+D: no more input."
+                : live != null && live.isEnded() ? "No more input (Ctrl+D). The program can still print." : null);
         return started;
     }
 
@@ -281,7 +295,7 @@ public class TerminalPanel extends JPanel implements TraceListener {
         refresh(); // the lines show where they were typed
         writing = true;
         try {
-            document.insertString(document.getLength(), keep, null);
+            document.insertString(document.getLength(), keep, typedStyle());
         } catch (BadLocationException ignored) {
             // the end is always there
         } finally {
@@ -302,7 +316,7 @@ public class TerminalPanel extends JPanel implements TraceListener {
             if (writing) {
                 super.insertString(fb, offset, text, attributes);
             } else if (accepting() && offset >= inputStart) {
-                super.insertString(fb, offset, text, null);
+                super.insertString(fb, offset, text, typedStyle());
                 if (text.indexOf('\n') >= 0) {
                     SwingUtilities.invokeLater(TerminalPanel.this::sendLines);
                 }
@@ -321,7 +335,7 @@ public class TerminalPanel extends JPanel implements TraceListener {
             if (writing) {
                 super.replace(fb, offset, length, text, attributes);
             } else if (accepting() && offset >= inputStart) {
-                super.replace(fb, offset, length, text, null);
+                super.replace(fb, offset, length, text, typedStyle());
                 if (text != null && text.indexOf('\n') >= 0) {
                     SwingUtilities.invokeLater(TerminalPanel.this::sendLines);
                 }
@@ -431,6 +445,11 @@ public class TerminalPanel extends JPanel implements TraceListener {
             StyleConstants.setForeground(style, Style.ACCENT);
         }
         return style;
+    }
+
+    // What the user types: blue as soon as it's typed, as it will be once sent (the theme's blue now).
+    private static AttributeSet typedStyle() {
+        return style(new Piece("", true));
     }
 
     // A crash's stack trace, without the lines from inside Java itself, which only hide the student's.
