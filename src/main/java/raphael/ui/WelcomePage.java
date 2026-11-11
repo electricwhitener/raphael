@@ -211,12 +211,19 @@ public class WelcomePage extends JPanel {
         JPanel none = new JPanel();
         none.setOpaque(false);
         none.setLayout(new javax.swing.BoxLayout(none, javax.swing.BoxLayout.Y_AXIS));
-        none.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, Style.SPACE_3, Style.SPACE_3, Style.SPACE_3));
+        none.setBorder(BorderFactory.createEmptyBorder(Style.SPACE_3, 0, Style.SPACE_3, 0)); // left edge = the heading's
         noneText.setAlignmentX(Component.LEFT_ALIGNMENT);
         none.add(noneText);
-        javax.swing.JButton showJava = new javax.swing.JButton("Show Java examples");
+        none.add(javax.swing.Box.createVerticalStrut(Style.SPACE_2));
+        javax.swing.JButton showJava = new javax.swing.JButton("Show Java examples") {
+            @Override
+            public Color getForeground() { // asked each time it paints, so it follows a theme switch
+                return Style.ACCENT;
+            }
+        };
         showJava.putClientProperty("JButton.buttonType", "borderless");
-        showJava.setForeground(Style.ACCENT);
+        showJava.putClientProperty("FlatLaf.style", "margin: 3,0,1,8"); // no left margin: lined up with the note
+        showJava.setFont(Style.sans(false, 13f));
         showJava.setAlignmentX(Component.LEFT_ALIGNMENT);
         showJava.addActionListener(e -> showExamplesOf(raphael.lang.Languages.JAVA));
         none.add(showJava);

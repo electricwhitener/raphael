@@ -653,7 +653,37 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         for (javax.swing.AbstractButton tall : new javax.swing.AbstractButton[] {examples, runButton}) {
             tall.putClientProperty("JComponent.minimumHeight", 32); // as tall as the icon buttons; width as the text needs
         }
+        bar.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                fitToolBar();
+            }
+        });
         return bar;
+    }
+
+    // A narrow window makes the toolbar give way, a little at a time, before anything is cut off:
+    // first the moments box shortens and Examples becomes an icon, then Skip and Finish call go
+    // (they're in the Run menu too). Asked when the window resizes and when a tab's controls come in.
+    private void fitToolBar() {
+        if (toolBar == null || toolBar.getWidth() == 0) {
+            return;
+        }
+        ControlsBar controls = controlsSlot.getComponentCount() == 1 && controlsSlot.getComponent(0) instanceof ControlsBar
+                ? (ControlsBar) controlsSlot.getComponent(0) : null;
+        for (int level = 0; level <= 2; level++) {
+            examplesButton.setText(level > 0 ? null : "Examples");
+            examplesButton.setIcon(level > 0 ? Icons.of(Icons.Glyph.SIDE_BAR, Icons.Role.TOOL) : null);
+            if (controls != null) {
+                controls.setCompact(level);
+            }
+            toolBar.doLayout();
+            if (toolBar.getPreferredSize().width <= toolBar.getWidth()) {
+                break;
+            }
+        }
+        toolBar.revalidate();
+        toolBar.repaint();
     }
 
     // A thin upright line between two groups of buttons, with a gap on each side.
@@ -1598,6 +1628,7 @@ public class MainWindow extends JFrame implements MomentMode.Watcher {
         controlsSlot.add(bar, BorderLayout.CENTER);
         controlsSlot.revalidate();
         controlsSlot.repaint();
+        javax.swing.SwingUtilities.invokeLater(this::fitToolBar); // this tab's controls, made to fit
     }
 
     // On the Welcome tab, everything that needs a program is off, and so is the picture's key.

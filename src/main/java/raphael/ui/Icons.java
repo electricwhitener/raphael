@@ -145,6 +145,15 @@ public final class Icons {
                 g.drawString("?", 5.6f, 11.4f);
             }
         },
+        SIDE_BAR { // a window with a panel at its left: the examples side bar
+            @Override
+            void draw(Graphics2D g) {
+                g.draw(new RoundRectangle2D.Float(2.5f, 3, 11, 10, 2, 2));
+                g.draw(new java.awt.geom.Line2D.Float(6.5f, 3, 6.5f, 13));
+                g.draw(new java.awt.geom.Line2D.Float(3.8f, 5.5f, 5.2f, 5.5f));
+                g.draw(new java.awt.geom.Line2D.Float(3.8f, 7.5f, 5.2f, 7.5f));
+            }
+        },
         PASTE { // a clipboard
             @Override
             void draw(Graphics2D g) {

@@ -59,7 +59,7 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         }
     };
     // "step 5 of 47", in the softer ink (it's a readout, not a control); asked each time it paints, for dark mode.
-    private final JLabel stepLabel = new JLabel("step – of –") {
+    private final JLabel stepLabel = new JLabel("– / –") {
         @Override
         public java.awt.Color getForeground() {
             return Style.INK_SOFT;
@@ -69,6 +69,8 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
     // Key moments: off, shown, or shown and paused at (one choice for every tab; see MomentMode).
     private final JComboBox<MomentMode> moments = new JComboBox<>(MomentMode.values());
     private boolean showingMode; // true while the box is being set to the choice made elsewhere
+    private static final int BOX_EXTRA = 44; // a combo box's arrow and padding, beside its text
+    private int compact; // 0 in a wide window; 1: the moments box shows only its word; 2: Skip and Finish call hidden too
     private final Timer playTimer;
     private boolean movingSlider; // true while we move the slider ourselves
     private boolean timerMoving;  // true while the play timer is moving to the next step
@@ -109,6 +111,21 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
             }
         });
         play.addActionListener(e -> togglePlay());
+        // A fixed width, and "Moments: show" when closed (the list says it in full), so the bar fits 960 px.
+        moments.setPrototypeDisplayValue(MomentMode.PAUSE);
+        moments.setPreferredSize(new java.awt.Dimension(momentsWidth(), moments.getPreferredSize().height));
+        moments.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                   boolean selected, boolean focused) {
+                super.getListCellRendererComponent(list, value, index, selected, focused);
+                if (index < 0 && value instanceof MomentMode) { // the closed box
+                    String word = ((MomentMode) value).name().toLowerCase(java.util.Locale.ROOT);
+                    setText(compact > 0 ? word : "Moments: " + word);
+                }
+                return this;
+            }
+        });
         moments.setSelectedItem(MomentMode.current());
         moments.setToolTipText(MomentMode.current().description());
         moments.getAccessibleContext().setAccessibleName("Key moments");
@@ -142,6 +159,25 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         add(slider, BorderLayout.CENTER);
         add(position, BorderLayout.EAST);
         stepChanged(model);
+    }
+
+    // A narrow window: 0 shows everything; 1 shortens the moments box to its word; 2 also hides
+    // Skip call and Finish call (they stay in the Run menu, with their keys).
+    public void setCompact(int level) {
+        if (level == compact) {
+            return;
+        }
+        compact = level;
+        moments.setPreferredSize(new java.awt.Dimension(momentsWidth(), moments.getPreferredSize().height));
+        over.setVisible(level < 2);
+        out.setVisible(level < 2);
+        revalidate();
+        repaint();
+    }
+
+    // As wide as the longest text the closed box shows, in its own font: nothing is cut off.
+    private int momentsWidth() {
+        return moments.getFontMetrics(moments.getFont()).stringWidth(compact > 0 ? "pause" : "Moments: pause") + BOX_EXTRA;
     }
 
     MomentMode momentChoice() { // what the box shows (for tests)
@@ -208,9 +244,13 @@ public class ControlsBar extends JPanel implements TraceListener, MomentMode.Wat
         slider.setMaximum(Math.max(model.size() - 1, 0));
         slider.setValue(model.getStep());
         movingSlider = false;
-        stepLabel.setText(has ? "step " + (model.getStep() + 1) + " of " + model.size() : "step – of –");
+        // "21 / 130": short, so the bar fits the smallest window; the tooltip and screen readers say it in words.
+        stepLabel.setText(has ? (model.getStep() + 1) + " / " + model.size() : "– / –");
+        String words = has ? "step " + (model.getStep() + 1) + " of " + model.size() : "no run yet";
+        stepLabel.setToolTipText(words + " (this step, and how many the run has)");
+        stepLabel.getAccessibleContext().setAccessibleName(words);
         // As wide as the run's last step needs, so the label doesn't grow while it counts.
-        String widest = "step " + model.size() + " of " + model.size();
+        String widest = model.size() + " / " + model.size();
         stepLabel.setPreferredSize(new java.awt.Dimension(stepLabel.getFontMetrics(stepLabel.getFont()).stringWidth(widest),
                 stepLabel.getPreferredSize().height));
         boolean canGoBack = has && model.getStep() > 0;
