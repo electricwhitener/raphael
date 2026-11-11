@@ -187,6 +187,7 @@ public class CCompiler {
     private static Output run(List<String> command, Path folder) throws CompileSetupException {
         ProcessBuilder builder = new ProcessBuilder(command).directory(folder.toFile()).redirectErrorStream(true);
         builder.environment().put("LC_ALL", "C");
+        Toolchains.prepare(builder.environment());
         try {
             Process gcc = builder.start();
             gcc.getOutputStream().close();

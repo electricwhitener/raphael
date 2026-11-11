@@ -13,7 +13,9 @@ import raphael.trace.JdiTracer;
 // "Raphael --self-test": checks, with no window, that this copy of Raphael can do its job: compile
 // an example, record it in a second JVM, and lay out its pictures. The installers are checked
 // with it on every system, because a packaged Raphael carries its own Java, and that Java must
-// include the compiler and the debugger. Exit code 0 means it all worked.
+// include the compiler and the debugger. Then the same for C, where this computer can run it: a
+// C example compiled with gcc and recorded through gdb (lldb on a Mac), which checks the Windows
+// installer's own copy of them and the Linux package's dependencies. Exit code 0 means it all worked.
 // OOP: a utility class (static methods, private constructor); exception handling: any failure,
 // checked or not, becomes a message and exit code 1.
 public final class SelfTest {
@@ -21,7 +23,8 @@ public final class SelfTest {
     private SelfTest() {
     }
 
-    public static int run() {
+    // needC: C must work too (the installers' checks); otherwise C is checked only where it can run.
+    public static int run(boolean needC) {
         try (InputStream example = SelfTest.class.getResourceAsStream("/examples/java/sorting/BubbleSort.java")) {
             String source = new String(example.readAllBytes(), StandardCharsets.UTF_8);
             CompileResult program = new SourceCompiler().compile(source);
@@ -43,9 +46,36 @@ public final class SelfTest {
             }
             System.out.println("self-test ok: Java " + System.getProperty("java.version") + ", "
                     + trace.size() + " steps recorded, " + pictures + " pictures, saved and reopened");
-            return 0;
+            return c(needC);
         } catch (Exception | LinkageError e) {
             return fail(e.toString());
+        }
+    }
+
+    // The C example: compiled, recorded, and printing what it should.
+    private static int c(boolean needed) throws Exception {
+        raphael.lang.Language c = raphael.lang.Languages.byId("c");
+        String cantRun = c.cantRun();
+        if (cantRun != null) {
+            if (needed) {
+                return fail("C can't run: " + cantRun);
+            }
+            System.out.println("self-test: C isn't checked here: " + cantRun);
+            return 0;
+        }
+        try (InputStream example = SelfTest.class.getResourceAsStream("/examples/c/lists/linked_list.c")) {
+            String source = new String(example.readAllBytes(), StandardCharsets.UTF_8);
+            CompileResult program = c.compile(source);
+            if (!program.success()) {
+                return fail("the C example didn't compile: " + program.errors());
+            }
+            Trace trace = c.newTracer().trace(program, "");
+            if (trace.getEndReason() != EndReason.FINISHED || !trace.getOutput().strip().equals("40 30 20 10")) {
+                return fail("the C example didn't record: " + trace.getEndMessage() + ", printed " + trace.getOutput().strip());
+            }
+            System.out.println("self-test ok: C, " + trace.size() + " steps recorded with "
+                    + raphael.toolchain.Toolchains.find(raphael.toolchain.Toolchains.debugger()));
+            return 0;
         }
     }
 

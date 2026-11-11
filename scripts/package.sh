@@ -34,9 +34,14 @@ case "$(uname -s)" in
 esac
 
 ARGS=(--type "$TYPE" --name Raphael --app-version "$VERSION"
-      --vendor "Raphael" --description "See data structures change while Java code runs"
+      --vendor "Raphael" --description "See data structures change while Java and C code runs"
       --input target/app --main-jar "raphael-$VERSION.jar" --main-class raphael.App
-      --runtime-image target/runtime --icon "$ICON" --dest target/installer)
+      --runtime-image target/runtime --icon "$ICON" --dest target/installer
+      --app-content licenses)                                    # the licences of what's bundled
+if [ "$OS" = windows ]; then
+    scripts/winlibs.sh target/toolchain                         # C: gcc and a gdb with Python, in mingw64
+    ARGS+=(--app-content target/toolchain/mingw64)
+fi
 if [ "$TYPE" != app-image ]; then
     ARGS+=(--file-associations scripts/raphael-file.properties)   # double-clicking a .raphael file opens it
     case "$OS" in
@@ -45,7 +50,8 @@ if [ "$TYPE" != app-image ]; then
         mac)     ARGS+=(--mac-package-identifier io.github.electricwhitener.raphael) ;;
         linux)   ARGS+=(--linux-shortcut --linux-menu-group Development --linux-app-category devel
                         --linux-deb-maintainer "raphael@users.noreply.github.com"
-                        --linux-package-deps libgtk-3-0) ;;  # for the system's own file dialog
+                        # GTK for the system's own file dialog; gcc, the C headers and gdb (with Python) for C
+                        --linux-package-deps "libgtk-3-0, gcc, libc6-dev, gdb") ;;
     esac
 fi
 jpackage "${ARGS[@]}"

@@ -115,6 +115,7 @@ public class CTracer implements Tracer {
             env.put("RAPHAEL_MAX_OBJECTS", String.valueOf(TraceLimits.MAX_OBJECTS));
             env.put("RAPHAEL_MAX_CELLS", String.valueOf(TraceLimits.MAX_ARRAY_CELLS));
             env.put("LC_ALL", "C");
+            Toolchains.prepare(env);
             Process process = builder.start();
             process.getOutputStream().close();
             StringBuffer gdbErrors = new StringBuffer();

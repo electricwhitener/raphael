@@ -26,7 +26,7 @@ public class App {
     public static void main(String[] args) {
         if (args.length > 0 && args[0].equals("--self-test")) { // used to check the installers
             System.setProperty("java.awt.headless", "true");
-            System.exit(SelfTest.run());
+            System.exit(SelfTest.run(args.length > 1 && args[1].equals("c"))); // "--self-test c": C must work too
         }
         if (Shortcuts.isMac()) { // read by Java when the window system starts, so first of all
             System.setProperty("apple.awt.application.appearance", "system"); // the title bar follows dark mode

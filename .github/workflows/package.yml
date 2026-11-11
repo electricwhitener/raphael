@@ -64,13 +64,13 @@ jobs:
           # The package adds Raphael to the desktop's menu; a CI server has no menu folders yet.
           sudo mkdir -p /usr/share/applications /usr/share/desktop-directories
           sudo apt-get install -y ./dist-installers/*.deb
-          /opt/raphael/bin/Raphael --self-test
+          /opt/raphael/bin/Raphael --self-test c
 
       - name: Install and self-test (macOS)
         if: runner.os == 'macOS'
         run: |
           hdiutil attach dist-installers/*.dmg -mountpoint /Volumes/Raphael -nobrowse
-          /Volumes/Raphael/Raphael.app/Contents/MacOS/Raphael --self-test
+          /Volumes/Raphael/Raphael.app/Contents/MacOS/Raphael --self-test c
           hdiutil detach /Volumes/Raphael
 
       - name: Install and self-test (Windows)
@@ -80,7 +80,7 @@ jobs:
           $msi = (Get-ChildItem dist-installers\*.msi | Select-Object -First 1).FullName
           $install = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /l*v install.log" -Wait -PassThru
           if ($install.ExitCode -ne 0) { Get-Content install.log -Tail 60; exit 1 }
-          $test = Start-Process "C:\Program Files\Raphael\Raphael.exe" -ArgumentList "--self-test" -Wait -PassThru
+          $test = Start-Process "C:\Program Files\Raphael\Raphael.exe" -ArgumentList "--self-test c" -Wait -PassThru
           if ($test.ExitCode -ne 0) { Write-Error "self-test failed"; exit 1 }
           Write-Output "installed and self-tested"
 

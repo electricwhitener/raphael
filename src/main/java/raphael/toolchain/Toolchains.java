@@ -5,9 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-// Finds the programs Raphael runs for languages other than Java: gcc now, and gdb, lldb and
-// python later in Stage 14. For now it looks on the PATH; the copies bundled with the installers
-// (Stage 14, step 8) will be looked for first.
+// Finds the programs Raphael runs for languages other than Java: gcc and gdb (lldb on a Mac), and
+// later python. The Windows installer carries its own (WinLibs, in a mingw64 folder next to
+// Raphael's jar), looked for first; elsewhere, and in a copy built from the code, they're the
+// system's, found on the PATH.
 // OOP: a utility class (static methods, private constructor).
 public final class Toolchains {
 
@@ -17,9 +18,34 @@ public final class Toolchains {
     private Toolchains() {
     }
 
-    // The program called name ("gcc"), or null if it isn't there.
+    // The bin folder of the toolchain that came with Raphael, or null.
+    public static Path bundled() {
+        try {
+            Path jar = Path.of(Toolchains.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            Path bin = jar.getParent().resolve("mingw64").resolve("bin");
+            return Files.isDirectory(bin) ? bin : null;
+        } catch (java.net.URISyntaxException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    // For a process that runs one of these tools: the bundled toolchain's bin first on its PATH,
+    // so gcc finds its assembler and linker, and gdb its DLLs and Python, there.
+    public static void prepare(java.util.Map<String, String> environment) {
+        Path bin = bundled();
+        if (bin != null) {
+            String key = environment.keySet().stream().filter(k -> k.equalsIgnoreCase("PATH")).findFirst().orElse("PATH");
+            environment.put(key, bin + File.pathSeparator + environment.getOrDefault(key, ""));
+        }
+    }
+
+    // The program called name ("gcc"), or null if it isn't there: Raphael's own copy first.
     public static Path find(String name) {
         String file = WINDOWS ? name + ".exe" : name;
+        Path bin = bundled();
+        if (bin != null && Files.isRegularFile(bin.resolve(file))) {
+            return bin.resolve(file);
+        }
         String path = System.getenv("PATH");
         if (path == null) {
             return null;
@@ -53,7 +79,9 @@ public final class Toolchains {
                         ? java.util.List.of(debugger.toString(), "--batch", "--no-lldbinit", "-o", "script print('raphael' + '-ok')")
                         : java.util.List.of(debugger.toString(), "-q", "-batch", "-nx", "-ex", "python print('raphael' + '-ok')");
                 try {
-                    Process p = new ProcessBuilder(command).redirectErrorStream(true).start();
+                    ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+                    prepare(builder.environment());
+                    Process p = builder.start();
                     p.getOutputStream().close();
                     String said = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     debuggerHasPython = p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS) && said.contains("raphael-ok");
