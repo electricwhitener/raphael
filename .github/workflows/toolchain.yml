@@ -109,7 +109,7 @@ jobs:
           mvn -B -q test -Dtest='CTracerTest,ExamplesTest,TracerTest' || true
           pass=0
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if mvn -B -q surefire:test -Dtest='TracerTest#theProgramEndsWhenRaphaelIsKilled' > run$i.txt 2>&1; then pass=$((pass+1)); else tail -5 run$i.txt; fi
+            if mvn -B -q surefire:test -Dtest='TracerTest#theProgramEndsWhenRaphaelIsKilled' > run$i.txt 2>&1; then pass=$((pass+1)); else cat target/surefire-reports/raphael.trace.TracerTest.txt | head -80; fi
           done
           echo "passed $pass of 10"
           [ "$pass" = 10 ]
