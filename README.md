@@ -288,6 +288,7 @@ Safety:
 | `Toolchains` (toolchain/) | Finds gcc and gdb (and later lldb and Python), checks that gdb can run Python, and says how to install what's missing on this system | `find(name)`, `gdbHasPython()`, `howToInstall(what)` |
 | `CTracer` | Traces a C program through gdb: starts it with the helper script, reads one JSON line per step, and builds the same Snapshots as Java's tracer; a watchdog ends a program stuck on one line | `trace(program, input)`, `stop()`, `crashText(signal)` |
 | `raphael_gdb.py` (resources/c/) | The Python script inside gdb: steps through the student's lines and sends each step's frames, locals, structs, arrays, globals, returns, output size and files as JSON | `run()`, `Step.value()`, `frames_now()`, `watch_return()` |
+| `raphael_lldb.py` (resources/c/) | The same for macOS, inside lldb (Apple's tools have no gdb); a return is caught by a breakpoint at the call's return address and read from the return register | `run()`, `Step.value()`, `watch_return()`, `return_value()` |
 | `Json` | A small reader for the helper's JSON lines (maps, lists, strings, numbers) | `read(text)` |
 | `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
 | **trace/** | | |
