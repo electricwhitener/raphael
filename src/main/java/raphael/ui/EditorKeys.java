@@ -19,9 +19,14 @@ public class EditorKeys {
     private static final String INDENT = "    ";
 
     private final JTextArea editor;
+    private raphael.lang.Language language = raphael.lang.Languages.JAVA; // its comments and how its blocks open
 
     public EditorKeys(JTextArea editor) {
         this.editor = editor;
+    }
+
+    public void setLanguage(raphael.lang.Language language) {
+        this.language = language;
     }
 
     public void install() {
@@ -53,12 +58,14 @@ public class EditorKeys {
         });
     }
 
-    // Starts a new line at the same indentation, one level deeper after a "{". Between "{" and
-    // "}" it opens the block: the cursor on its own line inside, the "}" below.
+    // Starts a new line at the same indentation, one level deeper after a "{" (or after a ":" in
+    // Python, whose blocks are indented). Between "{" and "}" it opens the block: the cursor on its
+    // own line inside, the "}" below.
     void newLine() {
         String before = textBeforeCaretOnLine();
         String indent = before.substring(0, before.length() - before.stripLeading().length());
-        boolean opens = before.stripTrailing().endsWith("{");
+        String code = before.stripTrailing();
+        boolean opens = code.endsWith("{") || (language.blocksByIndent() && code.endsWith(":") && !code.stripLeading().startsWith("#"));
         if (opens && editor.getSelectedText() == null && charAfterCaret() == '}') {
             int at = editor.getSelectionStart();
             editor.replaceSelection("\n" + indent + INDENT + "\n" + indent);
@@ -169,8 +176,9 @@ public class EditorKeys {
     // Comments out the selected lines, or un-comments them if they're all comments already.
     void toggleComment() {
         boolean allComments = true;
+        String mark = language.lineComment(); // "//" or "#"
         for (String line : selectedLines()) {
-            allComments &= line.isBlank() || line.stripLeading().startsWith("//");
+            allComments &= line.isBlank() || line.stripLeading().startsWith(mark);
         }
         boolean remove = allComments;
         changeLines(line -> {
@@ -179,9 +187,9 @@ public class EditorKeys {
             }
             int start = line.length() - line.stripLeading().length();
             if (!remove) {
-                return line.substring(0, start) + "// " + line.substring(start);
+                return line.substring(0, start) + mark + " " + line.substring(start);
             }
-            String rest = line.substring(start + 2);
+            String rest = line.substring(start + mark.length());
             return line.substring(0, start) + (rest.startsWith(" ") ? rest.substring(1) : rest);
         });
     }

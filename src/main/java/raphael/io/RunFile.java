@@ -47,16 +47,23 @@ public final class RunFile {
     public static final String EXTENSION = ".raphael";
     private static final int MAGIC = 0x52415048; // "RAPH" in ASCII: says "this is a Raphael run"
     // Goes up when the saved classes change. 2: a program can have several files (Saved.files).
-    // Version 1 files still open (their files come back as null); Raphael 1.0 refuses version 2.
-    private static final int VERSION = 2;
+    // 3: the program's language (Saved.language). Older files still open (what they lack comes
+    // back as null: one file, in Java); Raphael 1.0 refuses version 2, and 1.2 refuses version 3.
+    private static final int VERSION = 3;
 
     // What a .raphael file holds. source is the program of one file; files, for a program of
     // several files, holds each of them (null for one file, and in version 1 files).
     // A record is read back by its parts' names, so a part added later is simply null in older files.
-    public record Saved(String source, String input, Trace trace, List<SourceFile> files) implements Serializable {
+    // language is the language's id ("java", "c"), null in files from before there were languages.
+    public record Saved(String source, String input, Trace trace, List<SourceFile> files, String language)
+            implements Serializable {
 
         public Saved(String source, String input, Trace trace) {
-            this(source, input, trace, null);
+            this(source, input, trace, null, "java");
+        }
+
+        public Saved(String source, String input, Trace trace, List<SourceFile> files) {
+            this(source, input, trace, files, "java");
         }
     }
 

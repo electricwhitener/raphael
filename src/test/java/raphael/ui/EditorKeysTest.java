@@ -116,4 +116,22 @@ class EditorKeysTest {
         assertEquals("a\nb\nb\n", editor.getText());
         assertEquals(4, editor.getCaretPosition(), "the cursor is on the copy");
     }
+
+    // Ctrl+/ uses the language's comment, and Enter after a ":" indents in Python.
+    @org.junit.jupiter.api.Test
+    void theEditorFollowsTheLanguage() throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            javax.swing.JTextArea editor = new javax.swing.JTextArea("x = 1");
+            EditorKeys keys = new EditorKeys(editor);
+            keys.setLanguage(raphael.lang.Languages.PYTHON);
+            editor.selectAll();
+            keys.toggleComment();
+            assertEquals("# x = 1", editor.getText());
+            editor.setText("if x:");
+            editor.setCaretPosition(editor.getText().length());
+            keys.newLine();
+            assertEquals("if x:\n    ", editor.getText());
+        });
+    }
+
 }

@@ -69,13 +69,6 @@ import raphael.trace.RunLimits;
 // job); an inner class implements Workbench.Host, the interface a Workbench talks back through.
 public class MainWindow extends JFrame {
 
-    private static final String NEW_PROGRAM = """
-            public class Main {
-                public static void main(String[] args) {
-                    
-                }
-            }
-            """;
     private static final String HELP = """
             run and stop
               Ctrl+Enter or F5   run; while recording, stop
@@ -130,6 +123,7 @@ public class MainWindow extends JFrame {
     private final JButton runButton = new JButton("Run"); // the stop button while recording
     private final JLabel status = new JLabel(" ");
     private final JButton position = new JButton(); // "Ln 12, Col 5"; a click opens Go to Line
+    private final JButton languageChip = new JButton(); // "Java": the program's language; a click changes it
     private final JPanel positionDivider = new JPanel(); // a thin line between the legend and Ln, Col
     private final Legend legend = new Legend();
     // "Raphael 1.1.0 is available ↗": stays in the status bar, and opens the download page.
@@ -192,7 +186,7 @@ public class MainWindow extends JFrame {
         north.add(busy, BorderLayout.SOUTH);
         add(north, BorderLayout.NORTH);
 
-        // Drop a .java file anywhere on the window to open it.
+        // Drop a code file anywhere on the window to open it.
         setTransferHandler(new FileDrop(null, this::openDropped));
         welcome = new WelcomePage(new WelcomePage.Actions(this::newProgram, this::open, this::pasteProgram,
                 this::loadExample, this::openFile));
@@ -225,7 +219,13 @@ public class MainWindow extends JFrame {
         statusRight.add(recordingChip);
         statusRight.add(updateNotice);
         statusRight.add(legend);
+        languageChip.putClientProperty("JButton.buttonType", "borderless");
+        languageChip.setFont(Style.UI_FONT.deriveFont(12f));
+        languageChip.setRequestFocusEnabled(false);
+        languageChip.setToolTipText("The program's language: click to change it");
+        languageChip.addActionListener(e -> chooseLanguage(languageChip, true));
         statusRight.add(positionDivider);
+        statusRight.add(languageChip);
         statusRight.add(position); // last, always in the same place
         statusBar.add(statusRight, BorderLayout.EAST);
         add(statusBar, BorderLayout.SOUTH);
@@ -336,6 +336,7 @@ public class MainWindow extends JFrame {
         statusBar.setBackground(Style.BAR);
         positionDivider.setBackground(Style.HAIRLINE);
         position.setForeground(Style.INK_SOFT);
+        languageChip.setForeground(Style.INK_SOFT);
         repaint();
     }
 
@@ -456,6 +457,10 @@ public class MainWindow extends JFrame {
     // Ln, Col on the right of the status bar, for the program in front.
     private void showPosition() {
         position.setVisible(current != null);
+        languageChip.setVisible(current != null);
+        if (current != null) {
+            languageChip.setText(current.getLanguage().name());
+        }
         if (current != null) {
             position.setText("Ln " + current.getCode().caretLine() + ", Col " + current.getCode().caretColumn());
         }
@@ -550,8 +555,8 @@ public class MainWindow extends JFrame {
         bar.setInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, null);
 
         JButton newProgram = ControlsBar.button(Icons.Glyph.NEW, "New program", "New program, or paste one in  (Ctrl+N)");
-        newProgram.addActionListener(e -> newProgram());
-        JButton open = ControlsBar.button(Icons.Glyph.OPEN, "Open", "Open a .java file  (Ctrl+O)");
+        newProgram.addActionListener(e -> chooseLanguage(newProgram, false)); // a menu of the languages
+        JButton open = ControlsBar.button(Icons.Glyph.OPEN, "Open", "Open a program or a recording  (Ctrl+O)");
         open.addActionListener(e -> open());
         JButton save = ControlsBar.button(Icons.Glyph.SAVE, "Save", "Save  (Ctrl+S)");
         saveButton = save;
@@ -682,7 +687,12 @@ public class MainWindow extends JFrame {
     private JMenuBar buildMenuBar() {
         JMenuBar bar = new JMenuBar();
         JMenu file = menu("File", KeyEvent.VK_F);
-        file.add(item("New", "control N", this::newProgram));
+        file.add(item("New", "control N", this::newProgram)); // in the last language chosen
+        JMenu newIn = new JMenu("New Program In");
+        for (raphael.lang.Language language : raphael.lang.Languages.all()) {
+            newIn.add(item(language.name(), null, () -> newProgram(language)));
+        }
+        file.add(newIn);
         file.add(item("New Window", "shift control N", Windows::openNew));
         file.add(item("Open…", "control O", this::open));
         file.add(item("Open Folder…", "shift control O", this::openFolder));
@@ -1095,7 +1105,7 @@ public class MainWindow extends JFrame {
             }
             drafted.put(program, text);
             DraftStore draft = drafts.computeIfAbsent(program, p -> new DraftStore(draftFolder.resolve(
-                    "draft-" + ProcessHandle.current().pid() + "-" + DRAFTS.incrementAndGet() + ".java")));
+                    "draft-" + ProcessHandle.current().pid() + "-" + DRAFTS.incrementAndGet() + program.getLanguage().endings().get(0))));
             writeDraft(draft, text);
         }
     }
@@ -1129,13 +1139,14 @@ public class MainWindow extends JFrame {
     public void offerDraft() {
         List<DraftStore> found = new java.util.ArrayList<>();
         List<String> codes = new java.util.ArrayList<>();
+        List<raphael.lang.Language> languages = new java.util.ArrayList<>(); // each draft's, from its ending
         java.time.Instant newest = null;
         List<java.nio.file.Path> files = new java.util.ArrayList<>();
         try {
             files.add(AppFolders.data().resolve("draft.java"));
             if (draftFolder != null) {
                 try (java.util.stream.Stream<java.nio.file.Path> list = java.nio.file.Files.list(draftFolder)) {
-                    list.filter(f -> f.getFileName().toString().endsWith(".java")).sorted().forEach(files::add);
+                    list.filter(f -> raphael.lang.Languages.forFile(f.getFileName().toString()) != null).sorted().forEach(files::add);
                 }
             }
             for (java.nio.file.Path file : files) {
@@ -1146,6 +1157,7 @@ public class MainWindow extends JFrame {
                 }
                 found.add(draft);
                 codes.add(code);
+                languages.add(raphael.lang.Languages.forFile(file.getFileName().toString()));
                 java.time.Instant at = draft.savedAt();
                 newest = newest == null || at.isAfter(newest) ? at : newest;
             }
@@ -1168,8 +1180,10 @@ public class MainWindow extends JFrame {
                 .buttons("Restore", null, "Discard it")
                 .ask();
         if ("Restore".equals(answer)) {
-            for (String code : codes) {
+            for (int i = 0; i < codes.size(); i++) {
+                String code = codes.get(i);
                 Workbench program = newTab();
+                program.setLanguage(languages.get(i));
                 program.showCode(code, null, "restored code");
                 program.getCode().markUnsaved();
                 host.stateChanged(program);
@@ -1221,10 +1235,83 @@ public class MainWindow extends JFrame {
     }
 
     void newProgram() {
+        newProgram(lastNewLanguage());
+    }
+
+    // A new program in this language, from its template, with the cursor where the code goes.
+    void newProgram(raphael.lang.Language language) {
+        App.SETTINGS.put("lastNewLanguage", language.id());
         Workbench program = newTab();
-        program.showCode(NEW_PROGRAM, null, "Untitled-" + (++untitled));
-        program.getCode().startTypingAt(3, 8);
+        program.setLanguage(language);
+        String template = language.template();
+        program.showCode(template, null, "Untitled-" + (++untitled));
+        int[] at = typingPlace(template);
+        program.getCode().startTypingAt(at[0], at[1]);
         say(Shortcuts.label("type your code, or ctrl+a then ctrl+v to paste a whole program · then press run (ctrl+enter)"), Style.INK_SOFT);
+    }
+
+    // A menu of the four languages under a button: for New (a new program in that language, the
+    // last one chosen first, with Ctrl+N beside it), or for the status bar's chip (the program in
+    // front becomes that language; its code stays as it is, coloured and run as the new language).
+    private void chooseLanguage(JComponent under, boolean change) {
+        JPopupMenu menu = new JPopupMenu();
+        List<raphael.lang.Language> order = new java.util.ArrayList<>(raphael.lang.Languages.all());
+        raphael.lang.Language first = change && current != null ? current.getLanguage() : lastNewLanguage();
+        order.remove(first);
+        order.add(0, first);
+        for (raphael.lang.Language language : order) {
+            String keys = !change && language == first ? Shortcuts.label("   Ctrl+N") : "";
+            JMenuItem item = new JMenuItem((change && language == first ? "✓ " : "") + language.name() + keys);
+            item.addActionListener(e -> {
+                if (!change) {
+                    newProgram(language);
+                } else if (current != null) {
+                    changeLanguage(current, language);
+                }
+            });
+            menu.add(item);
+        }
+        if (change) {
+            menu.addSeparator();
+            JMenuItem note = new JMenuItem("The code stays as it is");
+            note.setEnabled(false);
+            menu.add(note);
+        }
+        menu.show(under, 0, change ? -menu.getPreferredSize().height : under.getHeight());
+    }
+
+    // The program in front becomes another language. A template nobody has typed into is swapped
+    // for the new language's own.
+    private void changeLanguage(Workbench program, raphael.lang.Language language) {
+        String code = program.getCode().getCode();
+        boolean untouchedTemplate = code.equals(program.getLanguage().template());
+        program.setLanguage(language);
+        if (untouchedTemplate) {
+            program.showCode(language.template(), null, "Untitled-" + untitled);
+            int[] at = typingPlace(language.template());
+            program.getCode().startTypingAt(at[0], at[1]);
+        }
+        App.SETTINGS.put("lastNewLanguage", language.id());
+        showPosition();
+        say("this program is " + language.name() + " now"
+                + (language.cantRun() != null ? " · " + language.cantRun() : Shortcuts.label(" · press run (ctrl+enter)")), Style.INK_SOFT);
+    }
+
+    // The language New uses without asking (Ctrl+N): the last one chosen, else the one being learned.
+    static raphael.lang.Language lastNewLanguage() {
+        String id = App.SETTINGS.get("lastNewLanguage", null);
+        return id == null ? raphael.lang.Languages.preferred() : raphael.lang.Languages.byId(id);
+    }
+
+    // Where typing starts in a template: the first line that's only indentation (line from 1).
+    static int[] typingPlace(String template) {
+        String[] lines = template.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (!lines[i].isEmpty() && lines[i].isBlank()) {
+                return new int[] {i + 1, lines[i].length()};
+            }
+        }
+        return new int[] {1, 0};
     }
 
     void loadExample(String name) {
@@ -1280,14 +1367,18 @@ public class MainWindow extends JFrame {
             text = null; // nothing usable on the clipboard (an image, say, or it's busy)
         }
         if (text == null || text.isBlank()) {
-            say(Shortcuts.label("the clipboard has no text · copy a Java program first, then press ctrl+v"), Style.INK_SOFT);
+            say(Shortcuts.label("the clipboard has no text · copy a program first, then press ctrl+v"), Style.INK_SOFT);
             return;
         }
         Workbench program = newTab();
+        raphael.lang.Language language = raphael.lang.Languages.recognise(text); // what the pasted code looks like
+        program.setLanguage(language != null ? language : lastNewLanguage());
         program.showCode(text, null, "pasted program");
         program.getCode().markUnsaved();
         host.stateChanged(program);
-        say(Shortcuts.label("pasted your program · press run (ctrl+enter)"), Style.INK_SOFT);
+        say(Shortcuts.label("pasted your " + program.getLanguage().name() + " program"
+                + (language == null ? " (the language is in the status bar: click it to change)" : "")
+                + " · press run (ctrl+enter)"), Style.INK_SOFT);
     }
 
     // The Welcome tab, in front: opened again if it was closed.
@@ -1597,8 +1688,8 @@ public class MainWindow extends JFrame {
             return;
         }
         if (!FileKind.CODE_OR_RUN.accepts(file.getName())) {
-            Dialogs.tell(this, "Raphael opens .java and .raphael files", file.getName()
-                    + " isn't one. Drop Java code (a name ending in .java) or a saved recording (.raphael).");
+            Dialogs.tell(this, "Raphael opens code and .raphael files", file.getName()
+                    + " isn't one. Drop a program (.java, .c, .cpp or .py) or a saved recording (.raphael).");
             return;
         }
         openFile(file);
@@ -1623,7 +1714,10 @@ public class MainWindow extends JFrame {
         }
         try {
             String text = SafeFiles.readCode(file.toPath());
-            newTab(true).showCode(text, file, file.getName());
+            Workbench program = newTab(true);
+            raphael.lang.Language language = raphael.lang.Languages.forFile(file.getName());
+            program.setLanguage(language != null ? language : raphael.lang.Languages.JAVA);
+            program.showCode(text, file, file.getName());
             remember(file);
             say("opened " + file.getName() + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);
         } catch (IOException e) {
@@ -1650,7 +1744,8 @@ public class MainWindow extends JFrame {
         remember(file);
     }
 
-    // File → Open Folder: a folder of .java files as one program, its files in tabs.
+    // File → Open Folder: a folder of code files as one program, its files in tabs. The program's
+    // language is the one most of its files are in.
     private void openFolder() {
         File folder = chooseFolder();
         if (folder != null) {
@@ -1671,16 +1766,27 @@ public class MainWindow extends JFrame {
         List<raphael.model.SourceFile> files = new java.util.ArrayList<>();
         String first = null;
         java.nio.file.Path root = folder.toPath();
+        raphael.lang.Language language;
         try (java.util.stream.Stream<java.nio.file.Path> all = java.nio.file.Files.walk(root, 8)) {
-            List<java.nio.file.Path> sources = all
-                    .filter(path -> path.getFileName().toString().endsWith(".java") && java.nio.file.Files.isRegularFile(path))
+            List<java.nio.file.Path> code = all
+                    .filter(path -> raphael.lang.Languages.forFile(path.getFileName().toString()) != null
+                            && java.nio.file.Files.isRegularFile(path))
                     .filter(path -> inOwnFolders(root.relativize(path)))
                     .sorted().limit(FOLDER_MAX_FILES).toList();
+            java.util.Map<raphael.lang.Language, Long> counts = new java.util.HashMap<>();
+            for (java.nio.file.Path path : code) {
+                counts.merge(raphael.lang.Languages.forFile(path.getFileName().toString()), 1L, Long::sum);
+            }
+            language = counts.entrySet().stream().max(java.util.Map.Entry.comparingByValue()).map(java.util.Map.Entry::getKey)
+                    .orElse(raphael.lang.Languages.JAVA);
+            raphael.lang.Language chosen = language;
+            List<java.nio.file.Path> sources = code.stream().filter(path -> chosen.owns(path.getFileName().toString())).toList();
             for (java.nio.file.Path path : sources) {
                 String text = SafeFiles.readCode(path);
                 String relative = root.relativize(path).toString().replace(File.separatorChar, '/');
                 files.add(new raphael.model.SourceFile(relative, text));
-                boolean hasMain = text.contains("static void main");
+                boolean hasMain = text.contains("static void main") || text.matches("(?s).*\\bint\\s+main\\s*\\(.*")
+                        || text.contains("__main__");
                 if (hasMain && (first == null || relative.endsWith("Main.java"))) {
                     first = relative;
                 }
@@ -1692,11 +1798,13 @@ public class MainWindow extends JFrame {
             return;
         }
         if (files.isEmpty()) {
-            Dialogs.tell(this, "No Java files in " + folder.getName(), "Raphael opens a folder of .java files as one program. "
+            Dialogs.tell(this, "No code files in " + folder.getName(), "Raphael opens a folder of .java, .c, .cpp or .py files as one program. "
                     + "This folder has none (folders named target, out, bin and build are skipped).");
             return;
         }
-        newTab(true).showFiles(files, first, folder, folder.getName());
+        Workbench program = newTab(true);
+        program.setLanguage(language);
+        program.showFiles(files, first, folder, folder.getName());
         remember(folder);
         say("opened " + folder.getName() + ": " + files.size() + (files.size() == 1 ? " file" : " files")
                 + Shortcuts.label(" · press run (ctrl+enter)"), Style.INK_SOFT);

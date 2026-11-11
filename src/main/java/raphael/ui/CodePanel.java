@@ -54,7 +54,7 @@ import raphael.render.Style;
 // line. A crash makes its line red. Compile errors are marked red too; hover to see the message.
 // Click a line number to jump to the next time that line runs. Editing the code clears the old
 // run, because its steps no longer match the code. Ctrl+Z and Ctrl+Y undo and redo edits.
-// The code is coloured as in an IDE: JavaTokens finds the pieces, ColoredView draws them.
+// The code is coloured as in an IDE: the language's lexer finds the pieces, ColoredView draws them.
 // A program of several files has one FileText per file (its text, undo history, unsaved flag and
 // error marks); the editor shows one at a time and, while stepping, follows the running line from
 // file to file. A program typed in on its own is one FileText with no path.
@@ -66,6 +66,7 @@ public class CodePanel extends JPanel implements TraceListener {
     private final TraceModel model;
     private final Map<String, FileText> texts = new java.util.LinkedHashMap<>(); // path → its text, in tab order
     private FileText shown; // the file in the editor
+    private raphael.lang.Language language = raphael.lang.Languages.JAVA; // how the code is coloured
     private java.util.function.Consumer<String> onFileShown = path -> { }; // does nothing until the program sets it
     private final List<Object> errorMarks = new ArrayList<>();
     private final List<Object> stepMarks = new ArrayList<>();
@@ -141,6 +142,20 @@ public class CodePanel extends JPanel implements TraceListener {
     }
 
     // A program of one file, typed in or opened on its own.
+    // Colours the code as this language's, from now on (every open file is coloured again).
+    public void setLanguage(raphael.lang.Language language) {
+        this.language = language;
+        keys.setLanguage(language);
+        for (FileText text : texts.values()) {
+            text.tokens = language.tokens(editorText(text));
+        }
+        editor.repaint();
+    }
+
+    public raphael.lang.Language getLanguage() {
+        return language;
+    }
+
     public void setCode(String code) {
         texts.clear();
         show(newText(null, code));
@@ -221,7 +236,7 @@ public class CodePanel extends JPanel implements TraceListener {
         } catch (BadLocationException e) {
             throw new IllegalStateException(e); // inserting at 0 always works
         }
-        text.tokens = JavaTokens.of(code.replace("\r\n", "\n"));
+        text.tokens = language.tokens(code.replace("\r\n", "\n"));
         text.document.addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -446,12 +461,12 @@ public class CodePanel extends JPanel implements TraceListener {
     }
 
     private boolean inStringOrComment(int position) {
-        for (JavaTokens.Token token : shown.tokens) {
+        for (raphael.lang.Token token : shown.tokens) {
             if (token.start() > position) {
                 return false;
             }
             if (position < token.end()) {
-                return token.kind() == JavaTokens.Kind.STRING || token.kind() == JavaTokens.Kind.COMMENT;
+                return token.kind() == raphael.lang.Token.Kind.STRING || token.kind() == raphael.lang.Token.Kind.COMMENT;
             }
         }
         return false;
@@ -618,7 +633,7 @@ public class CodePanel extends JPanel implements TraceListener {
 
     private void codeChanged(FileText text) {
         text.dirty = true;
-        text.tokens = JavaTokens.of(editorText(text));
+        text.tokens = language.tokens(editorText(text));
         lineNumbers.revalidate();
         lineNumbers.repaint();
         if (text != shown) {
@@ -687,7 +702,7 @@ public class CodePanel extends JPanel implements TraceListener {
         }
     }
 
-    private static Color colorOf(JavaTokens.Kind kind) {
+    private static Color colorOf(raphael.lang.Token.Kind kind) {
         return switch (kind) {
             case KEYWORD -> Style.CODE_KEYWORD;
             case TYPE -> Style.CODE_TYPE;
@@ -717,7 +732,7 @@ public class CodePanel extends JPanel implements TraceListener {
         @Override
         protected float drawUnselectedText(Graphics2D g, float x, float y, int start, int end) throws BadLocationException {
             int position = start;
-            for (JavaTokens.Token token : shown.tokens) {
+            for (raphael.lang.Token token : shown.tokens) {
                 if (token.end() <= position) {
                     continue;
                 }
@@ -944,7 +959,7 @@ public class CodePanel extends JPanel implements TraceListener {
         final javax.swing.text.PlainDocument document = new javax.swing.text.PlainDocument();
         final UndoManager undo = new UndoManager(); // the JDK's list of edits to step back through
         final Map<Integer, String> errors = new HashMap<>(); // line → message
-        List<JavaTokens.Token> tokens = List.of(); // the coloured pieces of the text
+        List<raphael.lang.Token> tokens = List.of(); // the coloured pieces of the text
         boolean dirty; // changed since it was loaded or saved
         int caret;
 

@@ -1,4 +1,4 @@
-package raphael.ui;
+package raphael.lang;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -7,12 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class JavaTokensTest {
+class LexerTest {
 
     // Each coloured piece as "KIND:text".
     private static List<String> pieces(String code) {
         List<String> pieces = new ArrayList<>();
-        for (JavaTokens.Token t : JavaTokens.of(code)) {
+        for (Token t : Languages.JAVA.tokens(code)) {
             pieces.add(t.kind() + ":" + code.substring(t.start(), t.end()));
         }
         return pieces;
@@ -47,6 +47,6 @@ class JavaTokensTest {
 
     @Test
     void aVeryLongStringDoesNotOverflow() {
-        assertEquals(1, JavaTokens.of("\"" + "\\n".repeat(50000) + "\"").size());
+        assertEquals(1, Languages.JAVA.tokens("\"" + "\\n".repeat(50000) + "\"").size());
     }
 }

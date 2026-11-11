@@ -23,10 +23,11 @@ class WindowsFileDialogTest {
     }
 
     @Test
-    void openShowsJavaFilesAndCanStartAnywhere() {
+    void openShowsCodeFilesAndCanStartAnywhere() {
         String script = WindowsFileDialog.script(false, FileKind.CODE_OR_RUN, null, "ignored.java");
         assertTrue(script.contains("OpenFileDialog"));
-        assertTrue(script.contains("$d.Filter = 'Java code and Raphael recordings (*.java;*.raphael)|*.java;*.raphael|All files (*.*)|*.*'"));
+        assertTrue(script.contains("$d.Filter = 'Code and Raphael recordings (*.java;*.c;*.h;*.cpp;*.cc;*.cxx;*.hpp;*.hh;*.py;*.raphael)|"
+                + "*.java;*.c;*.h;*.cpp;*.cc;*.cxx;*.hpp;*.hh;*.py;*.raphael|All files (*.*)|*.*'"), script);
         assertFalse(script.contains("InitialDirectory"), "no folder: Windows picks its usual one");
     }
 }

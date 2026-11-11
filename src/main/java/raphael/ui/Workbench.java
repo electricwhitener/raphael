@@ -28,7 +28,6 @@ import javax.swing.Timer;
 import raphael.RaphaelException;
 import raphael.compile.CompileHints;
 import raphael.compile.CompileResult;
-import raphael.compile.SourceCompiler;
 import raphael.io.RunFile;
 import raphael.io.SafeFiles;
 import raphael.io.StepLog;
@@ -40,7 +39,6 @@ import raphael.model.Trace;
 import raphael.render.SceneBuilder;
 import raphael.render.SceneList;
 import raphael.render.Style;
-import raphael.trace.JdiTracer;
 import raphael.trace.RunLimits;
 import raphael.trace.Tracer;
 
@@ -104,7 +102,8 @@ public class Workbench extends JPanel {
     // The console, the key moments and the trace table share one place in the bottom row, as tabs.
     private final javax.swing.JTabbedPane bottomTabs = new javax.swing.JTabbedPane();
     private final List<File> inputFiles = new ArrayList<>(); // copied into the program's folder for each run
-    private final Tracer tracer = new JdiTracer();
+    private raphael.lang.Language language = raphael.lang.Languages.JAVA; // what the code is written in
+    private Tracer tracer = raphael.lang.Languages.JAVA.newTracer(); // a new one for each language, made by the language
     // The picture area shows either the picture or, before the first run, a short guide.
     private final CardLayout pictureCards = new CardLayout();
     private final JPanel pictureArea = new JPanel(pictureCards);
@@ -156,7 +155,7 @@ public class Workbench extends JPanel {
         pictureArea.add(guide, "empty");
         model.addListener(m -> showPictureOrGuide());
         model.addListener(m -> host.stateChanged(this)); // the status bar follows the step (a caught exception)
-        // Drop a .java file on the code or the picture to open it.
+        // Drop a code file on the code or the picture to open it.
         visual.setTransferHandler(new FileDrop(null, host::openDropped));
         code.getEditor().setTransferHandler(new FileDrop(code.getEditor().getTransferHandler(), host::openDropped));
 
@@ -245,7 +244,7 @@ public class Workbench extends JPanel {
 
         // The stdin box only appears for a program that can read input.
         code.setOnCodeChanged(() -> {
-            boolean input = allCode().contains("System.in");
+            boolean input = language.readsInput(allCode());
             console.showInput(input);
             if (input) {
                 bottomTabs.setSelectedIndex(0); // the stdin box is in the console
@@ -481,7 +480,7 @@ public class Workbench extends JPanel {
         if (path == null) {
             return null;
         }
-        String name = path.substring(path.lastIndexOf('/') + 1).replaceAll("\\.java$", "");
+        String name = language.baseName(path.substring(path.lastIndexOf('/') + 1));
         java.util.regex.Matcher pkg = java.util.regex.Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;").matcher(code.getCode());
         return pkg.find() ? pkg.group(1) + "." + name : name;
     }
@@ -494,7 +493,7 @@ public class Workbench extends JPanel {
     // A compile error clicked in the console: "Circle.java, line 12: …" (a program of several
     // files) or "line 12: …" brings that line into view.
     private void goToError(String text) {
-        java.util.regex.Matcher error = java.util.regex.Pattern.compile("^(?:(\\S+\\.java), )?line (\\d+):").matcher(text);
+        java.util.regex.Matcher error = java.util.regex.Pattern.compile("^(?:(\\S+\\.\\w+), )?line (\\d+):").matcher(text);
         if (!error.find()) {
             return;
         }
@@ -562,6 +561,11 @@ public class Workbench extends JPanel {
             tracer.stop();
             return;
         }
+        if (language.cantRun() != null) { // a language Raphael can edit but not run yet
+            visual.setMessage("can't run " + language.name() + " yet", language.cantRun(), null, null);
+            say("[" + language.name() + "] " + language.cantRun(), Style.INK_SOFT);
+            return;
+        }
         String source = code.getCode();
         List<SourceFile> files = fileTabs.getTabCount() > 0 ? code.getFiles() : null; // a program of several files
         String preferred = classInFront();
@@ -594,8 +598,7 @@ public class Workbench extends JPanel {
         new SwingWorker<RunResult, String>() {
             @Override
             protected RunResult doInBackground() throws Exception {
-                CompileResult program = files != null ? new SourceCompiler().compileFolder(files, preferred)
-                        : new SourceCompiler().compile(source);
+                CompileResult program = files != null ? language.compileFolder(files, preferred) : language.compile(source);
                 if (!program.success()) {
                     return new RunResult(program, null, null, source, input, files, List.of());
                 }
@@ -699,7 +702,8 @@ public class Workbench extends JPanel {
         }
         Trace trace = result.trace();
         LOG.info("Ran: " + trace.size() + " steps, " + trace.getEndReason());
-        lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files());
+        lastRun = new RunFile.Saved(result.files() == null ? result.source() : null, result.input(), trace, result.files(),
+                language.id());
         model.setInput(result.input());
         model.load(trace, result.scenes(), result.scenes().getRunSize(), result.moments(), result.program().facts());
         String chose = chooseView(result.program().facts());
@@ -710,7 +714,7 @@ public class Workbench extends JPanel {
         String steps = "recorded " + trace.size() + " steps · space pauses";
         if (trace.getEndReason() == EndReason.FINISHED) {
             say("[ok] " + steps + (chose == null ? "" : " · " + chose), Style.INK);
-        } else if (trace.getEndMessage().startsWith("NoSuchElementException") && allCode().contains("System.in")) {
+        } else if (trace.getEndMessage().startsWith("NoSuchElementException") && language.readsInput(allCode())) {
             visual.setMessage("needs input", "This program reads input, and it ran out.", null,
                     "Type its input into the stdin box below, then press run.");
             say("[needs input] type it into the stdin box, then run again", Style.ERROR);
@@ -752,7 +756,8 @@ public class Workbench extends JPanel {
 
     // A recording saved earlier: its code goes in the editor and its steps play, with nothing run.
     public void showRecording(File file, RunFile.Saved saved) {
-        // Ctrl+S saves the code as .java files, never over the recording.
+        // Ctrl+S saves the code as code files, never over the recording.
+        setLanguage(raphael.lang.Languages.byId(saved.language())); // Java for recordings made before there were languages
         if (saved.files() != null) {
             showFiles(saved.files(), null, null, file.getName());
         } else {
@@ -775,10 +780,10 @@ public class Workbench extends JPanel {
     }
 
     // What a recording's code says: it's compiled again for the facts (nothing is run).
-    private static raphael.analysis.CodeFacts factsOf(RunFile.Saved saved) {
+    private raphael.analysis.CodeFacts factsOf(RunFile.Saved saved) {
         try {
-            CompileResult program = saved.files() != null ? new SourceCompiler().compileFolder(saved.files(), null)
-                    : new SourceCompiler().compile(saved.source());
+            CompileResult program = saved.files() != null ? language.compileFolder(saved.files(), null)
+                    : language.compile(saved.source());
             return program.facts();
         } catch (raphael.compile.CompileSetupException | RuntimeException e) {
             LOG.log(Level.INFO, "No facts for this recording", e);
@@ -853,7 +858,7 @@ public class Workbench extends JPanel {
         File[] here = folder.listFiles();
         if (here != null) {
             for (File file : here) {
-                if (file.isFile() && !file.isHidden() && !file.getName().endsWith(".java") && file.length() <= 10_000_000) {
+                if (file.isFile() && !file.isHidden() && !language.owns(file.getName()) && file.length() <= 10_000_000) {
                     inputs.add(file.toPath());
                 }
             }
@@ -868,7 +873,7 @@ public class Workbench extends JPanel {
         if (fileTabs.getTabCount() > 0) {
             return saveFiles(); // a folder program is saved where it is
         }
-        File file = host.chooseFile(true, FileKind.CODE, currentFile != null ? currentFile.getName() : suggestedName(code.getCode()));
+        File file = host.chooseFile(true, FileKind.codeOf(language), currentFile != null ? currentFile.getName() : language.suggestedName(code.getCode()));
         return file != null && saveTo(file);
     }
 
@@ -898,8 +903,8 @@ public class Workbench extends JPanel {
             say("run the program first, then save its recording", Style.INK_SOFT);
             return;
         }
-        String name = (folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
-                : suggestedName(lastRun.source() != null ? lastRun.source() : code.getCode())).replaceAll("\\.java$", "");
+        String name = language.baseName(folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
+                : language.suggestedName(lastRun.source() != null ? lastRun.source() : code.getCode()));
         File file = host.chooseFile(true, FileKind.RUN, name + RunFile.EXTENSION);
         if (file == null) {
             return;
@@ -920,8 +925,8 @@ public class Workbench extends JPanel {
         if (trace == null) {
             return;
         }
-        String name = (folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
-                : suggestedName(code.getCode())).replaceAll("\\.java$", "");
+        String name = language.baseName(folder != null ? folder.getName() : currentFile != null ? currentFile.getName()
+                : language.suggestedName(code.getCode()));
         File file = host.chooseFile(true, FileKind.CSV, name + "-steps.csv");
         if (file == null) {
             return;
@@ -939,7 +944,7 @@ public class Workbench extends JPanel {
 
     // The Files panel shows when the program could use files, or the user has given it some.
     private void showFilesIfUsed() {
-        boolean used = !inputFiles.isEmpty() || usesFiles(allCode());
+        boolean used = !inputFiles.isEmpty() || language.usesFiles(allCode());
         if (files.isVisible() != used) {
             files.setVisible(used);
             files.getParent().revalidate();
@@ -949,7 +954,7 @@ public class Workbench extends JPanel {
     // Whether code works with files: it names one of Java's file classes. Not just "java.io", which
     // an import of IOException alone would match, or "Path", which a graph program may call a class.
     static boolean usesFiles(String code) {
-        return code.matches("(?s).*\\b(FileReader|FileWriter|FileInputStream|FileOutputStream|PrintWriter|Files|Paths|File)\\b.*");
+        return raphael.lang.Languages.JAVA.usesFiles(code);
     }
 
     private void addInputFile() {
@@ -994,13 +999,28 @@ public class Workbench extends JPanel {
 
     // A file name for code that has none yet: its public class (or first class), then .java.
     static String suggestedName(String code) {
-        java.util.regex.Matcher publicClass = java.util.regex.Pattern
-                .compile("public\\s+(?:final\\s+|abstract\\s+)?class\\s+(\\w+)").matcher(code);
-        if (publicClass.find()) {
-            return publicClass.group(1) + ".java";
+        return raphael.lang.Languages.JAVA.suggestedName(code);
+    }
+
+    // ---- the language ----
+
+    public raphael.lang.Language getLanguage() {
+        return language;
+    }
+
+    // Writes, colours and runs this tab's code as this language from now on.
+    public void setLanguage(raphael.lang.Language language) {
+        if (language == this.language) {
+            return;
         }
-        java.util.regex.Matcher anyClass = java.util.regex.Pattern.compile("\\bclass\\s+(\\w+)").matcher(code);
-        return anyClass.find() ? anyClass.group(1) + ".java" : "Main.java";
+        this.language = language;
+        code.setLanguage(language);
+        if (language.cantRun() == null) {
+            tracer = language.newTracer();
+        }
+        console.showInput(language.readsInput(allCode()));
+        showFilesIfUsed();
+        host.stateChanged(this);
     }
 
     // What one press of run produced: the compile result, and the trace and pictures if it ran.
