@@ -609,7 +609,7 @@ public class Workbench extends JPanel {
                 recordedSteps = trace.size();
                 publish("drawing " + trace.size() + " steps…");
                 SceneBuilder builder = files != null ? new SceneBuilder(files) : new SceneBuilder(source);
-                List<raphael.explain.Moment> moments = new raphael.explain.MomentFinder().find(trace, program.facts());
+                List<raphael.explain.Moment> moments = new raphael.explain.MomentFinder().find(trace, program.facts(), input);
                 return new RunResult(program, trace, builder.build(trace), source, input, files, moments);
             }
 
@@ -774,7 +774,7 @@ public class Workbench extends JPanel {
         recordingText = "saved recording · " + saved.trace().size() + " steps";
         raphael.analysis.CodeFacts facts = factsOf(saved);
         model.setInput(saved.input());
-        model.load(saved.trace(), scenes, scenes.getRunSize(), new raphael.explain.MomentFinder().find(saved.trace(), facts), facts);
+        model.load(saved.trace(), scenes, scenes.getRunSize(), new raphael.explain.MomentFinder().find(saved.trace(), facts, saved.input()), facts);
         chooseView(facts);
         if (isShowing()) {
             visual.requestFocusInWindow();

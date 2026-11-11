@@ -50,7 +50,9 @@ public class CCompiler {
     public CompileResult compile(String code) throws CompileSetupException {
         Path dir = tempFolder();
         write(dir.resolve("src").resolve(SINGLE), code);
-        return build(dir, List.of(SINGLE), Map.of());
+        raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
+        raphael.analysis.CFactScanner.scan(facts, code, null, "main"); // one text: its frames have no file name, and its unit is main.c's
+        return build(dir, List.of(SINGLE), Map.of(), facts);
     }
 
     // A program of several files, from a folder; each path is relative to the folder. Every .c file
@@ -60,6 +62,7 @@ public class CCompiler {
         Path src = dir.resolve("src");
         List<String> sources = new ArrayList<>();
         Map<String, String> sourceFiles = new LinkedHashMap<>();
+        raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
         for (SourceFile file : files) {
             Path onDisk = src.resolve(file.path()).normalize();
             if (!onDisk.startsWith(src)) {
@@ -70,11 +73,14 @@ public class CCompiler {
             if (file.path().endsWith(".c")) {
                 sources.add(file.path());
             }
+            String name = file.path().substring(file.path().lastIndexOf('/') + 1);
+            raphael.analysis.CFactScanner.scan(facts, file.text(), file.path(), name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name);
         }
-        return build(dir, sources, sourceFiles);
+        return build(dir, sources, sourceFiles, facts);
     }
 
-    private CompileResult build(Path dir, List<String> sources, Map<String, String> sourceFiles) throws CompileSetupException {
+    private CompileResult build(Path dir, List<String> sources, Map<String, String> sourceFiles,
+                                raphael.analysis.CodeFacts facts) throws CompileSetupException {
         Path gcc = Toolchains.find("gcc");
         if (gcc == null) {
             throw new CompileSetupException(Toolchains.howToInstall("gcc to compile C"));
@@ -101,7 +107,7 @@ public class CCompiler {
                     .reduce((a, b) -> a + "\n" + b).orElse("gcc stopped without saying why.")));
         }
         boolean ok = gccSaid.exit() == 0;
-        return new CompileResult(ok, ok ? List.of() : errors, dir, ok ? EXE : null, sourceFiles);
+        return new CompileResult(ok, ok ? List.of() : errors, dir, ok ? EXE : null, sourceFiles, facts);
     }
 
     // gcc's errors (warnings left out, as for Java), each with the notes that follow it.

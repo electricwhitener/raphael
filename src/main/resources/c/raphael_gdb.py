@@ -644,6 +644,8 @@ def run():
             # one when this call's last line was a return.
             depth = student_depth(frame)
             closing = text == "}" and (returns_value(frame) or last_text.get(depth, "").startswith("return"))
+            if closing and fn == "main" and exits:
+                closing = False  # main's last step: the returns that happened in its return line need a step to land on
             # Some functions stop first on their own "int main(void) {" line; Java starts inside.
             try:
                 opening = frame.function() is not None and frame.function().line == sal.line

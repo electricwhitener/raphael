@@ -50,6 +50,10 @@ public class Reads {
                     FrameSnapshot ran = before.getFrames().get(0);
                     Map<String, Value> changed = changed(before, now);
                     for (CodeFacts.CallFact call : facts.callsAt(ran.getFile(), ran.getLine())) {
+                        if (C_READS.contains(call.method())) {
+                            readC(call, typed, at, changed, before.getFiles(), spots);
+                            continue;
+                        }
                         boolean word = WORD_READS.contains(call.method());
                         if (!word && !LINE_READS.contains(call.method())) {
                             continue;
@@ -78,6 +82,139 @@ public class Reads {
             justRead.add(spots);
             last.add(spots.isEmpty() && s > 0 ? last.get(s - 1) : new HashMap<>(latest));
         }
+    }
+
+    // ---- C ----
+
+    private static final Set<String> C_READS = Set.of("scanf", "fscanf", "getchar", "fgetc", "getc", "fgets", "gets");
+
+    // One of C's reads on the line that just ran. From the keyboard, scanf's format says what it
+    // took: %d, %s and %f skip spaces and newlines, then take a word; %c takes the very next
+    // character (even the newline a %d left behind) unless a space comes before it in the format;
+    // a space skips any spaces. getchar() takes one character, fgets() and gets() the rest of the
+    // line. From a file, as for Java: the file whose next word or line just landed in a variable.
+    private static void readC(CodeFacts.CallFact call, String typed, Map<String, Integer> at, Map<String, Value> changed,
+                              Map<String, String> files, List<Spot> spots) {
+        List<String> args = call.arguments();
+        String method = call.method();
+        String stream = switch (method) {
+            case "fscanf", "fgetc", "getc" -> args.isEmpty() ? null : args.get(0);
+            case "fgets" -> args.size() < 3 ? null : args.get(2);
+            default -> "stdin";
+        };
+        if (!"stdin".equals(stream)) {
+            boolean line = method.equals("fgets");
+            int reads = method.equals("fscanf") && args.size() > 1 ? conversions(unquote(args.get(1))) : 1;
+            for (int i = 0; i < reads; i++) {
+                Spot spot = fileRead(files, at, changed, !line);
+                if (spot == null) {
+                    return;
+                }
+                at.put(spot.source(), spot.to());
+                spots.add(spot);
+            }
+            return;
+        }
+        int from = at.getOrDefault(INPUT, 0);
+        if (method.equals("getchar") || method.equals("fgetc") || method.equals("getc")) {
+            if (from < typed.length()) {
+                at.put(INPUT, from + 1);
+                spots.add(new Spot(INPUT, from, from + 1, changed.size() == 1 ? changed.keySet().iterator().next() : null));
+            }
+            return;
+        }
+        if (method.equals("fgets") || method.equals("gets")) {
+            int[] got = readFrom(typed, from, false);
+            if (got != null) {
+                at.put(INPUT, got[1]);
+                spots.add(new Spot(INPUT, got[0], got[1], args.isEmpty() ? null : args.get(0)));
+            }
+            return;
+        }
+        int format = method.equals("fscanf") ? 1 : 0;
+        if (args.size() <= format) {
+            return;
+        }
+        String f = unquote(args.get(format));
+        int target = format + 1;
+        int pos = from;
+        for (int i = 0; i < f.length(); i++) {
+            char c = f.charAt(i);
+            if (Character.isWhitespace(c)) {
+                while (pos < typed.length() && Character.isWhitespace(typed.charAt(pos))) {
+                    pos++;
+                }
+                continue;
+            }
+            if (c != '%') { // a character the input must have: taken if it's there, else scanf stops
+                if (pos < typed.length() && typed.charAt(pos) == c) {
+                    pos++;
+                    continue;
+                }
+                break;
+            }
+            int k = i + 1;
+            boolean kept = true;
+            if (k < f.length() && f.charAt(k) == '*') {
+                kept = false;
+                k++;
+            }
+            while (k < f.length() && (Character.isDigit(f.charAt(k)) || "hlLqjzt".indexOf(f.charAt(k)) >= 0)) {
+                k++;
+            }
+            if (k >= f.length()) {
+                break;
+            }
+            char conversion = f.charAt(k);
+            i = conversion == '[' ? Math.max(k, f.indexOf(']', k + 2)) : k;
+            if (conversion == '%') {
+                pos += pos < typed.length() && typed.charAt(pos) == '%' ? 1 : 0;
+                continue;
+            }
+            if (conversion == 'n') {
+                target += kept ? 1 : 0;
+                continue;
+            }
+            int start = pos;
+            int end;
+            if (conversion == 'c') {
+                if (start >= typed.length()) {
+                    break;
+                }
+                end = start + 1;
+            } else {
+                int[] got = readFrom(typed, pos, true);
+                if (got == null) {
+                    break;
+                }
+                start = got[0];
+                end = got[1];
+            }
+            String into = kept && target < args.size() ? args.get(target).replaceFirst("^&\\s*", "") : null;
+            target += kept ? 1 : 0;
+            spots.add(new Spot(INPUT, start, end, into));
+            pos = end;
+        }
+        if (pos > from) {
+            at.put(INPUT, pos);
+        }
+    }
+
+    // How many values a scanf format reads (%d, %s…; not %% or %n, nor %*d's skipped one).
+    private static int conversions(String format) {
+        int count = 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("%(\\*?)[0-9hlLqjzt]*([a-zA-Z\\[%])").matcher(format);
+        while (m.find()) {
+            count += m.group(1).isEmpty() && !"%".equals(m.group(2)) && !"n".equals(m.group(2)) ? 1 : 0;
+        }
+        return count;
+    }
+
+    // "\"%d %d\"" → %d %d (with \n and \t as the characters).
+    private static String unquote(String literal) {
+        String inner = literal.length() >= 2 && literal.startsWith("\"") && literal.endsWith("\"")
+                ? literal.substring(1, literal.length() - 1) : literal;
+        return inner.replace("\\n", "\n").replace("\\t", "\t");
     }
 
     // How many characters of this source had been read by this step (0 if none).

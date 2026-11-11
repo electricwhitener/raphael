@@ -36,7 +36,14 @@ public class CodeFacts {
     // A call. declaredType is the declared type of what it's called on ("Shape" in s.area()),
     // or null for a call with nothing in front; declaringClass is the class whose method it names.
     // receiver: what it's called on, as written ("s" in s.area()), or null.
-    public record CallFact(String file, int line, String method, String declaredType, String declaringClass, String receiver) {
+    // arguments: what's passed, each as written ("\"%d %d\"", "&a", "&b"); C's facts have them (scanf's
+    // format, fopen's file name), Java's don't need them (an empty list).
+    public record CallFact(String file, int line, String method, String declaredType, String declaringClass, String receiver,
+                           List<String> arguments) {
+
+        public CallFact(String file, int line, String method, String declaredType, String declaringClass, String receiver) {
+            this(file, line, method, declaredType, declaringClass, receiver, List.of());
+        }
     }
 
     public record CatchFact(int line, List<String> types) {

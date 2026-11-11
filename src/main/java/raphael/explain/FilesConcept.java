@@ -41,12 +41,14 @@ class FilesConcept extends Concept {
                     // held it in its buffer until it was closed (or flushed, or the buffer filled).
                     boolean flushed = was.get(name).isEmpty() && (s - createdAt.getOrDefault(name, s) > 2 || closedOrFlushed(before, facts));
                     into.add(new Moment(s, "file-written", "Written to " + name,
-                            (flushed ? "The text reaches " + name + " only now: a writer keeps what it's given in a buffer, "
+                            (flushed ? "The text reaches " + name + " only now: " + (opensWithFopen(facts)
+                                    ? "C keeps what's written to a FILE in a buffer, " : "a writer keeps what it's given in a buffer, ")
                                     + "and writes it to the file " + whatWrote(before, facts) + ". " : "")
                                     + "Added: " + shorten(added) + ".",
                             flushed, file, line));
                 }
             }
+            missingInC(before, now, facts, s, into);
             ThrownException thrown = now.getThrown();
             if (thrown != null && ExceptionConcept.MISSING_FILE.contains(thrown.type())) {
                 into.add(new Moment(s, "file-missing", "No such file",
@@ -59,11 +61,42 @@ class FilesConcept extends Concept {
         }
     }
 
+    private static boolean opensWithFopen(CodeFacts facts) {
+        return facts.calls().stream().anyMatch(call -> call.method().equals("fopen"));
+    }
+
+    private static final java.util.Set<String> CLOSERS = java.util.Set.of("close", "flush", "fclose", "fflush");
+
+    // C: fopen gave NULL just now, so the file it was asked to read isn't in the folder. Java
+    // throws instead (the missing-file moment above).
+    private static void missingInC(Snapshot before, Snapshot now, CodeFacts facts, int s, List<Moment> into) {
+        if (before.getFrames().isEmpty() || now.getFrames().isEmpty()) {
+            return;
+        }
+        String file = before.getFrames().get(0).getFile();
+        for (CodeFacts.CallFact call : facts.callsAt(file, before.getLine())) {
+            if (!call.method().equals("fopen") || call.arguments().isEmpty()) {
+                continue;
+            }
+            for (Map.Entry<String, raphael.model.Value> local : now.getFrames().get(0).getLocals().entrySet()) {
+                raphael.model.Value was = before.getFrames().get(0).getLocals().get(local.getKey());
+                if (local.getValue() instanceof raphael.model.NullValue && !(was instanceof raphael.model.NullValue)) {
+                    String name = call.arguments().get(0);
+                    into.add(new Moment(s, "file-missing", "No such file",
+                            "fopen(" + name + ") gave NULL: " + name + " isn't in the program's folder, so " + local.getKey()
+                                    + " points to no file. Check " + local.getKey() + " == NULL before reading from it.",
+                            true, now.getFrames().get(0).getFile(), now.getLine()));
+                    return;
+                }
+            }
+        }
+    }
+
     // Whether the line that just ran closed or flushed something (a writer's text then reaches the file).
     private static boolean closedOrFlushed(Snapshot before, CodeFacts facts) {
         String file = before.getFrames().isEmpty() ? null : before.getFrames().get(0).getFile();
         for (CodeFacts.CallFact call : facts.callsAt(file, before.getLine())) {
-            if (call.method().equals("close") || call.method().equals("flush")) {
+            if (CLOSERS.contains(call.method())) {
                 return true;
             }
         }
@@ -80,14 +113,19 @@ class FilesConcept extends Concept {
     private static String whatWrote(Snapshot before, CodeFacts facts) {
         String file = before.getFrames().isEmpty() ? null : before.getFrames().get(0).getFile();
         for (CodeFacts.CallFact call : facts.callsAt(file, before.getLine())) {
-            if (call.method().equals("flush")) {
-                return "when it's flushed, as flush() on line " + before.getLine() + " just did";
+            if (call.method().equals("flush") || call.method().equals("fflush")) {
+                return "when it's flushed, as " + call.method() + "() on line " + before.getLine() + " just did";
             }
-            if (call.method().equals("close")) {
-                return "when it's closed, as close() on line " + before.getLine() + " just did";
+            if (call.method().equals("close") || call.method().equals("fclose")) {
+                return "when it's closed, as " + call.method() + "() on line " + before.getLine() + " just did";
             }
         }
-        return "when it's closed, which the end of the try (with resources) just did";
+        for (CodeFacts.TryFact tried : facts.tries()) {
+            if (Objects.equals(tried.file(), file) && tried.endLine() == before.getLine() + 1) {
+                return "when it's closed, which the end of the try (with resources) just did";
+            }
+        }
+        return "when it's closed, or its buffer fills";
     }
 
     // FileNotFoundException's message is "name (No such file or directory)": just the name.

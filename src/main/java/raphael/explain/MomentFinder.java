@@ -24,13 +24,20 @@ public class MomentFinder {
             new EncapsulationConcept(),
             new InheritanceConcept(),
             new PolymorphismConcept(),
-            new StaticConcept());
+            new StaticConcept(),
+            new MemoryConcept());
 
     public List<Moment> find(Trace trace, CodeFacts facts) {
+        return find(trace, facts, "");
+    }
+
+    // input: what was typed into the program's stdin box, for the moments about reading it.
+    public List<Moment> find(Trace trace, CodeFacts facts, String input) {
         List<Moment> all = new ArrayList<>();
         for (Concept concept : concepts) {
             all.addAll(concept.moments(trace, facts));
         }
+        all.addAll(new InputConcept(input).moments(trace, facts));
         all.sort(Comparator.comparingInt(Moment::step)); // stable: on one step, the concepts' order
         Map<String, Integer> paused = new HashMap<>();
         List<Moment> kept = new ArrayList<>();
