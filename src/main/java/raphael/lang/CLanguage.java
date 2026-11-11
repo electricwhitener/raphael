@@ -2,9 +2,15 @@ package raphael.lang;
 
 import java.util.List;
 import java.util.Set;
+import raphael.compile.CCompiler;
+import raphael.compile.CompileResult;
+import raphael.compile.CompileSetupException;
+import raphael.compile.GccHints;
+import raphael.model.SourceFile;
 
-// C: the language most data-structures courses are taught in.
-// OOP: inheritance (a Language, through NotRunnableYet until Stage 14) and overriding.
+// C: the language most data-structures courses are taught in. Compiled with gcc (CCompiler); it
+// stays NotRunnableYet until its tracer is written (Stage 14, step 3).
+// OOP: inheritance (a Language, through NotRunnableYet until then) and overriding.
 public class CLanguage extends NotRunnableYet {
 
     static final Set<String> KEYWORDS = Set.of("auto", "break", "case", "char", "const", "continue", "default", "do",
@@ -60,6 +66,21 @@ public class CLanguage extends NotRunnableYet {
     @Override
     public boolean usesFiles(String code) {
         return code.matches("(?s).*\\bfopen\\s*\\(.*");
+    }
+
+    @Override
+    public CompileResult compile(String code) throws CompileSetupException {
+        return new CCompiler().compile(code);
+    }
+
+    @Override
+    public CompileResult compileFolder(List<SourceFile> files, String preferredMain) throws CompileSetupException {
+        return new CCompiler().compileFolder(files, preferredMain);
+    }
+
+    @Override
+    public String hint(String compilerMessage) {
+        return GccHints.hint(compilerMessage);
     }
 
     @Override

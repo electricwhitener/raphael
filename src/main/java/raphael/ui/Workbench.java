@@ -26,7 +26,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import raphael.RaphaelException;
-import raphael.compile.CompileHints;
 import raphael.compile.CompileResult;
 import raphael.io.RunFile;
 import raphael.io.SafeFiles;
@@ -736,7 +735,7 @@ public class Workbench extends JPanel {
         for (CompileResult.CompileError error : errors) {
             text.append(error.file() != null ? error.file() + ", " : "")
                     .append(error.line() > 0 ? "line " + error.line() + ": " : "").append(error.message()).append("\n");
-            String hint = CompileHints.hint(error.message());
+            String hint = language.hint(error.message());
             if (hint != null) {
                 text.append("  hint: ").append(hint).append("\n");
             }
@@ -754,7 +753,7 @@ public class Workbench extends JPanel {
                     + second.message().lines().findFirst().orElse("") + " (see the console)";
         }
         visual.setMessage("didn't compile · " + errors.size() + (errors.size() == 1 ? " error" : " errors"),
-                where.lines().findFirst().orElse(""), next, CompileHints.hint(first.message()));
+                where.lines().findFirst().orElse(""), next, language.hint(first.message()));
         say("[error] " + where.lines().findFirst().orElse("") + more, Style.ERROR);
     }
 

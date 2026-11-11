@@ -106,4 +106,9 @@ public class JavaLanguage extends Language {
     public Tracer newTracer() {
         return new JdiTracer();
     }
+
+    @Override
+    public String hint(String compilerMessage) {
+        return raphael.compile.CompileHints.hint(compilerMessage);
+    }
 }

@@ -279,6 +279,10 @@ Safety:
 | `SourceCompiler` | Compiles the editor's text (blanking the file rules first) or a folder's files (keeping their packages) with javac, out of sight of Raphael's own classes, and finds the class with `main` | `compile(source)`, `compileFolder(files, preferredMain)`, `topLevelText()`, `withoutFileRules()`, `findMainClass()` |
 | `CompileResult` | The result: success, errors (line + message), class folder, main class | record getters |
 | `CompileHints` | A plain hint for javac's common errors ("cannot find symbol" → which name, and what to check) | `hint(message)` |
+| `CCompiler` | Compiles a C program (one text or a folder's files) with gcc (`-g -O0`, flags that make every gcc stop where gcc 14 does, `-std=gnu17`), links in the runtime shim, and reads gcc's, clang's and the linker's messages into compile errors | `compile(code)`, `compileFolder(files, preferredMain)`, `errors(output, named)` |
+| `GccHints` | A plain hint for the C compiler's common errors, in gcc's or Apple clang's words (a missing `#include` → which header) | `hint(message)` |
+| `raphael_rt.c` (resources/c/) | The runtime shim linked into every C program, compiled without `-g`: turns stdout's buffer off so output keeps up with the steps | its constructor |
+| `Toolchains` (toolchain/) | Finds gcc (and later gdb, lldb and Python), and says how to install what's missing on this system | `find(name)`, `howToInstall(what)` |
 | `CompileSetupException` | Raphael couldn't get ready to compile: no JDK, or the temp folder can't be written | constructors |
 | **trace/** | | |
 | `Tracer` | Interface: "run this program and record every step" | `trace(program, input)`, `trace(program)`, `stop()`, `stepsSoFar()` |
@@ -355,7 +359,7 @@ Safety:
 | `TraceListener` | Interface every panel implements to hear about step changes | `stepChanged()`, `traceChanged()` |
 | `CodePanel` | Editor with colours, clickable line numbers, next/previous-line marks, error marks, matching brackets and undo; one `FileText` per file of the program, following the program from file to file | `setCode()`, `setFiles()`, `showFile()`, `showErrors()`, `stepChanged()`, `goToLine()`, `undo()`, `isDirty()`, `markBrackets()`, `ColoredView.drawUnselectedText()` |
 | `EditorKeys` | What a code editor does for you: keeps the indentation, moves lines with Tab, comments with Ctrl+/, finds text | `install()`, `newLine()`, `indent()`, `toggleComment()`, `find()` |
-| `Language`, `JavaLanguage`, `CLanguage`, `CppLanguage`, `PythonLanguage`, `NotRunnableYet` (lang/) | One class per language: file endings, comments, how blocks open, the new-program template, colouring, whether code reads input or files, how to recognise pasted code, and how to compile and trace it (only Java runs so far) | `endings()`, `template()`, `tokens()`, `likeness()`, `cantRun()`, `compile()`, `newTracer()`, `owns()` |
+| `Language`, `JavaLanguage`, `CLanguage`, `CppLanguage`, `PythonLanguage`, `NotRunnableYet` (lang/) | One class per language: file endings, comments, how blocks open, the new-program template, colouring, whether code reads input or files, how to recognise pasted code, the hints for its compiler's errors, and how to compile and trace it (Java runs; C compiles, and is traced from Stage 14's next step) | `endings()`, `template()`, `tokens()`, `likeness()`, `cantRun()`, `compile()`, `hint()`, `newTracer()`, `owns()` |
 | `Languages`, `RegexLexer`, `Token` (lang/) | The registry of languages and the one being learned; one configurable lexer that colours every language | `byId()`, `forFile()`, `recognise()`, `preferred()`, `tokens()` |
 | `Segmented` | A row of equal cells with one chosen (the language switches), painted so the chosen cell is always the accent colour | `choose()`, `describe()` |
 | `ExamplesPanel` | The examples side bar: a language switch, search, and the tree of title, category, subcategory and cases; one click previews, a double click keeps | `showLanguage()`, `select()`, `focusSearch()`, the interface `Actions` |
@@ -432,6 +436,7 @@ Each class also names its concept in an `// OOP:` comment at the top of the file
 - `NamesTest`: short type names, including lambdas.
 - `ErrorExplainerTest`: a NullPointerException names the variable that was null; an index past the end says how many cells there are and mentions `<=`; the other common exceptions; which ones have advice.
 - `CompileHintsTest`: a plain hint for each common javac message, naming the variable or class it's about; rare messages are left as they are.
+- `CCompilerTest`: C compiles with gcc and runs; output printed before a crash is kept; a missing `;`, a missing `#include` (with the header in the hint), a wrong pointer type, an undeclared variable, a function never written and a missing `main`; programs of several files, whose errors name their file; canned gcc, clang and linker output (skipped tests where there's no gcc, except the canned ones).
 - `DialogsTest`: buttons in each system's order (Windows, macOS, Linux); the draft's time reads "today at", "yesterday at" or a date.
 - `FileDropTest`: a dropped file is opened, and pasting text into the editor still works.
 - `WindowsFileDialogTest`: the PowerShell script for Windows' own dialog (quotes, the suggested name, the filter).

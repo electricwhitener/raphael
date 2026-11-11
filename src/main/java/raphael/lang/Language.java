@@ -62,6 +62,11 @@ public abstract class Language {
     // A new tracer for one run.
     public abstract Tracer newTracer();
 
+    // A plain hint for one of its compiler's error messages, or null if there's none.
+    public String hint(String compilerMessage) {
+        return null;
+    }
+
     // ---- written once, for every language ----
 
     // Whether a file of this name is this language's ("Tree.java", "list.C").
