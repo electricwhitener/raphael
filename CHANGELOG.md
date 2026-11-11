@@ -11,7 +11,8 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - Crashes are explained: which pointer was NULL, freed or never set, which divisor was 0, which index was outside its array, which `assert` failed.
 - Compile errors get plain hints (a missing `;` or `#include`, a wrong pointer type, an undeclared name, a function never written).
 - Key moments for C: malloc made a block, free left pointers dangling, a function changed its caller's variable through a pointer, and `scanf("%c")` reading the newline a `%d` left behind (Java's `nextLine()` after `nextInt()` gets the same moment).
-- The Windows installer includes a C compiler and debugger (WinLibs, about 400 MB installed); the Linux package depends on gcc and gdb; on a Mac, Apple's Command Line Tools (`xcode-select --install`).
+- The Windows installer includes a C compiler and debugger (WinLibs): the download grows to 159 MB, and they take 528 MB once installed. The Linux package depends on gcc and gdb; on a Mac, Apple's Command Line Tools (`xcode-select --install`).
+- C says NULL, and a struct reads `struct Node {val=10, next=NULL}`. A missing `;` is marked on its own line, not the next one.
 - The first C examples: hello, pointers and swap, factorial, a linked list, a binary search tree, and a NULL-pointer bug.
 
 **Languages**
