@@ -98,12 +98,15 @@ public final class Toolchains {
 
     // What to do when a tool is missing, in a sentence for this system.
     public static String howToInstall(String what) {
+        String still = " You can still edit and save this program.";
         if (WINDOWS) {
-            return "Raphael couldn't find " + what + ". Reinstalling Raphael puts it back.";
+            return "Raphael couldn't find " + what + ". Reinstall Raphael to put it back, then press Run again." + still;
         }
         if (MAC) {
-            return "Raphael needs Apple's Command Line Tools for " + what + ". Type xcode-select --install in Terminal.";
+            return "Raphael needs Apple's Command Line Tools for " + what + ". Type xcode-select --install in Terminal, "
+                    + "let it finish, then press Run again." + still;
         }
-        return "Raphael needs " + what + ". On Ubuntu or Debian, type sudo apt install gcc gdb in a terminal.";
+        return "Raphael needs " + what + ". In a terminal, type sudo apt install gcc gdb (on Ubuntu or Debian), "
+                + "then press Run again." + still;
     }
 }

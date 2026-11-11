@@ -339,7 +339,8 @@ public class CTracer implements Tracer {
                     }
                     Map<String, String> types = new LinkedHashMap<>();
                     ((Map<String, Object>) object.get("ftypes")).forEach((name, t) -> types.put(name, (String) t));
-                    heap.put(id, new ObjectNode(id, type, fields, types, null, Boolean.TRUE.equals(object.get("freed"))));
+                    heap.put(id, new ObjectNode(id, type, fields, types, null, Boolean.TRUE.equals(object.get("freed")),
+                            Boolean.TRUE.equals(object.get("tag"))));
                 }
             }
             List<FrameSnapshot> frames = new ArrayList<>();
@@ -380,7 +381,7 @@ public class CTracer implements Tracer {
                 return new ReferenceValue(((Number) v.get("r")).longValue());
             }
             if (v.containsKey("n")) {
-                return NullValue.INSTANCE;
+                return NullValue.C; // C's word
             }
             return new PrimitiveValue((String) v.get("p"));
         }

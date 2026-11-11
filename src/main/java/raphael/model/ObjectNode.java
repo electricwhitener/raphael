@@ -13,19 +13,22 @@ public class ObjectNode extends HeapObject {
     private final Map<String, Value> fields;      // field name → value, in declared order
     private final Map<String, String> fieldTypes; // field name → declared type, e.g. "Main$Node"
     private final String parentName; // the student's class this one extends, or null
+    private final boolean struct;    // C: written "struct Node" (false in recordings made before C)
 
     public ObjectNode(long id, String typeName, Map<String, Value> fields, Map<String, String> fieldTypes) {
         this(id, typeName, fields, fieldTypes, null);
     }
 
     public ObjectNode(long id, String typeName, Map<String, Value> fields, Map<String, String> fieldTypes, String parentName) {
-        this(id, typeName, fields, fieldTypes, parentName, false);
+        this(id, typeName, fields, fieldTypes, parentName, false, false);
     }
 
-    // freed: a C struct whose memory free() gave back.
+    // C: freed, a struct whose memory free() gave back; struct, one named by its tag, which C
+    // writes as "struct Node" (a typedef'd one is just "Point").
     public ObjectNode(long id, String typeName, Map<String, Value> fields, Map<String, String> fieldTypes, String parentName,
-                      boolean freed) {
+                      boolean freed, boolean struct) {
         super(id, typeName, freed);
+        this.struct = struct;
         this.parentName = parentName;
         this.fields = Collections.unmodifiableMap(new LinkedHashMap<>(fields));
         this.fieldTypes = Collections.unmodifiableMap(new LinkedHashMap<>(fieldTypes));
@@ -50,7 +53,8 @@ public class ObjectNode extends HeapObject {
     // e.g. Node{val=5, next→7}
     @Override
     public String describe(Snapshot snapshot) {
-        StringBuilder text = new StringBuilder((isFreed() ? "freed " : "") + Names.simple(getTypeName()) + "{");
+        StringBuilder text = new StringBuilder((isFreed() ? "freed " : "") + (struct ? "struct " : "")
+                + Names.simple(getTypeName()) + (struct ? " {" : "{"));
         boolean first = true;
         for (Map.Entry<String, Value> field : fields.entrySet()) {
             if (!first) {

@@ -30,6 +30,7 @@ import raphael.render.Style;
 public class TraceTablePanel extends javax.swing.JPanel implements TraceListener {
 
     private static final int FIXED = 3; // step, line, method
+    private static final int MAX_WIDTH = 220; // a column of array cells, before it's cut off (with a tooltip)
 
     private final Rows rows = new Rows();
     private final JTable table = new JTable(rows);
@@ -52,6 +53,10 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
                 setHorizontalAlignment(column < 2 ? RIGHT : LEFT);
                 setForeground(column < FIXED ? Style.MUTED : Style.INK);
                 setBorder(BorderFactory.createEmptyBorder(0, Style.SPACE_2, 0, Style.SPACE_2));
+                String text = value == null ? "" : value.toString();
+                // a cut-off array's cells, in full
+                setToolTipText(column >= FIXED && getFontMetrics(getFont()).stringWidth(text) + 2 * Style.SPACE_2
+                        > t.getColumnModel().getColumn(column).getWidth() ? text : null);
                 return this;
             }
         });
@@ -69,8 +74,16 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
     @Override
     public void traceChanged(TraceModel model) {
         rows.load(model.getTrace());
+        java.awt.FontMetrics metrics = table.getFontMetrics(table.getFont());
         for (int c = 0; c < table.getColumnCount(); c++) {
-            table.getColumnModel().getColumn(c).setPreferredWidth(c == 0 || c == 1 ? 48 : c == 2 ? 120 : 84);
+            int width = c == 0 || c == 1 ? 48 : c == 2 ? 120 : 84;
+            for (int r : new int[] {table.getRowCount() / 2, table.getRowCount() - 1}) { // an array's cells: as wide as they need, to 220 px
+                if (c >= FIXED && r >= 0) {
+                    Object text = rows.getValueAt(r, c);
+                    width = Math.max(width, Math.min(MAX_WIDTH, metrics.stringWidth(String.valueOf(text)) + 2 * Style.SPACE_2 + 4));
+                }
+            }
+            table.getColumnModel().getColumn(c).setPreferredWidth(width);
         }
         stepChanged(model);
     }
@@ -162,6 +175,10 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
             }
             if (value instanceof ReferenceValue) {
                 HeapObject object = step.getObject(((ReferenceValue) value).id());
+                if (object instanceof raphael.model.ArrayNode && !((raphael.model.ArrayNode) object).getElementType().endsWith("[]")) {
+                    String cells = object.describe(step); // "int[5] [0, 1, 4, ?, ?]": the cells, so a change shows
+                    return cells.substring(cells.indexOf('[', cells.indexOf(']') + 1));
+                }
                 return object == null ? "→ ?" : object.shortName();
             }
             return value.display();

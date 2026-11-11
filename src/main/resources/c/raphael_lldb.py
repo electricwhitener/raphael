@@ -320,6 +320,8 @@ class Step:
             return {"p": "?"}
         v = value_at(address, t)
         node = {"k": "o", "type": name, "fields": {}, "ftypes": {}}
+        if not t.GetUnqualifiedType().IsTypedefType() and (canonical(t).GetName() or "").replace("struct ", "") == name:
+            node["tag"] = True  # struct Node, as C writes it (a typedef'd one is just Point)
         block = STEP_BLOCKS[0].at(address)
         if block is not None and block[2]:
             node["freed"] = True

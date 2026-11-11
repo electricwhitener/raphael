@@ -111,6 +111,7 @@ public class CCompiler {
             errors.add(new CompileResult.CompileError(0, gccSaid.text().strip().lines().limit(6)
                     .reduce((a, b) -> a + "\n" + b).orElse("gcc stopped without saying why.")));
         }
+        errors = onTheirLine(errors, dir.resolve("src"));
         boolean ok = gccSaid.exit() == 0;
         return new CompileResult(ok, ok ? List.of() : errors, dir, ok ? EXE : null, sourceFiles, facts);
     }
@@ -150,6 +151,31 @@ public class CCompiler {
             }
         }
         return errors;
+    }
+
+    private static final Pattern SEMICOLON_BEFORE = Pattern.compile("^expected (?:',' or )?';' before ");
+
+    // gcc reports a missing ; on the line after it (where it found what came next): such an error
+    // moves back to the last line with code before it, where the ; belongs.
+    static List<CompileResult.CompileError> onTheirLine(List<CompileResult.CompileError> errors, Path src) {
+        List<CompileResult.CompileError> moved = new ArrayList<>();
+        for (CompileResult.CompileError error : errors) {
+            if (error.line() > 1 && SEMICOLON_BEFORE.matcher(error.message()).find()) {
+                try {
+                    List<String> lines = Files.readAllLines(src.resolve(error.file() == null ? SINGLE : error.file()));
+                    int line = (int) error.line() - 1;
+                    while (line > 1 && lines.get(line - 1).strip().isEmpty()) {
+                        line--;
+                    }
+                    moved.add(new CompileResult.CompileError(error.file(), line, error.message()));
+                    continue;
+                } catch (IOException | RuntimeException e) {
+                    // the file can't be read back: the error stays where gcc put it
+                }
+            }
+            moved.add(error);
+        }
+        return moved;
     }
 
     private static CompileResult.CompileError linkError(String name, boolean twice, String file, long line) {

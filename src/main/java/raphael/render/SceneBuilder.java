@@ -327,7 +327,7 @@ public class SceneBuilder {
         Scene scene = new Scene();
         List<Structure> structures = detector.detect(snapshot);
         layOut(structures, scene, context);
-        fadeFreed(scene, snapshot);
+        fadeFreed(scene, snapshot, context);
         addFocus(scene, snapshot);
         addLabels(scene, snapshot);
         return scene;
@@ -438,11 +438,12 @@ public class SceneBuilder {
     }
 
     private static final Pattern OBJECT_KEY = Pattern.compile("^#(\\d+)(?!\\d)");
+    private static final Pattern MARKER_KEY = Pattern.compile("^idx:(\\d+):");
 
     // C memory that free() gave back is drawn faded, captioned "freed", so a pointer still holding
     // it is plainly dangling. Every shape of the object (its box, cells and fields) has a key that
     // starts with "#id".
-    private static void fadeFreed(Scene scene, Snapshot snapshot) {
+    private static void fadeFreed(Scene scene, Snapshot snapshot, RenderContext context) {
         Set<Long> freed = new HashSet<>();
         for (HeapObject object : snapshot.getHeap().values()) {
             if (object.isFreed()) {
@@ -454,13 +455,20 @@ public class SceneBuilder {
         }
         for (SceneNode node : new ArrayList<>(scene.getNodes())) {
             Matcher key = OBJECT_KEY.matcher(node.key());
-            if (!key.find() || !freed.contains(Long.parseLong(key.group(1)))) {
+            Matcher marker = MARKER_KEY.matcher(node.key()); // a marker pointing into freed memory fades with it
+            boolean ofFreed = key.find() && freed.contains(Long.parseLong(key.group(1)));
+            boolean markerOfFreed = marker.find() && freed.contains(Long.parseLong(marker.group(1)));
+            if (!ofFreed && !markerOfFreed) {
                 continue;
             }
             scene.add(new SceneNode(node.key(), node.kind(), node.x(), node.y(), node.w(), node.h(), node.text(),
                     node.caption(), SceneNode.Look.DIM));
-            if (node.key().equals("#" + key.group(1))) { // the object's own shape: its caption goes under it (labels are above)
-                scene.add(new SceneNode("freed:" + node.key(), SceneNode.Kind.TEXT, node.x(), node.bottom() + 2,
+            if (ofFreed && node.key().equals("#" + key.group(1))) {
+                // The object's own shape: its caption goes under everything (labels are above; index
+                // numbers and markers below), left-aligned with it.
+                boolean marked = !context.markersFor(Long.parseLong(key.group(1))).isEmpty();
+                double y = node.bottom() + Style.CAPTION_H + (marked ? Style.MARKER_H : 0) + 2;
+                scene.add(new SceneNode("freed:" + node.key(), SceneNode.Kind.TEXT, node.x(), y,
                         Math.max(node.w(), 60), Style.CAPTION_H, "freed", null));
             }
         }

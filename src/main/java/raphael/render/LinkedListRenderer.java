@@ -3,6 +3,7 @@ package raphael.render;
 import java.awt.Dimension;
 import java.util.List;
 import raphael.detect.LinkedListStructure;
+import raphael.detect.LinkedStructure;
 
 // Draws a linked list as a row of nodes: [ value | • ]──▶ [ value | / ]
 // The arrow leaves the node's "next" slot; a null next is a slot with a slash through it.
@@ -48,10 +49,25 @@ public class LinkedListRenderer extends StructureRenderer {
         return new Dimension((int) width, Style.LABEL_SPACE + Style.NODE_H + Style.CURVE_SPACE);
     }
 
+    // Whether the node's link field (prev-like if back) holds memory nobody has set (shown "?").
+    private boolean unset(long id, boolean back) {
+        raphael.model.ObjectNode node = list.getNode(id);
+        for (java.util.Map.Entry<String, raphael.model.Value> field : node.getFields().entrySet()) {
+            if (node.getTypeName().equals(node.getFieldType(field.getKey())) && LinkedStructure.isBackLink(field.getKey()) == back
+                    && "?".equals(field.getValue().display())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void addSlot(Scene scene, long id, String name, long target, String targetKey,
                          double x, double y, SceneEdge.Kind arrow) {
         String slotKey = key(id) + "." + name;
-        if (target == -1) {
+        if (target == -1 && unset(id, name.equals("prev"))) {
+            // C: malloc'd and not set yet. A slash would say NULL, as if malloc cleared memory; it doesn't.
+            scene.add(new SceneNode(slotKey, SceneNode.Kind.CELL, x, y, Style.SLOT_W, Style.NODE_H, "?", null));
+        } else if (target == -1) {
             scene.add(new SceneNode(slotKey, SceneNode.Kind.NULL_SLOT, x, y, Style.SLOT_W, Style.NODE_H, "", null));
         } else {
             scene.add(new SceneNode(slotKey, SceneNode.Kind.SLOT, x, y, Style.SLOT_W, Style.NODE_H, "", null));

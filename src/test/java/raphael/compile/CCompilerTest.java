@@ -82,7 +82,7 @@ class CCompilerTest {
                 """);
         assertFalse(program.success());
         CompileResult.CompileError error = program.errors().get(0);
-        assertTrue(error.line() == 3 || error.line() == 4, "gcc says 4, clang 3: " + error);
+        assertEquals(3, error.line(), "the line the ; is missing from (gcc names the next one; Raphael moves it back)");
         assertNotNull(GccHints.hint(error.message()), error.message());
         assertEquals(null, error.file()); // one text, as for Java
     }

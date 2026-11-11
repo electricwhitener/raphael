@@ -321,6 +321,8 @@ class Step:
         except (gdb.MemoryError, gdb.error):
             return {"p": "?"}
         node = {"k": "o", "type": name, "fields": {}, "ftypes": {}}
+        if t.strip_typedefs().tag:
+            node["tag"] = True  # struct Node, as C writes it (a typedef'd one is just Point)
         block = STEP_BLOCKS[0].at(address)
         if block is not None and block[2]:
             node["freed"] = True  # free() gave it back: what's drawn is what it last held

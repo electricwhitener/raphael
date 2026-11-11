@@ -350,8 +350,11 @@ public class CallsScenes implements SceneSource {
     }
 
     private static String text(Value value, Snapshot step) {
-        if (value == null || value instanceof NullValue) {
+        if (value == null) {
             return "null";
+        }
+        if (value instanceof NullValue) {
+            return value.display(); // null, or NULL in C
         }
         if (value instanceof ReferenceValue) {
             HeapObject object = step.getObject(((ReferenceValue) value).id());

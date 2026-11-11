@@ -113,6 +113,10 @@ class CTracerTest {
         assertEquals("Node", first.getTypeName());
         assertEquals("30", first.getField("val").display());
         assertEquals("Node", first.getFieldType("next")); // so StructureDetector links the list
+        assertTrue(first.describe(last).startsWith("struct Node {val=30, next→"), first.describe(last)); // as C writes it
+        ObjectNode tail = (ObjectNode) last.getObject(((ReferenceValue) ((ObjectNode) last.getObject(
+                ((ReferenceValue) first.getField("next")).id())).getField("next")).id());
+        assertEquals("NULL", tail.getField("next").display()); // C's word
         int nodes = 0;
         for (HeapObject object : last.getHeap().values()) {
             nodes += object instanceof ObjectNode ? 1 : 0;
@@ -245,6 +249,7 @@ class CTracerTest {
         assertEquals("Person[]", people.getTypeName());
         ObjectNode ann = (ObjectNode) last.getObject(((ReferenceValue) people.getElements().get(0)).id());
         assertEquals("Person", ann.getTypeName()); // the typedef's name: the struct has none
+        assertTrue(ann.describe(last).startsWith("Person{"), ann.describe(last)); // so it isn't "struct Person"
         assertEquals("\"Ann\"", ann.getField("name").display()); // a char array in a struct reads as its text
         assertEquals(people.getElements().get(1), locals.get("older")); // the same box as the array's cell
         raphael.model.ArrayNode word = (raphael.model.ArrayNode) last.getObject(((ReferenceValue) locals.get("word")).id());

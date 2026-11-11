@@ -86,6 +86,8 @@ jobs:
           if ($test.ExitCode -ne 0) {
             # Raphael.exe has no console: the installed copy's own java prints why
             & "C:\Program Files\Raphael\runtime\bin\java.exe" -cp "C:\Program Files\Raphael\app\*" raphael.App --self-test c
+            Set-Content hello.c "int main(void) { return 0; }"
+            & "C:\Program Files\Raphael\mingw64\bin\gcc.exe" -v -fno-use-linker-plugin hello.c -o hello.exe 2>&1 | Select-Object -Last 12
             Write-Error "self-test failed"; exit 1
           }
           Write-Output "installed and self-tested"

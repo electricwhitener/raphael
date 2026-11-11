@@ -18,7 +18,7 @@ public final class GccHints {
         }
         String first = message.lines().findFirst().orElse("").trim();
         if (first.contains("expected ';'") || first.contains("expected ',' or ';'")) {
-            return "A statement is missing the ; at its end. (gcc often points at the line after it.)";
+            return "A statement is missing the ; at its end.";
         }
         if (first.contains("expected declaration or statement at end of input") || first.equals("expected '}'")) {
             return "A { has no matching }. Count the braces of the function above.";

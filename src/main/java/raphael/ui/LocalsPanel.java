@@ -80,9 +80,15 @@ public class LocalsPanel extends JPanel implements TraceListener {
         FrameSnapshot beforeFrame = before == null || before.getFrames().isEmpty() ? null : before.getFrames().get(0);
         boolean sameCall = beforeFrame != null && before.getFrames().size() == now.getFrames().size()
                 && beforeFrame.getMethodName().equals(frame.getMethodName());
+        // A second variable holding the same array (p = a, or int[] b = a) says so, "→ a", instead
+        // of showing the same cells twice, which would look like a copy.
+        Map<Long, String> shownBy = new java.util.HashMap<>();
         for (Map.Entry<String, Value> local : frame.getLocals().entrySet()) {
             boolean changed = sameCall && !local.getValue().equals(beforeFrame.getLocals().get(local.getKey()));
-            addRow(local.getKey(), describe(local.getValue(), now), changed);
+            Value value = local.getValue();
+            String alias = value instanceof ReferenceValue && now.getObject(((ReferenceValue) value).id()) instanceof raphael.model.ArrayNode
+                    ? shownBy.putIfAbsent(((ReferenceValue) value).id(), local.getKey()) : null;
+            addRow(local.getKey(), alias != null ? "→ " + alias : describe(value, now), changed);
         }
         for (Map.Entry<String, Value> field : now.getStatics().entrySet()) {
             boolean changed = before != null && !field.getValue().equals(before.getStatics().get(field.getKey()));

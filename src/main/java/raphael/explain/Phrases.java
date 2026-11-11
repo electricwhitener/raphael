@@ -24,8 +24,11 @@ public final class Phrases {
 
     // A value as the student would write it: 3, "Ann", 'x', null, or an object by its class ("a Circle").
     public static String value(Value value, Snapshot at) {
-        if (value == null || value instanceof NullValue) {
+        if (value == null) {
             return "null";
+        }
+        if (value instanceof NullValue) {
+            return value.display(); // null, or NULL in C
         }
         if (value instanceof ReferenceValue) {
             HeapObject object = at == null ? null : at.getObject(((ReferenceValue) value).id());
