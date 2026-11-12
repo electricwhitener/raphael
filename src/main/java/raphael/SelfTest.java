@@ -52,28 +52,34 @@ public final class SelfTest {
         }
     }
 
-    // The C example: compiled, recorded, and printing what it should.
+    // The C example, then the C++ one: compiled, recorded, and printing what they should. (C++ on
+    // a Mac waits for lldb to read it, so there it's only reported.)
     private static int c(boolean needed) throws Exception {
-        raphael.lang.Language c = raphael.lang.Languages.byId("c");
-        String cantRun = c.cantRun();
+        int c = compiled("c", "/examples/c/lists/linked_list.c", "40 30 20 10", needed);
+        return c != 0 ? c : compiled("cpp", "/examples/cpp/lists/linked_list.cpp", "1 2 3", needed && !raphael.toolchain.Toolchains.MAC);
+    }
+
+    private static int compiled(String id, String example, String prints, boolean needed) throws Exception {
+        raphael.lang.Language language = raphael.lang.Languages.byId(id);
+        String cantRun = language.cantRun();
         if (cantRun != null) {
             if (needed) {
-                return fail("C can't run: " + cantRun);
+                return fail(language.name() + " can't run: " + cantRun);
             }
-            System.out.println("self-test: C isn't checked here: " + cantRun);
+            System.out.println("self-test: " + language.name() + " isn't checked here: " + cantRun);
             return 0;
         }
-        try (InputStream example = SelfTest.class.getResourceAsStream("/examples/c/lists/linked_list.c")) {
-            String source = new String(example.readAllBytes(), StandardCharsets.UTF_8);
-            CompileResult program = c.compile(source);
+        try (InputStream in = SelfTest.class.getResourceAsStream(example)) {
+            String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            CompileResult program = language.compile(source);
             if (!program.success()) {
-                return fail("the C example didn't compile: " + program.errors());
+                return fail("the " + language.name() + " example didn't compile: " + program.errors());
             }
-            Trace trace = c.newTracer().trace(program, "");
-            if (trace.getEndReason() != EndReason.FINISHED || !trace.getOutput().strip().equals("40 30 20 10")) {
-                return fail("the C example didn't record: " + trace.getEndMessage() + ", printed " + trace.getOutput().strip());
+            Trace trace = language.newTracer().trace(program, "");
+            if (trace.getEndReason() != EndReason.FINISHED || !trace.getOutput().strip().equals(prints)) {
+                return fail("the " + language.name() + " example didn't record: " + trace.getEndMessage() + ", printed " + trace.getOutput().strip());
             }
-            System.out.println("self-test ok: C, " + trace.size() + " steps recorded with "
+            System.out.println("self-test ok: " + language.name() + ", " + trace.size() + " steps recorded with "
                     + raphael.toolchain.Toolchains.find(raphael.toolchain.Toolchains.debugger()));
             return 0;
         }

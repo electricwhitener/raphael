@@ -50,8 +50,8 @@ if [ "$TYPE" != app-image ]; then
         mac)     ARGS+=(--mac-package-identifier io.github.electricwhitener.raphael) ;;
         linux)   ARGS+=(--linux-shortcut --linux-menu-group Development --linux-app-category devel
                         --linux-deb-maintainer "raphael@users.noreply.github.com"
-                        # GTK for the system's own file dialog; gcc, the C headers and gdb (with Python) for C
-                        --linux-package-deps "libgtk-3-0, gcc, libc6-dev, gdb") ;;
+                        # GTK for the system's own file dialog; gcc, g++, the C headers and gdb (with Python) for C and C++
+                        --linux-package-deps "libgtk-3-0, gcc, g++, libc6-dev, gdb") ;;
     esac
 fi
 jpackage "${ARGS[@]}"
