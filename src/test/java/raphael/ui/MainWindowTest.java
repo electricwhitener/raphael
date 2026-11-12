@@ -151,11 +151,11 @@ class MainWindowTest {
     void theWelcomePageShowsEachLanguagesOwnExamples() {
         assumeFalse(GraphicsEnvironment.isHeadless(), "needs a screen");
         WelcomePage page = new WelcomePage(new WelcomePage.Actions(() -> { }, () -> { }, () -> { }, e -> { }, f -> { }, l -> { }));
+        page.showExamplesOf(raphael.lang.Languages.byId("python"));
+        assertEquals("python", page.shownLanguage().id());
+        assertFalse(page.showsExampleList(), "Python has no examples yet: a note, not Java's list");
         page.showExamplesOf(raphael.lang.Languages.byId("cpp"));
-        assertEquals("cpp", page.shownLanguage().id());
-        assertFalse(page.showsExampleList(), "C++ has no examples yet: a note, not Java's list");
-        page.showExamplesOf(raphael.lang.Languages.byId("c"));
-        assertTrue(page.showsExampleList());
+        assertTrue(page.showsExampleList(), "C++ has its own");
     }
 
     // The key-moment choice is one for every tab: changing it in a tab's playback bar changes the

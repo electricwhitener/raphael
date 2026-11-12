@@ -252,6 +252,20 @@ public final class CFactScanner {
         boolean recursive = false;
         int callsBefore = facts.calls().size();
         for (int k = open + 1; k < bodyEnd; k++) {
+            if (cpp && text(k).equals("new") && isName(k + 1)) { // new Node(1): C++'s malloc, as the memory moments see it
+                facts.add(new CodeFacts.CallFact(file, tokens.get(k).line(), "new", null, null, null, List.of(text(k + 1))));
+                continue;
+            }
+            if (cpp && text(k).equals("delete")) { // delete gone; delete[] cells: C++'s free
+                int from = text(k + 1).equals("[") ? k + 3 : k + 1;
+                int end = from;
+                while (end < bodyEnd && !text(end).equals(";")) {
+                    end++;
+                }
+                facts.add(new CodeFacts.CallFact(file, tokens.get(k).line(), "delete", null, null, null,
+                        end > from ? List.of(slice(from, end - 1)) : List.of()));
+                continue;
+            }
             if (cpp && isName(k) && text(k + 1).equals("(") && (text(k - 1).equals(".") || text(k - 1).equals("->"))
                     && isName(k - 2)) { // s->area(): a call on an object, with the type s was declared as
                 String receiver = text(k - 2);

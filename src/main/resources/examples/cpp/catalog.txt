@@ -1,0 +1,22 @@
+// The C++ examples. "# title", "## category", an optional "### subcategory", then one case
+// a line: path | title | blurb. A case before any ### belongs to the category itself.
+
+# C++
+## Basics
+basics/hello | Hello, C++ | cout with <<, a string and an int, and main returning 0.
+basics/references | References | int &a is another name for the caller's variable, so swap changes it.
+
+## Classes and objects
+oop/account | A class with private data | Only the class's own methods change its balance, and they check first.
+oop/shapes | Virtual methods | One call, shape->area(), runs each kind of shape's own area.
+oop/exceptions | Exceptions | at() throws out_of_range, the catch gets it, and the program goes on.
+
+## The standard library
+stl/vector_sort | vector and sort | A vector grows with push_back; sort puts it in order.
+stl/word_count | Counting with a map | counts[word]++ counts each word, its keys kept in order.
+
+## Linked lists
+lists/linked_list | A linked list | new makes each node, delete gives it back.
+
+## Trees
+trees/bst | Binary search tree | Insert with recursion: smaller keys go left, bigger ones right.

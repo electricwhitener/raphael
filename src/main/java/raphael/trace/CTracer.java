@@ -460,17 +460,20 @@ public class CTracer implements Tracer {
             for (Object f : (List<Object>) message.get("frames")) {
                 Map<String, Object> frame = (Map<String, Object>) f;
                 String file = (String) frame.get("file");
-                frames.add(new FrameSnapshot(unitOf(file), (String) frame.get("fn"), ((Number) frame.get("line")).intValue(),
+                String fn = (String) frame.get("fn");
+                frames.add(new FrameSnapshot(classOf(fn, file), methodOf(fn), ((Number) frame.get("line")).intValue(),
                         values((Map<String, Object>) frame.get("locals")), namedFiles ? file : null));
             }
             Map<String, Value> globals = new LinkedHashMap<>();
-            String unit = frames.isEmpty() ? "main" : frames.get(0).getClassName();
+            List<Object> rawFrames = (List<Object>) message.get("frames");
+            String unit = rawFrames.isEmpty() ? "main" : unitOf((String) ((Map<String, Object>) rawFrames.get(0)).get("file"));
             values((Map<String, Object>) message.get("globals")).forEach((name, v) -> globals.put(unit + "." + name, v));
             List<Exit> exits = new ArrayList<>();
             for (Object e : (List<Object>) message.get("exits")) {
                 Map<String, Object> exit = (Map<String, Object>) e;
                 Object returned = exit.get("returned");
-                exits.add(new Exit(unitOf((String) exit.get("file")), (String) exit.get("fn"), returned == null ? null : value(returned)));
+                String fn = (String) exit.get("fn");
+                exits.add(new Exit(classOf(fn, (String) exit.get("file")), methodOf(fn), returned == null ? null : value(returned)));
             }
             Object newFiles = message.get("files");
             if (newFiles != null) {
@@ -523,6 +526,24 @@ public class CTracer implements Tracer {
     }
 
     // A frame's "class" in C is its file, without the ending: main.c → main.
+    // A frame's class: a C++ method's own (Circle in Circle::area, as Java names a method's class),
+    // else, as for C, its file's unit (main.c → main).
+    static String classOf(String fn, String file) {
+        int at = fn == null ? -1 : fn.lastIndexOf("::");
+        if (at > 0) {
+            String owner = fn.substring(0, at);
+            int outer = owner.lastIndexOf("::"); // shapes::Circle::area: the class is Circle
+            return outer >= 0 && !owner.substring(outer).contains(">") ? owner.substring(outer + 2) : owner;
+        }
+        return unitOf(file);
+    }
+
+    // A frame's method: area in Circle::area, ~Shape in Shape::~Shape, the function's name in C.
+    static String methodOf(String fn) {
+        int at = fn == null ? -1 : fn.lastIndexOf("::");
+        return at > 0 ? fn.substring(at + 2) : fn;
+    }
+
     private static String unitOf(String file) {
         String name = file == null ? "main" : file.substring(file.lastIndexOf('/') + 1);
         int dot = name.lastIndexOf('.');

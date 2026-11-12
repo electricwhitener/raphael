@@ -22,7 +22,7 @@ import raphael.model.Value;
 // OOP: inheritance (a Concept); it overrides relevant() and find().
 public class MemoryConcept extends Concept {
 
-    private static final Set<String> ALLOCATORS = Set.of("malloc", "calloc", "realloc", "strdup");
+    private static final Set<String> ALLOCATORS = Set.of("malloc", "calloc", "realloc", "strdup", "new"); // new: C++
 
     @Override
     protected boolean relevant(CodeFacts facts) {
@@ -46,6 +46,9 @@ public class MemoryConcept extends Concept {
                 allocator = allocator == null && ALLOCATORS.contains(call.method()) ? call.method() : allocator;
                 if (call.method().equals("free") && freedWith == null) {
                     freedWith = "free(" + (call.arguments().isEmpty() ? "" : call.arguments().get(0)) + ")";
+                }
+                if (call.method().equals("delete") && freedWith == null) { // C++
+                    freedWith = "delete" + (call.arguments().isEmpty() ? "" : " " + call.arguments().get(0));
                 }
             }
             if (allocator != null) {
@@ -80,12 +83,15 @@ public class MemoryConcept extends Concept {
                     + (holders.size() == 1 ? " points" : " point") + " to it") + ".";
             if (allocator.equals("realloc")) {
                 text += " realloc made a new block, copied the old one into it, and gave the old one back.";
+            } else if (unset && now.getFrames().get(0).getMethodName().equals(Names.simple(object.getTypeName()))) {
+                text += " Its fields aren't set yet, so they show ?; its constructor, running now, sets them.";
             } else if (unset) {
                 text += " Its memory isn't set yet, so it shows ?: whatever was there before.";
             } else if (allocator.equals("calloc")) {
                 text += " calloc sets every byte to 0.";
             }
-            into.add(new Moment(s, "malloc", allocator + " made a block", text, true, file, now.getLine()));
+            into.add(new Moment(s, "malloc", allocator.equals("new") ? "new made an object" : allocator + " made a block", text, true,
+                    file, now.getLine()));
             return; // one block per line is the moment; the rest are in the picture
         }
     }
@@ -101,11 +107,12 @@ public class MemoryConcept extends Concept {
             String what = object instanceof ArrayNode
                     ? "the block of " + ((ArrayNode) object).getLength() + " " + Names.simple(((ArrayNode) object).getElementType()) + "s"
                     : "the " + Names.simple(object.getTypeName());
-            into.add(new Moment(s, "free", "free gave it back",
+            boolean cpp = freedWith != null && freedWith.startsWith("delete");
+            into.add(new Moment(s, "free", cpp ? "delete gave it back" : "free gave it back",
                     (freedWith == null ? "free()" : freedWith) + " gave " + what + " back: it isn't the program's memory any more."
                             + (holders.isEmpty() ? "" : " " + String.join(" and ", holders) + (holders.size() == 1 ? " still holds" : " still hold")
                             + " its address: " + (holders.size() == 1 ? "a dangling pointer" : "dangling pointers")
-                            + ". Using it now is a bug; set it to NULL."),
+                            + ". Using it now is a bug; set it to " + (cpp ? "nullptr" : "NULL") + "."),
                     true, file, now.getLine()));
             return;
         }

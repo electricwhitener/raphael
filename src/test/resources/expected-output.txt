@@ -1491,3 +1491,36 @@ after swap: x=2 y=1
 ## c/trees/bst_insert
 20 30 40 50 60 70
 
+
+## cpp/basics/hello
+Hello, Ada
+First program: 1843
+
+## cpp/basics/references
+8 3
+
+## cpp/lists/linked_list
+1 2 3
+
+## cpp/oop/account
+150
+
+## cpp/oop/exceptions
+85
+no mark there
+done
+
+## cpp/oop/shapes
+total area: 7.14
+
+## cpp/stl/vector_sort
+1 2 5 9
+
+## cpp/stl/word_count
+be 2
+not 1
+or 1
+to 2
+
+## cpp/trees/bst
+1 3 6 8 10

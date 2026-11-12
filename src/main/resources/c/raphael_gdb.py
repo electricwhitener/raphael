@@ -209,10 +209,34 @@ def cpp_name(text):
     return head.replace("std::", "") + "<" + ", ".join(cpp_name(a) for a in kept) + ">"
 
 
+printers = {"loaded": False}
+
+
+def load_std_printers():
+    """libstdc++'s pretty-printers, from the gcc beside this gdb (share/gcc-*/python), for a gdb that
+    doesn't load them by itself (Windows' does not)."""
+    printers["loaded"] = True
+    import glob
+    import sys
+    share = os.path.dirname(os.path.dirname(gdb.PYTHONDIR))  # …/share/gdb/python → …/share
+    for folder in sorted(glob.glob(os.path.join(share, "gcc-*", "python")), reverse=True):
+        try:
+            sys.path.insert(0, folder)
+            from libstdcxx.v6.printers import register_libstdcxx_printers
+            register_libstdcxx_printers(None)
+            return
+        except (ImportError, RuntimeError, gdb.error):
+            continue
+
+
 def printer_of(v):
     """gdb's pretty-printer for a library type (libstdc++'s), or None."""
     try:
-        return gdb.default_visualizer(v)
+        printer = gdb.default_visualizer(v)
+        if printer is None and not printers["loaded"] and str(v.type.strip_typedefs()).startswith("std::"):
+            load_std_printers()
+            printer = gdb.default_visualizer(v)
+        return printer
     except (gdb.error, RuntimeError, TypeError):
         return None
 
@@ -379,11 +403,7 @@ class Step:
     def struct_at(self, address, t):
         name = type_name(t)
         if CPP and not students_type(t) and name.startswith("std::"):  # a library exception: its real type and message
-            try:
-                vptr = int(gdb.Value(address).cast(gdb.lookup_type("long").pointer()).dereference())
-                real = symbol_at(vptr, "vtable for ")
-            except (gdb.error, gdb.MemoryError, RuntimeError):
-                real = None
+            real = type_of_object(address)
             if real:
                 message = exception_message(address, real)
                 return {"p": cpp_name(real) + (": " + json.dumps(message) if message is not None else "")}
@@ -796,15 +816,29 @@ MESSAGE_EXCEPTIONS = {"logic_error", "domain_error", "invalid_argument", "length
                       "runtime_error", "range_error", "overflow_error", "underflow_error", "system_error"}
 
 
-def symbol_at(address, prefix):
-    """The name of the symbol at an address, without prefix: 'typeinfo for std::runtime_error@GLIBCXX…' → 'std::runtime_error'."""
+def read_pointer(address):
+    return int(gdb.Value(address).cast(gdb.lookup_type("void").pointer().pointer()).dereference())
+
+
+def type_from_typeinfo(type_info):
+    """A C++ type's name from its type_info object: the C++ ABI gcc uses everywhere puts its
+    mangled name ("St12out_of_range") just after its _vptr, and gdb demangles it. No symbols needed."""
     try:
-        said = gdb.execute("info symbol %d" % address, to_string=True)
-    except gdb.error:
+        size = gdb.lookup_type("void").pointer().sizeof
+        mangled = gdb.Value(type_info + size).cast(gdb.lookup_type("char").pointer().pointer()).dereference().string()
+        said = gdb.execute("demangle _ZTS" + mangled.lstrip("*"), to_string=True).strip()
+    except (gdb.error, gdb.MemoryError, RuntimeError, UnicodeDecodeError):
         return None
-    if not said.startswith(prefix):
+    return said.replace("typeinfo name for ", "", 1) if said.startswith("typeinfo name for ") else None
+
+
+def type_of_object(address):
+    """The real type of an object with virtual methods: its vtable holds its type_info one slot before the first method."""
+    try:
+        vptr = read_pointer(address)
+        return type_from_typeinfo(read_pointer(vptr - gdb.lookup_type("void").pointer().sizeof))
+    except (gdb.error, gdb.MemoryError, RuntimeError):
         return None
-    return said[len(prefix):].split(" in section")[0].split("@")[0].split(" + ")[0].strip()
 
 
 def exception_message(address, name):
@@ -813,9 +847,18 @@ def exception_message(address, name):
         return None
     try:
         pointer = gdb.Value(address + gdb.lookup_type("void").pointer().sizeof).cast(gdb.lookup_type("char").pointer().pointer())
-        return pointer.dereference().string(errors="replace", length=-1)[:200]
+        return plain_message(pointer.dereference().string(errors="replace", length=-1)[:200])
     except (gdb.error, gdb.MemoryError, RuntimeError, UnicodeDecodeError):
         return None
+
+
+RANGE_CHECK = re.compile(r"\w+::_M_range_check: __n \(which is (\d+)\) >= this->size\(\) \(which is (\d+)\)")
+
+
+def plain_message(text):
+    """The library's own words, where they're its insides: at(5) on a vector of 3 says so plainly."""
+    m = RANGE_CHECK.match(text)
+    return "index %s, but the size is %s" % (m.group(1), m.group(2)) if m else text
 
 
 def throw_arguments():
@@ -835,7 +878,7 @@ def note_throw():
     kind, message = "exception", None
     try:
         exception, type_info = throw_arguments()
-        name = symbol_at(type_info, "typeinfo for ")
+        name = type_from_typeinfo(type_info)
         if name:
             kind = cpp_name(name)
             message = exception_message(exception, name)
