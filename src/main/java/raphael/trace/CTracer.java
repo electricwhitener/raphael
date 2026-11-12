@@ -513,13 +513,40 @@ public class CTracer implements Tracer {
             return new PrimitiveValue((String) v.get("p"));
         }
 
+        // The fields the line that just ran changed, on objects that were there before it: what Java's
+        // tracer learns from field watchpoints, worked out here by comparing the two steps. (A new
+        // object's first values are the step that made it, not writes.)
+        private static List<raphael.model.FieldWrite> writes(Step before, Step now) {
+            if (before.frames().isEmpty()) {
+                return List.of();
+            }
+            FrameSnapshot ran = before.frames().get(0);
+            List<raphael.model.FieldWrite> found = new ArrayList<>();
+            for (HeapObject object : now.heap().values()) {
+                HeapObject was = before.heap().get(object.getId());
+                if (!(object instanceof ObjectNode) || !(was instanceof ObjectNode) || !object.getTypeName().equals(was.getTypeName())) {
+                    continue;
+                }
+                for (Map.Entry<String, Value> field : ((ObjectNode) object).getFields().entrySet()) {
+                    Value old = ((ObjectNode) was).getField(field.getKey());
+                    if (old != null && !old.equals(field.getValue())) {
+                        found.add(new raphael.model.FieldWrite(object.getId(), object.getTypeName(), field.getKey(), field.getValue(),
+                                ran.getMethodName(), ran.getLine()));
+                    }
+                }
+            }
+            return found;
+        }
+
         // The whole run. printed: everything the program wrote, to turn each step's byte count into characters.
         Trace trace(byte[] printed, List<raphael.model.TypedLine> typed) {
             String output = new String(printed, StandardCharsets.UTF_8);
             List<Snapshot> snapshots = new ArrayList<>();
-            for (Step step : recorded) {
+            for (int i = 0; i < recorded.size(); i++) {
+                Step step = recorded.get(i);
                 int bytes = Math.min(step.outputBytes(), printed.length);
-                snapshots.add(step.snapshot(new String(printed, 0, bytes, StandardCharsets.UTF_8).length()));
+                List<raphael.model.FieldWrite> writes = i == 0 ? List.of() : writes(recorded.get(i - 1), step);
+                snapshots.add(step.snapshot(new String(printed, 0, bytes, StandardCharsets.UTF_8).length(), writes));
             }
             return new Trace(snapshots, output, endReason, endMessage, typed);
         }
@@ -575,7 +602,11 @@ public class CTracer implements Tracer {
         }
 
         Snapshot snapshot(int outputLength) {
-            return new Snapshot(frames, heap, globals, outputLength, exception, thrown, files, exits, List.of(), 0);
+            return snapshot(outputLength, List.of());
+        }
+
+        Snapshot snapshot(int outputLength, List<raphael.model.FieldWrite> writes) {
+            return new Snapshot(frames, heap, globals, outputLength, exception, thrown, files, exits, writes, 0);
         }
     }
 }

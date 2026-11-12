@@ -147,10 +147,17 @@ def plain_message(text):
 
 
 def read_pointer(address):
+    if not 0 < address < (1 << 64):
+        raise MemoryError(address)  # 0, or what a bad pointer minus 8 gives: nothing to read
     e = err()
-    value = Run.process.ReadPointerFromMemory(address, e)
+    try:
+        value = Run.process.ReadPointerFromMemory(address, e)
+    except OverflowError:
+        raise MemoryError(address)
     if not e.Success():
         raise MemoryError(address)
+    if arm64():
+        value &= 0x0000FFFFFFFFFFFF  # Apple's ARM chips may sign a pointer in its top bits: the address is below them
     return value
 
 
@@ -995,7 +1002,12 @@ def run(debugger):
             again = last_line_of.get(cfa) == (rel, line) and not caught
             if again and exits:
                 landing[0] = step_message(thread)
-            if not closing and not opening and not again and not written_by_compiler(fn, text):
+            # Apple's clang builds a constructor (and a destructor) as two functions on the same
+            # line, the outer one only calling the inner one: the inner one isn't another step.
+            caller = thread.GetFrameAtIndex(1) if thread.GetNumFrames() > 1 else None
+            inner_half = (CPP and caller is not None and fn_name(caller) == fn
+                          and caller.GetLineEntry().GetLine() == line and frame_file(caller) == rel)
+            if not closing and not opening and not again and not written_by_compiler(fn, text) and not inner_half:
                 last_line_of[cfa] = (rel, line)
                 for deeper in [c for c in last_line_of if c < cfa]:  # the stack grows down: those calls are over
                     del last_line_of[deeper]

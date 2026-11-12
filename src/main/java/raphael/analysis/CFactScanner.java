@@ -303,10 +303,40 @@ public final class CFactScanner {
         }
         facts.add(new CodeFacts.MethodFact(file, className, name, tokens.get(t).line(), tokens.get(bodyEnd).line(),
                 recursive, returnsValue, parameters));
+        if (cpp && !className.equals(unit) && parameters.size() == 1 && !constructor) {
+            setter(className, name, parameters.get(0), open, bodyEnd);
+        }
         return bodyEnd;
     }
 
     // ---- C++ ----
+
+    // A setter: a method of one parameter that sets one of its class's fields from it
+    // (balance += amount, this->side = s), and the line of an if before it that can refuse.
+    private void setter(String className, String method, String parameter, int open, int bodyEnd) {
+        java.util.Set<String> fields = new java.util.HashSet<>();
+        for (CodeFacts.FieldFact field : facts.fields()) {
+            if (field.className().equals(className)) {
+                fields.add(field.name());
+            }
+        }
+        int guard = -1;
+        for (int k = open + 1; k < bodyEnd; k++) {
+            if (text(k).equals("if") && guard < 0) {
+                guard = tokens.get(k).line();
+            }
+            boolean member = fields.contains(text(k)) && !text(k - 1).equals(".") && (!text(k - 1).equals("->") || text(k - 2).equals("this"));
+            if (member && Set.of("=", "+=", "-=").contains(text(k + 1)) || member && text(k + 1).equals("+") && text(k + 2).equals("=")
+                    || member && text(k + 1).equals("-") && text(k + 2).equals("=")) {
+                for (int j = k + 2; j < bodyEnd && !text(j).equals(";"); j++) {
+                    if (text(j).equals(parameter)) {
+                        facts.add(new CodeFacts.SetterFact(className, method, text(k), guard));
+                        return;
+                    }
+                }
+            }
+        }
+    }
 
     // A C++ construct at the top level at t: a template's <…>, a namespace's opening, a class, or
     // a method defined outside its class (double Square::area() {…}). Returns where to go on, or t if none.
