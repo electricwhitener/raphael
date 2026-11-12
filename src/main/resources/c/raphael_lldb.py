@@ -866,6 +866,7 @@ def step_message(thread):
 
 
 thrown = {}  # C++: the exception on its way from a throw to its catch
+last_step = {}  # the place of the last step sent: line, file, and the student's calls then (the throw's, if lldb missed it)
 exception_breakpoints = {}  # breakpoint id → "throw" or "catch"
 
 
@@ -903,9 +904,22 @@ def at_exception_breakpoint(thread):
     kind = exception_breakpoints.get(thread.GetStopReasonDataAtIndex(0))
     if kind == "throw":
         note_throw(thread)
-    elif kind == "catch" and thrown:
-        thrown["caught"] = True  # the next line of the student's code is the catch's
+    elif kind == "catch":
+        if not thrown and last_step:
+            # On a Mac lldb steps over __cxa_throw without stopping at its breakpoint: the throw was
+            # the last step's line, and what was thrown is read when the catch starts (caught_object).
+            thrown.update({"type": None, "message": None, "line": last_step["line"], "file": last_step["file"],
+                           "calls": last_step["calls"]})
+        if thrown:
+            thrown["caught"] = True  # the next line of the student's code is the catch's
     return kind is not None
+
+
+def caught_object(frame):
+    """Just back from __cxa_begin_catch, which returns the caught object: its type and message."""
+    address = frame.FindRegister("x0" if arm64() else "rax").GetValueAsUnsigned()
+    name = type_of_object(address)
+    return (cpp_name(name), exception_message(address, name)) if name else ("exception", None)
 
 
 def body_start(frame):
@@ -1014,11 +1028,14 @@ def run(debugger):
                 watch_return(thread)
                 message = step_message(thread)
                 if caught:  # the first step of the catch: what was thrown, and the calls it left
+                    if thrown.get("type") is None:
+                        thrown["type"], thrown["message"] = caught_object(frame)
                     now = {(c[0], c[1]) for c in student_calls(thread)}
                     message["thrown"] = {"type": thrown["type"], "message": thrown["message"], "line": thrown["line"],
                                          "file": thrown["file"], "catch": line, "catchFile": rel,
                                          "left": [c[0] for c in thrown["calls"] if (c[0], c[1]) not in now]}
                     thrown.clear()
+                last_step.update({"line": line, "file": rel, "calls": student_calls(thread)})
                 send(message)
                 landing[0] = None
                 del exits[:]
