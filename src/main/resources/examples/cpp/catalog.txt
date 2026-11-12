@@ -14,6 +14,7 @@ oop/exceptions | Exceptions | at() throws out_of_range, the catch gets it, and t
 ## The standard library
 stl/vector_sort | vector and sort | A vector grows with push_back; sort puts it in order.
 stl/word_count | Counting with a map | counts[word]++ counts each word, its keys kept in order.
+stl/heap_and_stack | A heap and a stack | priority_queue keeps the biggest on top as a heap; a stack gives back the last pushed.
 
 ## Linked lists
 lists/linked_list | A linked list | new makes each node, delete gives it back.

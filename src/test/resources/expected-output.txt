@@ -1524,3 +1524,7 @@ to 2
 
 ## cpp/trees/bst
 1 3 6 8 10
+
+## cpp/stl/heap_and_stack
+9 3
+5 2

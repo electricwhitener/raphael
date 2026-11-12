@@ -210,6 +210,11 @@ public class SceneBuilder {
         return arrays;
     }
 
+    // Java's PriorityQueue or C++'s std::priority_queue: a heap, kept in an array.
+    private static boolean isPriorityQueue(HeapObject object) {
+        return object.getTypeName().endsWith("PriorityQueue") || object.getTypeName().startsWith("priority_queue<");
+    }
+
     // Which arrays are heaps, learned over the whole run, and how much of each is in the heap
     // at every step: a variable named like a size, else what it was the step before.
     private List<Map<Long, Integer>> learnHeaps(Trace trace, RenderContext context) {
@@ -233,8 +238,11 @@ public class SceneBuilder {
                 }
             }
             for (HeapObject object : snapshot.getHeap().values()) {
-                if (object instanceof ArrayNode && object.getTypeName().endsWith("PriorityQueue")) {
+                if (object instanceof ArrayNode && isPriorityQueue(object)) {
                     context.markHeap(object.getId(), ((ArrayNode) object).getElements().size()); // its array is a heap
+                }
+                if (object instanceof ArrayNode && object.getTypeName().startsWith("stack<")) {
+                    context.markStack(object.getId()); // C++'s std::stack: drawn upright, its top on top
                 }
             }
             for (HeapObject object : snapshot.getHeap().values()) {
@@ -255,7 +263,7 @@ public class SceneBuilder {
                             }
                         }
                     }
-                    if (object.getTypeName().endsWith("PriorityQueue")) {
+                    if (isPriorityQueue(object)) {
                         size = ((ArrayNode) object).getElements().size();
                     }
                     if (size != null) {
