@@ -14,6 +14,10 @@ import java.util.regex.Pattern;
 // and # lines are skipped.
 // A function's "class" is its file's name without the ending (main.c → main), as CTracer names
 // its frames, so the facts and the recorded run name things alike.
+// C++ (scanCpp): also its classes, with their base classes, public and private fields, methods
+// (in the class, or defined outside it as Square::area), abstract methods (= 0), and calls on an
+// object (s->area()) with the type it was declared as, which the Objects view and the OOP
+// concepts read as they read Java's.
 // OOP: encapsulation (the tokens and the position are private; scan() is the one way in); a
 // nested record (Token).
 public final class CFactScanner {
@@ -33,18 +37,29 @@ public final class CFactScanner {
     private final CodeFacts facts;
     private final List<Token> tokens = new ArrayList<>();
     private final java.util.Set<String> structs = new java.util.HashSet<>(); // struct names, and typedef names for structs
+    private final boolean cpp;
 
-    private CFactScanner(CodeFacts facts, String source, String file, String unit) {
+    private CFactScanner(CodeFacts facts, String source, String file, String unit, boolean cpp) {
         this.facts = facts;
         this.source = source;
         this.file = file;
         this.unit = unit;
+        this.cpp = cpp;
     }
 
     // Adds one file's facts. file: its path in the program, or null for the editor's one text;
     // unit: its name without the ending.
     public static void scan(CodeFacts facts, String source, String file, String unit) {
-        CFactScanner scanner = new CFactScanner(facts, source, file, unit);
+        scan(facts, source, file, unit, false);
+    }
+
+    // The same for a C++ file: its classes too.
+    public static void scanCpp(CodeFacts facts, String source, String file, String unit) {
+        scan(facts, source, file, unit, true);
+    }
+
+    private static void scan(CodeFacts facts, String source, String file, String unit, boolean cpp) {
+        CFactScanner scanner = new CFactScanner(facts, source, file, unit, cpp);
         scanner.tokenize();
         scanner.functions();
         scanner.momentComments();
@@ -109,7 +124,7 @@ public final class CFactScanner {
                 while (i < n && (Character.isLetterOrDigit(source.charAt(i)) || source.charAt(i) == '.')) {
                     i++;
                 }
-            } else if (source.startsWith("->", i)) {
+            } else if (source.startsWith("->", i) || source.startsWith("::", i)) {
                 i += 2;
             } else {
                 i++;
@@ -153,6 +168,13 @@ public final class CFactScanner {
         int t = 0;
         while (t < tokens.size()) {
             String s = text(t);
+            if (cpp) {
+                int next = cppTopLevel(t);
+                if (next > t) {
+                    t = next;
+                    continue;
+                }
+            }
             if (s.equals("typedef") && (text(t + 1).equals("struct") || text(t + 1).equals("union")) && isName(t + 2)
                     && isName(t + 3) && text(t + 4).equals(";")) {
                 structs.add(text(t + 2)); // typedef struct Node Node;
@@ -185,7 +207,7 @@ public final class CFactScanner {
             if (isName(t) && text(t + 1).equals("(") && !NOT_CALLS.contains(s)) {
                 int close = closing(t + 1);
                 if (text(close + 1).equals("{")) {
-                    t = function(t, close) + 1;
+                    t = function(t, close, unit, close + 1) + 1;
                     continue;
                 }
                 t = close + 1;
@@ -195,17 +217,23 @@ public final class CFactScanner {
         }
     }
 
-    // A function definition: its name at t, its parameters' ")" at close. Returns its body's "}".
-    private int function(int t, int close) {
-        String name = text(t);
-        int bodyEnd = closing(close + 1);
+    // A function definition: its name at t, its parameters' ")" at close, its body's "{" at open,
+    // in className (C: the file's unit; C++: a method's class). Returns its body's "}".
+    private int function(int t, int close, String className, int open) {
+        String name = text(t - 1).equals("~") ? "~" + text(t) : text(t);
+        int bodyEnd = closing(open);
         List<String> types = new ArrayList<>(); // what comes before the name, back to the last declaration's end
-        for (int k = t - 1; k >= 0 && !Set.of(";", "}", "{").contains(text(k)); k--) {
-            if (!SPECIFIERS.contains(text(k))) {
+        int typeEnd = t - (text(t - 1).equals("~") ? 1 : 0);
+        if (text(typeEnd - 1).equals("::")) {
+            typeEnd -= 2; // Square::area: the return type is before Square
+        }
+        for (int k = typeEnd - 1; k >= 0 && !Set.of(";", "}", "{", ":").contains(text(k)); k--) {
+            if (!SPECIFIERS.contains(text(k)) && !Set.of("virtual", "explicit", "constexpr", "friend").contains(text(k))) {
                 types.add(0, text(k));
             }
         }
-        boolean returnsValue = !(types.size() == 1 && types.get(0).equals("void"));
+        boolean constructor = name.equals(className) || name.startsWith("~");
+        boolean returnsValue = !constructor && !(types.size() == 1 && types.get(0).equals("void"));
         List<String> parameters = new ArrayList<>();
         for (List<Integer> part : splitAtCommas(t + 2, close - 1)) {
             String last = null;
@@ -223,7 +251,13 @@ public final class CFactScanner {
         }
         boolean recursive = false;
         int callsBefore = facts.calls().size();
-        for (int k = close + 2; k < bodyEnd; k++) {
+        for (int k = open + 1; k < bodyEnd; k++) {
+            if (cpp && isName(k) && text(k + 1).equals("(") && (text(k - 1).equals(".") || text(k - 1).equals("->"))
+                    && isName(k - 2)) { // s->area(): a call on an object, with the type s was declared as
+                String receiver = text(k - 2);
+                facts.add(new CodeFacts.CallFact(file, tokens.get(k).line(), text(k), declaredType(receiver, t, k), null, receiver));
+                continue;
+            }
             if (isName(k) && text(k + 1).equals("(") && !NOT_CALLS.contains(text(k))
                     && !text(k - 1).equals(".") && !text(k - 1).equals("->")) {
                 int end = closing(k + 1);
@@ -242,7 +276,7 @@ public final class CFactScanner {
                 }
             }
         }
-        for (int k = close + 2; k < bodyEnd; k++) {
+        for (int k = open + 1; k < bodyEnd; k++) {
             if (text(k).equals("return")) {
                 int end = k + 1;
                 while (end < bodyEnd && !text(end).equals(";")) {
@@ -250,12 +284,174 @@ public final class CFactScanner {
                 }
                 String expression = end > k + 1 ? slice(k + 1, end - 1) : null;
                 boolean calls = expression != null && Pattern.compile("\\b" + Pattern.quote(name) + "\\s*\\(").matcher(expression).find();
-                facts.add(new CodeFacts.ReturnFact(file, tokens.get(k).line(), unit, name, expression, calls));
+                facts.add(new CodeFacts.ReturnFact(file, tokens.get(k).line(), className, name, expression, calls));
             }
         }
-        facts.add(new CodeFacts.MethodFact(file, unit, name, tokens.get(t).line(), tokens.get(bodyEnd).line(),
+        facts.add(new CodeFacts.MethodFact(file, className, name, tokens.get(t).line(), tokens.get(bodyEnd).line(),
                 recursive, returnsValue, parameters));
         return bodyEnd;
+    }
+
+    // ---- C++ ----
+
+    // A C++ construct at the top level at t: a template's <…>, a namespace's opening, a class, or
+    // a method defined outside its class (double Square::area() {…}). Returns where to go on, or t if none.
+    private int cppTopLevel(int t) {
+        String s = text(t);
+        if (s.equals("template") && text(t + 1).equals("<")) {
+            int depth = 0;
+            for (int k = t + 1; k < tokens.size(); k++) {
+                depth += text(k).equals("<") ? 1 : text(k).equals(">") ? -1 : 0;
+                if (depth == 0) {
+                    return k + 1;
+                }
+            }
+            return tokens.size();
+        }
+        if (s.equals("namespace") && (text(t + 1).equals("{") || text(t + 2).equals("{"))) {
+            return text(t + 1).equals("{") ? t + 2 : t + 3; // its contents are read as if at the top level
+        }
+        if ((s.equals("class") || s.equals("struct")) && isName(t + 1)) {
+            int k = t + 2;
+            if (text(k).equals("final")) {
+                k++;
+            }
+            if (text(k).equals("{") || text(k).equals(":")) {
+                return classBody(text(t + 1), t + 2, s.equals("class")) + 1;
+            }
+        }
+        if (isName(t) && text(t + 1).equals("::")) {
+            int nameAt = text(t + 2).equals("~") ? t + 3 : t + 2;
+            if (isName(nameAt) && text(nameAt + 1).equals("(")) {
+                int close = closing(nameAt + 1);
+                int open = bodyOpen(close);
+                if (open > 0) {
+                    return function(nameAt, close, text(t), open) + 1;
+                }
+            }
+        }
+        return t;
+    }
+
+    // A class: its bases after ":" (from `from`), then its members. privateFirst: a class's members
+    // are private until a public:, a struct's public. Returns its "}".
+    private int classBody(String name, int from, boolean privateFirst) {
+        structs.add(name);
+        int open = from;
+        List<String> bases = new ArrayList<>();
+        while (open < tokens.size() && !text(open).equals("{")) {
+            String s = text(open);
+            if (isName(open) && !Set.of("public", "private", "protected", "virtual", "final").contains(s)
+                    && !text(open + 1).equals("::")) { // shapes::Shape: the last part is the class
+                bases.add(s);
+            }
+            if (s.equals("<")) { // a template base's arguments
+                int depth = 0;
+                for (; open < tokens.size(); open++) {
+                    depth += text(open).equals("<") ? 1 : text(open).equals(">") ? -1 : 0;
+                    if (depth == 0) {
+                        break;
+                    }
+                }
+            }
+            open++;
+        }
+        int close = closing(open);
+        boolean isPrivate = privateFirst;
+        boolean isAbstract = false;
+        int start = open + 1;
+        int k = open + 1;
+        while (k < close) {
+            String s = text(k);
+            if (Set.of("public", "private", "protected").contains(s) && text(k + 1).equals(":")) {
+                isPrivate = !s.equals("public");
+                k += 2;
+                start = k;
+                continue;
+            }
+            if (Set.of("friend", "using", "typedef", "enum", "class", "struct", "template").contains(s) && k == start) {
+                int end = k;
+                while (end < close && !text(end).equals(";")) {
+                    end = text(end).equals("{") ? closing(end) + 1 : end + 1;
+                }
+                k = end + 1;
+                start = k;
+                continue;
+            }
+            int nameAt = s.equals("~") ? k + 1 : k;
+            if (isName(nameAt) && text(nameAt + 1).equals("(") && !text(nameAt).equals("operator")) {
+                int paramsClose = closing(nameAt + 1);
+                int bodyAt = bodyOpen(paramsClose);
+                if (bodyAt > 0) { // a method with its body here
+                    k = function(nameAt, paramsClose, name, bodyAt) + 1;
+                } else { // declared here (= 0: abstract); defined outside, or nowhere
+                    int end = paramsClose + 1;
+                    boolean pure = false;
+                    while (end < close && !text(end).equals(";")) {
+                        pure |= text(end).equals("=") && text(end + 1).equals("0");
+                        end++;
+                    }
+                    if (pure) {
+                        facts.addAbstractMethod(name, text(nameAt));
+                        isAbstract = true;
+                    }
+                    k = end + 1;
+                }
+                start = k;
+                continue;
+            }
+            if (s.equals(";")) {
+                field(name, start, k - 1, isPrivate);
+                k++;
+                start = k;
+                continue;
+            }
+            k = s.equals("{") ? closing(k) + 1 : k + 1;
+        }
+        facts.addClass(name, bases.isEmpty() ? null : bases.get(0), bases.size() > 1 ? bases.subList(1, bases.size()) : List.of(),
+                isAbstract, false);
+        return close;
+    }
+
+    // After a function's ")" at close: its body's "{" past any const, override, noexcept or a
+    // constructor's initialisers (: side(s), next{nullptr}); -1 if it's only declared (";").
+    private int bodyOpen(int close) {
+        boolean initialisers = false;
+        for (int k = close + 1; k < tokens.size(); k++) {
+            String s = text(k);
+            if (s.equals(";")) {
+                return -1;
+            }
+            if (s.equals(":")) {
+                initialisers = true;
+            } else if (s.equals("(")) {
+                k = closing(k);
+            } else if (s.equals("{")) {
+                if (initialisers && isName(k - 1) && !text(k - 1).equals("noexcept")) {
+                    k = closing(k); // next{nullptr}: an initialiser, not the body
+                    continue;
+                }
+                return k;
+            }
+        }
+        return -1;
+    }
+
+    // The type a variable was declared with, looking back from k to the function's name at from
+    // (its parameters, then its body): "Shape" for Shape *s or Shape &s; null if not found.
+    private String declaredType(String variable, int from, int k) {
+        for (int j = k - 1; j > from; j--) {
+            if (text(j).equals(variable) && !text(j + 1).equals("(") && !text(j - 1).equals(".") && !text(j - 1).equals("->")) {
+                int type = j - 1;
+                while (type > from && (text(type).equals("*") || text(type).equals("&") || text(type).equals("const"))) {
+                    type--;
+                }
+                if (isName(type) && !Set.of("return", "new", "delete").contains(text(type))) {
+                    return text(type);
+                }
+            }
+        }
+        return null;
     }
 
     // A struct's fields, as FieldFacts of a "class" named after it: struct Node *next is a field
@@ -280,6 +476,10 @@ public final class CFactScanner {
 
     // One declaration inside a struct, from `from` to `to`: int x, y; struct Node *next; char name[8];
     private void field(String struct, int from, int to) {
+        field(struct, from, to, false);
+    }
+
+    private void field(String struct, int from, int to, boolean isPrivate) {
         List<List<Integer>> parts = splitAtCommas(from, to);
         if (parts.isEmpty() || parts.get(0).isEmpty()) {
             return;
@@ -333,7 +533,8 @@ public final class CFactScanner {
                 continue;
             }
             String type = structType ? base : base + (pointer ? " *" : "");
-            facts.add(new CodeFacts.FieldFact(struct, fieldName, array ? type + "[]" : type, false, false,
+            boolean isStatic = text(first.get(0)).equals("static");
+            facts.add(new CodeFacts.FieldFact(struct, fieldName, (array ? type + "[]" : type).replace(" :: ", "::"), isPrivate, isStatic,
                     tokens.get(part.isEmpty() ? from : part.get(0)).line(), false));
         }
     }

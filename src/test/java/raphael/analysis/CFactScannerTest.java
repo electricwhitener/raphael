@@ -134,4 +134,50 @@ class CFactScannerTest {
         assertTrue(facts.readsInput());
         assertTrue(facts.usesFiles());
     }
+
+    // C++: classes with their bases, private and public fields, methods in and outside the class,
+    // abstract methods, and a call on an object with the type it was declared as.
+    @Test
+    void cppClassesTheirMembersAndCalls() {
+        CodeFacts facts = new CodeFacts();
+        CFactScanner.scanCpp(facts, """
+                #include <string>
+                namespace shapes {
+                class Shape {
+                public:
+                    virtual double area() const = 0;
+                    virtual ~Shape() {}
+                };
+                }
+                class Square : public shapes::Shape {
+                    double side;
+                public:
+                    static int made;
+                    Square(double s) : side(s) {}
+                    double area() const override;
+                };
+                double Square::area() const {
+                    return side * side;
+                }
+                template <typename T>
+                struct Box { T value; };
+                int main() {
+                    shapes::Shape *s = new Square(2);
+                    double a = s->area();
+                    return 0;
+                }
+                """, null, "main");
+        assertEquals("Shape", facts.superclasses().get("Square"));
+        assertTrue(facts.isAbstract("Shape"));
+        assertEquals(List.of("area"), facts.abstractMethods("Shape"));
+        assertTrue(facts.fields().stream().anyMatch(f -> f.className().equals("Square") && f.name().equals("side") && f.isPrivate()));
+        assertTrue(facts.fields().stream().anyMatch(f -> f.className().equals("Square") && f.name().equals("made") && f.isStatic() && !f.isPrivate()));
+        assertTrue(facts.fields().stream().anyMatch(f -> f.className().equals("Box") && f.name().equals("value") && !f.isPrivate()));
+        List<String> methods = facts.methods().stream().map(m -> m.className() + "." + m.name()).toList();
+        assertEquals(List.of("Shape.~Shape", "Square.Square", "Square.area", "main.main"), methods);
+        CodeFacts.MethodFact area = facts.methods().get(2);
+        assertTrue(area.returnsValue());
+        assertEquals(16, area.firstLine()); // defined outside the class, at double Square::area()
+        assertTrue(facts.calls().stream().anyMatch(c -> c.method().equals("area") && "Shape".equals(c.declaredType()) && "s".equals(c.receiver())));
+    }
 }

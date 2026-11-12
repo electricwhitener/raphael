@@ -71,7 +71,7 @@ public class CCompiler {
         Path dir = tempFolder();
         write(dir.resolve("src").resolve(single), code);
         raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
-        raphael.analysis.CFactScanner.scan(facts, code, null, "main"); // one text: its frames have no file name, and its unit is main.c's
+        scan(facts, code, null, "main"); // one text: its frames have no file name, and its unit is main.c's
         return build(dir, List.of(single), Map.of(), facts);
     }
 
@@ -94,9 +94,17 @@ public class CCompiler {
                 sources.add(file.path());
             }
             String name = file.path().substring(file.path().lastIndexOf('/') + 1);
-            raphael.analysis.CFactScanner.scan(facts, file.text(), file.path(), name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name);
+            scan(facts, file.text(), file.path(), name.contains(".") ? name.substring(0, name.lastIndexOf('.')) : name);
         }
         return build(dir, sources, sourceFiles, facts);
+    }
+
+    private void scan(raphael.analysis.CodeFacts facts, String code, String file, String unit) {
+        if (cpp) {
+            raphael.analysis.CFactScanner.scanCpp(facts, code, file, unit);
+        } else {
+            raphael.analysis.CFactScanner.scan(facts, code, file, unit);
+        }
     }
 
     private CompileResult build(Path dir, List<String> sources, Map<String, String> sourceFiles,
