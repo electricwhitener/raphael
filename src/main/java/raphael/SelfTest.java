@@ -52,11 +52,10 @@ public final class SelfTest {
         }
     }
 
-    // The C example, then the C++ one: compiled, recorded, and printing what they should. (C++ on
-    // a Mac waits for lldb to read it, so there it's only reported.)
+    // The C example, then the C++ one: compiled, recorded, and printing what they should.
     private static int c(boolean needed) throws Exception {
         int c = compiled("c", "/examples/c/lists/linked_list.c", "40 30 20 10", needed);
-        return c != 0 ? c : compiled("cpp", "/examples/cpp/lists/linked_list.cpp", "1 2 3", needed && !raphael.toolchain.Toolchains.MAC);
+        return c != 0 ? c : compiled("cpp", "/examples/cpp/lists/linked_list.cpp", "1 2 3", needed);
     }
 
     private static int compiled(String id, String example, String prints, boolean needed) throws Exception {

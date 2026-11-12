@@ -60,6 +60,8 @@
                     <!-- The tests keep their settings apart from the user's own Raphael's (App.SETTINGS) -->
                     <systemPropertyVariables>
                         <raphael.test>true</raphael.test>
+                        <!-- mvn test -Draphael.debugger=lldb: C and C++ through lldb, as on a Mac -->
+                        <raphael.debugger>${raphael.debugger}</raphael.debugger>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

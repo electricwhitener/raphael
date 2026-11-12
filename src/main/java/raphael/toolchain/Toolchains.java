@@ -14,6 +14,7 @@ public final class Toolchains {
 
     public static final boolean WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows");
     public static final boolean MAC = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("mac");
+    public static final boolean USE_LLDB = MAC || "lldb".equals(System.getProperty("raphael.debugger"));
 
     private Toolchains() {
     }
@@ -33,6 +34,9 @@ public final class Toolchains {
     // For a process that runs one of these tools: the bundled toolchain's bin first on its PATH,
     // so gcc finds its assembler and linker, and gdb its DLLs and Python, there.
     public static void prepare(java.util.Map<String, String> environment) {
+        // Never online: Ubuntu sets DEBUGINFOD_URLS, and lldb then waits half a minute trying to
+        // download debug information for the system's libraries before it starts the program.
+        environment.remove("DEBUGINFOD_URLS");
         Path bin = bundled();
         if (bin != null) {
             String key = environment.keySet().stream().filter(k -> k.equalsIgnoreCase("PATH")).findFirst().orElse("PATH");
@@ -66,8 +70,9 @@ public final class Toolchains {
     private static Boolean debuggerHasPython; // asked once per run of Raphael
 
     // The debugger Raphael traces C with here: lldb on a Mac (Apple's tools have no gdb), gdb elsewhere.
+    // -Draphael.debugger=lldb uses lldb elsewhere too, to work on the Mac's script without a Mac.
     public static String debugger() {
-        return MAC ? "lldb" : "gdb";
+        return USE_LLDB ? "lldb" : "gdb";
     }
 
     // Whether that debugger is there and can run Python, which Raphael's C tracer is written in.
@@ -76,7 +81,7 @@ public final class Toolchains {
             debuggerHasPython = false;
             Path debugger = find(debugger());
             if (debugger != null) {
-                java.util.List<String> command = MAC
+                java.util.List<String> command = USE_LLDB
                         ? java.util.List.of(debugger.toString(), "--batch", "--no-lldbinit", "-o", "script print('raphael' + '-ok')")
                         : java.util.List.of(debugger.toString(), "-q", "-batch", "-nx", "-ex", "python print('raphael' + '-ok')");
                 try {

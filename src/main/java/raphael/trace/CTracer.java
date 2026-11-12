@@ -155,7 +155,7 @@ public class CTracer implements Tracer {
             Files.deleteIfExists(stopFile);
 
             String exe = build.resolve(program.mainClass()).toString();
-            List<String> command = Toolchains.MAC
+            List<String> command = Toolchains.USE_LLDB
                     ? List.of(debugger.toString(), "--batch", "--no-lldbinit", "-o", "command script import \"" + script + "\"")
                     : List.of(debugger.toString(), "-q", "-batch", "-nx", "-x", script.toString(), exe);
             ProcessBuilder builder = new ProcessBuilder(command).directory(folder.path().toFile());

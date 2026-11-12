@@ -91,9 +91,6 @@ public class CppLanguage extends Language {
     // Null when g++ and a debugger with Python are here (on a Mac, Apple's clang++, which answers to g++, and lldb).
     @Override
     public String cantRun() {
-        if (Toolchains.MAC) { // until raphael_lldb.py reads C++ (Stage 15, step 5)
-            return "C++ on a Mac comes with the next update (lldb, the Mac's debugger, is being taught C++).";
-        }
         if (Toolchains.find("g++") == null) {
             return Toolchains.howToInstall("g++ to compile C++");
         }

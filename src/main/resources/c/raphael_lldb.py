@@ -1,12 +1,16 @@
-# Raphael's C tracer for macOS, run inside lldb (Apple's debugger; macOS has no gdb):
+# Raphael's C and C++ tracer for macOS, run inside lldb (Apple's debugger; macOS has no gdb):
 #   RAPHAEL_EXE=program lldb --batch --no-lldbinit -o "command script import raphael_lldb.py"
 # It does what raphael_gdb.py does, with lldb's Python API, and prints the same JSON lines
 # (see raphael_gdb.py for the settings and the lines), so CTracer reads either one.
 # lldb has no FinishBreakpoint: a call's return is caught by a breakpoint at its return address,
 # where the value is read from the register a function returns it in.
+# C++ as raphael_gdb.py reads it: classes with their bases' fields inside, objects as their real
+# class, references as what they name, the standard containers through lldb's formatters, and a
+# throw and its catch through exception breakpoints.
 import bisect
 import json
 import os
+import re
 import struct
 
 import lldb
@@ -22,6 +26,8 @@ MAX_OBJECTS = int(os.environ.get("RAPHAEL_MAX_OBJECTS", "300"))
 MAX_CELLS = int(os.environ.get("RAPHAEL_MAX_CELLS", "64"))
 MAX_FILES, MAX_FILE_BYTES = 20, 20000
 UNSET = 0xBE
+# A C++ program (its files end .cpp, .cc or .cxx): classes are named as C++ writes them, "Dog", not "struct Dog".
+CPP = any(name.endswith((".cpp", ".cc", ".cxx")) for _, _, names in os.walk(SRC) for name in names)
 
 out = os.fdopen(os.dup(1), "w", buffering=1, encoding="utf-8")
 
@@ -31,6 +37,7 @@ def send(message):
 
 
 class Run:
+    debugger = None
     target = None
     process = None
 
@@ -63,6 +70,129 @@ def student_file(spec):
 
 def frame_file(frame):
     return student_file(frame.GetLineEntry().GetFileSpec())
+
+
+def fn_name(frame):
+    """A function's name as gdb gives it: Square::area for lldb's "Square::area() const", main for main."""
+    name = frame.GetFunctionName() or "?"
+    depth = 0
+    for i, c in enumerate(name):
+        depth += 1 if c == "<" else -1 if c == ">" else 0
+        if c == "(" and depth == 0 and not name[:i].endswith("operator"):
+            return name[:i]
+    return name
+
+
+INITIALISERS = re.compile(r"\)\s*:(?!:)")  # "Square(double s) : side(s)": a constructor's initialiser list
+
+
+def opens_only(text):
+    """Whether a function's first line only opens it ("int main(void) {"), with no code: not a
+    one-line function, nor a constructor's initialiser list."""
+    body = text.split("{", 1)[1] if "{" in text else ""
+    return body.strip() in ("", "}") and not INITIALISERS.search(text)
+
+
+def written_by_compiler(fn, text):
+    """A member C++ writes by itself (a constructor, destructor or copy nobody wrote): it's put on
+    the class's own line, "class Shape {", where its own name isn't written."""
+    if not CPP or "::" not in fn or re.match(r"\s*(class|struct)\b", text) is None:
+        return False
+    own = fn.split("::")[-1]
+    return re.search(r"(?<![~\w])" + re.escape(own) + r"\s*\(", text) is None
+
+
+def split_arguments(text):
+    parts, depth, start = [], 0, 0
+    for i, c in enumerate(text):
+        if c == "<":
+            depth += 1
+        elif c == ">":
+            depth -= 1
+        elif c == "," and depth == 0:
+            parts.append(text[start:i].strip())
+            start = i + 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+HIDDEN_ARGUMENTS = ("std::allocator<", "std::less<", "std::hash<", "std::equal_to<", "std::char_traits<",
+                    "std::greater<", "std::deque<", "std::vector<")
+
+
+def cpp_name(text):
+    """A library type as a student writes it: std::vector<int, std::allocator<int> > → vector<int>."""
+    text = text.replace("std::__cxx11::", "std::").replace("std::__1::", "std::").replace("std::__debug::", "std::").strip()
+    for long in ("std::basic_string<char, std::char_traits<char>, std::allocator<char> >",
+                 "std::basic_string<char, std::char_traits<char>, std::allocator<char>>"):
+        text = text.replace(long, "std::string")
+    if "<" not in text:
+        return text.replace("std::", "")
+    head, inside = text[:text.index("<")], text[text.index("<") + 1:text.rindex(">")]
+    arguments = split_arguments(inside)
+    kept = [arguments[0]] + [a for a in arguments[1:] if not a.startswith(HIDDEN_ARGUMENTS) or head.endswith("pair")]
+    if head.endswith("map") and len(arguments) > 1:
+        kept = arguments[:2]
+    return head.replace("std::", "") + "<" + ", ".join(cpp_name(a) for a in kept) + ">"
+
+
+MESSAGE_EXCEPTIONS = {"logic_error", "domain_error", "invalid_argument", "length_error", "out_of_range",
+                      "runtime_error", "range_error", "overflow_error", "underflow_error", "system_error"}
+RANGE_CHECK = re.compile(r"\w+::_M_range_check: __n \(which is (\d+)\) >= this->size\(\) \(which is (\d+)\)")
+
+
+def plain_message(text):
+    m = RANGE_CHECK.match(text)
+    return "index %s, but the size is %s" % (m.group(1), m.group(2)) if m else text
+
+
+def read_pointer(address):
+    e = err()
+    value = Run.process.ReadPointerFromMemory(address, e)
+    if not e.Success():
+        raise MemoryError(address)
+    return value
+
+
+def demangle(mangled):
+    said = lldb.SBCommandReturnObject()
+    Run.debugger.GetCommandInterpreter().HandleCommand("language cplusplus demangle " + mangled, said)
+    text = said.GetOutput() or ""
+    return text.split("--->", 1)[1].strip() if "--->" in text else None
+
+
+def type_from_typeinfo(type_info):
+    """A C++ type's name from its type_info object: its mangled name follows its _vptr (the C++ ABI)."""
+    try:
+        e = err()
+        # On Apple's ARM chips libc++ may set the name pointer's top bit (a type whose name isn't unique): masked off.
+        name_at = read_pointer(type_info + Run.target.GetAddressByteSize()) & 0x7FFFFFFFFFFFFFFF
+        mangled = Run.process.ReadCStringFromMemory(name_at, 200, e)
+        if not e.Success() or not mangled:
+            return None
+        said = demangle("_ZTS" + mangled.lstrip("*"))
+    except MemoryError:
+        return None
+    return said.replace("typeinfo name for ", "", 1) if said and said.startswith("typeinfo name for ") else None
+
+
+def type_of_object(address):
+    """An object with virtual methods: its vtable holds its type_info one slot before the first method."""
+    try:
+        return type_from_typeinfo(read_pointer(read_pointer(address) - Run.target.GetAddressByteSize()))
+    except MemoryError:
+        return None
+
+
+def exception_message(address, name):
+    if name.replace("std::", "") not in MESSAGE_EXCEPTIONS:
+        return None
+    try:
+        e = err()
+        text = Run.process.ReadCStringFromMemory(read_pointer(address + Run.target.GetAddressByteSize()), 200, e)
+        return plain_message(text) if e.Success() else None
+    except MemoryError:
+        return None
 
 
 def text_of(rel, line):
@@ -256,6 +386,18 @@ class Step:
         t = v.GetType()
         c = canonical(t)
         tc = c.GetTypeClass()
+        if tc == lldb.eTypeClassReference:  # a reference is another name for the variable it names
+            target = v.Dereference()
+            if not target.IsValid() or target.GetLoadAddress() == lldb.LLDB_INVALID_ADDRESS:
+                named = canonical(c.GetDereferencedType())
+                if CPP and unknown(named):  # const std::exception &e: a class lldb knows nothing of; its address will do
+                    real = type_of_object(v.GetValueAsUnsigned())
+                    if real:
+                        message = exception_message(v.GetValueAsUnsigned(), real)
+                        return {"p": cpp_name(real) + (": " + json.dumps(message) if message is not None else "")}
+                    return {"p": cpp_name(named.GetName() or "?")}
+                target = value_at(v.GetValueAsUnsigned(), c.GetDereferencedType())
+            return self.value(target)
         if tc in (lldb.eTypeClassBuiltin, lldb.eTypeClassPointer, lldb.eTypeClassEnumeration) and unset(v):
             return {"p": "?"}
         if tc == lldb.eTypeClassPointer:
@@ -267,6 +409,16 @@ class Step:
                 pointee = c.GetPointeeType()
             pc = canonical(pointee)
             if pc.GetTypeClass() in STRUCTS:
+                if CPP and pc.IsPolymorphicClass():  # an Animal* that points to a Dog reads as the Dog
+                    freed_block = STEP_BLOCKS[0].at(address)
+                    if freed_block is not None and freed_block[2] and address in real_types:
+                        pointee = real_types[address]  # deleted: its type can't be read any more, but it was a Dog
+                    else:
+                        dynamic = v.GetDynamicValue(lldb.eDynamicCanRunTarget)
+                        if dynamic.IsValid() and dynamic.GetType().GetPointeeType().IsValid():
+                            pointee = full_type(dynamic.GetType().GetPointeeType())
+                        real_types[address] = pointee
+                    return self.struct_at(address, pointee)
                 block = STEP_BLOCKS[0].starting_at(address)
                 if block is not None and pc.GetByteSize() > 0 and block[1] >= 2 * pc.GetByteSize():
                     return self.block_array(block, pointee)
@@ -284,9 +436,15 @@ class Step:
         if tc == lldb.eTypeClassArray:
             return self.array(v)
         if tc in STRUCTS:
+            if CPP and (c.GetName() or "").startswith("std::") and not c.IsPolymorphicClass() and not unknown(c):
+                return self.library(v)  # std::vector, std::string, std::map… (an exception is read as itself)
             address = v.GetLoadAddress()
             if address == lldb.LLDB_INVALID_ADDRESS:
                 return {"p": v.GetSummary() or "struct"}
+            if CPP and c.IsPolymorphicClass():
+                dynamic = v.GetDynamicValue(lldb.eDynamicCanRunTarget)  # a reference to an Animal that is a Dog
+                if dynamic.IsValid():
+                    t = full_type(dynamic.GetType())
             return self.struct_at(address, t)
         if tc == lldb.eTypeClassEnumeration:
             return {"p": v.GetValue() or str(v.GetValueAsSigned())}
@@ -306,6 +464,12 @@ class Step:
 
     def struct_at(self, address, t):
         name = type_name(t)
+        if CPP and name.startswith("std::"):  # a library exception: its real type and message
+            real = type_of_object(address) if canonical(t).IsPolymorphicClass() or unknown(canonical(t)) else None
+            if real:
+                message = exception_message(address, real)
+                return {"p": cpp_name(real) + (": " + json.dumps(message) if message is not None else "")}
+            return {"p": cpp_name(name)}
         if library_struct(t):
             plain = t.GetUnqualifiedType()
             return {"p": plain.GetName() if plain.IsTypedefType() else name}
@@ -320,20 +484,13 @@ class Step:
             return {"p": "?"}
         v = value_at(address, t)
         node = {"k": "o", "type": name, "fields": {}, "ftypes": {}}
-        if not t.GetUnqualifiedType().IsTypedefType() and (canonical(t).GetName() or "").replace("struct ", "") == name:
+        if not CPP and not t.GetUnqualifiedType().IsTypedefType() and (canonical(t).GetName() or "").replace("struct ", "") == name:
             node["tag"] = True  # struct Node, as C writes it (a typedef'd one is just Point)
         block = STEP_BLOCKS[0].at(address)
         if block is not None and block[2]:
             node["freed"] = True
         self.heap[oid] = node
-        c = canonical(t)
-        for i in range(c.GetNumberOfFields()):
-            field = c.GetFieldAtIndex(i)
-            fname = field.GetName()
-            if not fname:
-                continue
-            child = v.GetChildMemberWithName(fname)
-            ft = field.GetType()
+        for fname, child, ft in own_fields(address, t):
             if canonical(ft).GetTypeClass() == lldb.eTypeClassArray and is_char(canonical(ft).GetArrayElementType()):
                 node["fields"][fname] = self.text(child)
                 node["ftypes"][fname] = "char[]"
@@ -341,6 +498,47 @@ class Step:
             node["fields"][fname] = self.value(child)
             node["ftypes"][fname] = type_name(ft)
         return {"r": oid}
+
+    def library(self, v):
+        """A standard-library value through lldb's formatters: a string's text, or a container as an
+        array of its items (a map's as key=value)."""
+        name = cpp_name(canonical(v.GetType()).GetName() or v.GetTypeName() or "?")
+        full = canonical(v.GetType()).GetName() or ""
+        if re.match(r"std::(__cxx11::|__1::)?basic_string<", full) or name == "string":  # the string itself, not a map of strings
+            return {"p": v.GetSummary() or '""'}
+        address = v.GetLoadAddress()
+        oid = object_id(address, name) if address != lldb.LLDB_INVALID_ADDRESS else len(ids) + 100000
+        if oid in self.heap:
+            return {"r": oid}
+        if len(self.heap) >= MAX_OBJECTS:
+            return {"p": name}
+        element = "?"
+        template = canonical(v.GetType()).GetTemplateArgumentType(0)
+        if template.IsValid():
+            element = cpp_name(template.GetName())
+        node = {"k": "a", "type": name, "elem": element, "items": [], "len": 0}
+        self.heap[oid] = node
+        count = v.GetNumChildren()
+        items = []
+        for i in range(min(count, MAX_CELLS)):
+            child = v.GetChildAtIndex(i)
+            first, second = child.GetChildMemberWithName("first"), child.GetChildMemberWithName("second")
+            if first.IsValid() and second.IsValid() and name.startswith(("map<", "unordered_map<", "multimap<")):
+                items.append({"p": self.shown(first) + "=" + self.shown(second)})
+            else:
+                items.append(self.value(child))
+        node["items"] = items
+        node["len"] = count
+        return {"r": oid}
+
+    def shown(self, v):
+        read = self.value(v)
+        if "p" in read:
+            return read["p"]
+        if "n" in read:
+            return "nullptr"
+        target = self.heap.get(read.get("r"))
+        return target["type"] if target else "?"
 
     def text(self, v):
         if unset(v):
@@ -388,14 +586,46 @@ class Step:
 
 # ---- frames and locals ----
 
+def own_fields(address, t):
+    """A struct's fields, and in C++ a class's: its base classes' fields first, then its own:
+    (name, value, type)."""
+    found = []
+    c = canonical(t)
+    for i in range(c.GetNumberOfDirectBaseClasses()):
+        base = c.GetDirectBaseClassAtIndex(i)
+        found.extend(own_fields(address + base.GetOffsetInBytes(), base.GetType()))
+    v = value_at(address, t)
+    for i in range(c.GetNumberOfFields()):
+        field = c.GetFieldAtIndex(i)
+        fname = field.GetName()
+        if not fname or fname.startswith("_vptr"):
+            continue
+        found.append((fname, v.GetChildMemberWithName(fname), field.GetType()))
+    return found
+
+
+real_types = {}  # C++: an object's address → its real type, read while it was alive (for after delete)
+
+
+def unknown(c):
+    """A library class the program has no debug information for (std::exception): no size, no fields."""
+    return c.GetByteSize() == 0 or (c.GetNumberOfFields() == 0 and c.GetNumberOfDirectBaseClasses() == 0 and not c.IsPolymorphicClass())
+
+
+def full_type(t):
+    """The class itself, by its name: lldb's type for an object's real class has no fields of its own."""
+    found = Run.target.FindFirstType(canonical(t).GetName() or "")
+    return found if found.IsValid() and canonical(found).GetNumberOfFields() + canonical(found).GetNumberOfDirectBaseClasses() > 0 else t
+
+
 def visible(frame, line):
     found = {}
     variables = frame.GetVariables(True, True, False, True)  # arguments, locals, no statics, in scope
     for i in range(variables.GetSize()):
         v = variables.GetValueAtIndex(i)
         name = v.GetName()
-        if not name:
-            continue
+        if not name or name.startswith("__"):
+            continue  # C++'s hidden parameters (__in_chrg)
         if v.GetValueType() != lldb.eValueTypeVariableArgument:
             declared = v.GetDeclaration()
             if declared.IsValid() and declared.GetLine() >= line:
@@ -431,7 +661,7 @@ def frames_now(step, thread):
         for name, v in visible(f, f.GetLineEntry().GetLine()):
             step.place(name, v)
         walked += 1
-        if f.GetFunctionName() == "main":
+        if fn_name(f) == "main":
             break
         k += 1
     for name, v in global_values():
@@ -442,7 +672,7 @@ def frames_now(step, thread):
         rel = frame_file(f)
         if rel is None:
             break
-        name = f.GetFunctionName() or "?"
+        name = fn_name(f)
         line = f.GetLineEntry().GetLine()
         frames.append({"fn": name, "file": rel, "line": line,
                        "locals": {n: step.value(v) for n, v in visible(f, line)}})
@@ -526,7 +756,7 @@ def arm64():
 
 def watch_return(thread):
     frame = thread.GetFrameAtIndex(0)
-    fn = frame.GetFunctionName()
+    fn = fn_name(frame)
     if fn == "main" or thread.GetNumFrames() < 2:
         return
     cfa = frame.GetCFA()
@@ -628,8 +858,66 @@ def step_message(thread):
     return message
 
 
+thrown = {}  # C++: the exception on its way from a throw to its catch
+exception_breakpoints = {}  # breakpoint id → "throw" or "catch"
+
+
+def student_calls(thread):
+    """The student's functions running now, newest first: (name, file, line)."""
+    calls_now = []
+    for k in range(min(thread.GetNumFrames(), 4 * MAX_FRAMES)):
+        f = thread.GetFrameAtIndex(k)
+        rel = frame_file(f)
+        if rel is not None:
+            calls_now.append((fn_name(f), rel, f.GetLineEntry().GetLine()))
+    return calls_now
+
+
+def note_throw(thread):
+    """At __cxa_throw(object, type_info, …): what's thrown, and where the student's code threw it."""
+    thrown.clear()
+    calls_now = student_calls(thread)
+    if not calls_now:
+        return
+    frame = thread.GetFrameAtIndex(0)
+    names = ("x0", "x1") if arm64() else ("rcx", "rdx") if os.name == "nt" else ("rdi", "rsi")
+    kind, message = "exception", None
+    exception = frame.FindRegister(names[0]).GetValueAsUnsigned()
+    name = type_from_typeinfo(frame.FindRegister(names[1]).GetValueAsUnsigned())
+    if name:
+        kind, message = cpp_name(name), exception_message(exception, name)
+    thrown.update({"type": kind, "message": message, "line": calls_now[0][2], "file": calls_now[0][1], "calls": calls_now})
+
+
+def at_exception_breakpoint(thread):
+    """Whether lldb stopped at the throw or the catch breakpoint, noting which."""
+    if thread.GetStopReason() != lldb.eStopReasonBreakpoint:
+        return False
+    kind = exception_breakpoints.get(thread.GetStopReasonDataAtIndex(0))
+    if kind == "throw":
+        note_throw(thread)
+    elif kind == "catch" and thrown:
+        thrown["caught"] = True  # the next line of the student's code is the catch's
+    return kind is not None
+
+
+def body_start(frame):
+    """A function stopped at its very first instruction (lldb doesn't skip the code that sets it up):
+    where its own line's code begins, the function's second row of the line table; or None."""
+    function = frame.GetFunction()
+    start = function.GetStartAddress().GetLoadAddress(Run.target)
+    if frame.GetPC() != start:
+        return None
+    end = function.GetEndAddress().GetLoadAddress(Run.target)
+    unit = frame.GetCompileUnit()
+    after = [unit.GetLineEntryAtIndex(i).GetStartAddress().GetLoadAddress(Run.target) for i in range(unit.GetNumLineEntries())]
+    after = sorted(a for a in after if start < a < end)
+    return after[0] if after else None
+
+
 def run(debugger):
     debugger.SetAsync(False)
+    Run.debugger = debugger
     Run.target = debugger.CreateTarget(EXE)
     if not Run.target.IsValid():
         send({"kind": "end", "reason": "failed", "message": "lldb couldn't open " + EXE})
@@ -644,6 +932,11 @@ def run(debugger):
         send({"kind": "end", "reason": "failed", "message": e.GetCString() or "the program didn't start"})
         return
     Run.target.BreakpointDelete(main.GetID())
+    if CPP:  # stop where an exception is thrown and where it's caught
+        throw_bp = Run.target.BreakpointCreateForException(lldb.eLanguageTypeC_plus_plus, False, True)
+        catch_bp = Run.target.BreakpointCreateForException(lldb.eLanguageTypeC_plus_plus, True, False)
+        exception_breakpoints[throw_bp.GetID()] = "throw"
+        exception_breakpoints[catch_bp.GetID()] = "catch"
     send({"kind": "start", "pid": Run.process.GetProcessID()})
     steps = 0
     last_text = {}
@@ -667,6 +960,8 @@ def run(debugger):
         frame = thread.GetFrameAtIndex(0)
         if frame.GetPC() in return_points:
             returned(thread)  # whether lldb calls it a breakpoint hit or the end of a step
+        if CPP:
+            at_exception_breakpoint(thread)
         entry = frame.GetLineEntry()
         rel = student_file(entry.GetFileSpec())
         if rel is None:
@@ -678,8 +973,14 @@ def run(debugger):
                 Run.process.Continue()  # main has returned: let the program end
             continue
         at_start = frame.GetPC() == entry.GetStartAddress().GetLoadAddress(Run.target)
-        if at_start:
-            fn = frame.GetFunctionName() or "?"
+        if at_start and CPP:
+            begins = body_start(frame)
+            if begins is not None and text_of(rel, entry.GetLine()) and not opens_only(text_of(rel, entry.GetLine())):
+                thread.RunToAddress(begins)  # a one-line function: its step is where its code begins, its arguments set
+                continue
+        caught = thrown.get("caught")
+        if at_start or caught:  # the start of a line (or the catch's first, reached mid-line)
+            fn = fn_name(frame)
             line = entry.GetLine()
             text = text_of(rel, line)
             depth = student_depth(thread)
@@ -687,19 +988,26 @@ def run(debugger):
             if closing and fn == "main" and exits:
                 closing = False
             start_line = frame.GetFunction().GetStartAddress().GetLineEntry().GetLine()
-            opening = line == start_line and text.endswith("{")
+            opening = line == start_line and (text.endswith("{") if not CPP else opens_only(text))
             # Apple's compiler starts a new line-table row where a call returns, so lldb can stop
             # twice on one line; a frame's step on the line it last stopped on is skipped.
             cfa = frame.GetCFA()
-            again = last_line_of.get(cfa) == (rel, line)
+            again = last_line_of.get(cfa) == (rel, line) and not caught
             if again and exits:
                 landing[0] = step_message(thread)
-            if not closing and not opening and not again:
+            if not closing and not opening and not again and not written_by_compiler(fn, text):
                 last_line_of[cfa] = (rel, line)
                 for deeper in [c for c in last_line_of if c < cfa]:  # the stack grows down: those calls are over
                     del last_line_of[deeper]
                 watch_return(thread)
-                send(step_message(thread))
+                message = step_message(thread)
+                if caught:  # the first step of the catch: what was thrown, and the calls it left
+                    now = {(c[0], c[1]) for c in student_calls(thread)}
+                    message["thrown"] = {"type": thrown["type"], "message": thrown["message"], "line": thrown["line"],
+                                         "file": thrown["file"], "catch": line, "catchFile": rel,
+                                         "left": [c[0] for c in thrown["calls"] if (c[0], c[1]) not in now]}
+                    thrown.clear()
+                send(message)
                 landing[0] = None
                 del exits[:]
                 steps += 1
