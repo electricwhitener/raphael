@@ -77,6 +77,7 @@ public class CodeFacts {
     private final List<Integer> throwLines = new ArrayList<>();
     private final Set<String> inputReaders = new HashSet<>(); // variables that read the keyboard (System.in)
     private boolean usesFiles;
+    private boolean cpp; // facts of C++ code: a method is written Circle::area, not Circle.area
     private boolean readsInput;
 
     // ---- reading ----
@@ -305,6 +306,15 @@ public class CodeFacts {
 
     void addThrow(int line) {
         throwLines.add(line);
+    }
+
+    void markCpp() {
+        cpp = true;
+    }
+
+    // Whether these are a C++ program's facts.
+    public boolean isCpp() {
+        return cpp;
     }
 
     void markUsesFiles() {

@@ -176,6 +176,12 @@ def type_name(t):
     return str(t)
 
 
+def number(x):
+    """A double as C++'s cout and C's %g would show it: 7.14, not 7.140000000000001; 3.0 stays a double."""
+    text = "%.15g" % x
+    return text if any(c in text for c in ".eni") else text + ".0"
+
+
 def split_arguments(text):
     """'int, std::allocator<int>' → ['int', 'std::allocator<int>'] (commas inside <…> stay)."""
     parts, depth, start = [], 0, 0
@@ -289,6 +295,8 @@ class Step:
             if v.address is None:
                 return
             t = v.type.strip_typedefs()
+            if t.code in (gdb.TYPE_CODE_REF, getattr(gdb, "TYPE_CODE_RVALUE_REF", -1)):
+                return  # a reference has no place of its own: its address is the variable it names
             element = t.target().sizeof if t.code == gdb.TYPE_CODE_ARRAY else 0
             self.places.append((int(v.address), t.sizeof, name, element))
             if t.code == gdb.TYPE_CODE_PTR and not unset(v):
@@ -342,7 +350,12 @@ class Step:
         t = v.type.strip_typedefs()
         try:
             if t.code in (gdb.TYPE_CODE_REF, getattr(gdb, "TYPE_CODE_RVALUE_REF", -1)):
-                return self.value(v.referenced_value())  # a reference is another name for the variable it names
+                # A reference is another name for the variable it names: an object is that object,
+                # a plain value says whose it is ("→ x (3)"), so it doesn't look like a copy.
+                target = v.referenced_value()
+                read = self.value(target)
+                named = self.named_address(int(target.address)) if "p" in read and target.address is not None else None
+                return {"p": "→ " + named[1:] + " (" + read["p"] + ")"} if named else read
             if t.code in (gdb.TYPE_CODE_INT, gdb.TYPE_CODE_FLT, gdb.TYPE_CODE_PTR, gdb.TYPE_CODE_BOOL, gdb.TYPE_CODE_ENUM) and unset(v):
                 return {"p": "?"}  # malloc'd, never written
             if t.code == gdb.TYPE_CODE_PTR:
@@ -391,7 +404,7 @@ class Step:
             if t.code == gdb.TYPE_CODE_BOOL:
                 return {"p": "true" if bool(v) else "false"}
             if t.code == gdb.TYPE_CODE_FLT:
-                return {"p": repr(float(v))}
+                return {"p": number(float(v))}
             if is_char(t):
                 return {"p": char_literal(int(v))}
             if t.code == gdb.TYPE_CODE_INT:

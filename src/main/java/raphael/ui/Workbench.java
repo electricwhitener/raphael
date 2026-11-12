@@ -1280,6 +1280,7 @@ public class Workbench extends JPanel implements PanelLayout.Watcher {
         }
         this.language = language;
         code.setLanguage(language);
+        callStack.setQualified(language.id().equals("cpp")); // Square::area(), as C++ writes it
         if (language.cantRun() == null) {
             tracer = language.newTracer();
         }

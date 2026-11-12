@@ -9,6 +9,7 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - `throw` and `catch` show the caught card, with the exception's real type and message ("out_of_range: index 5, but the size is 3").
 - The Objects view draws C++ classes as UML, and the key moments explain C++ too: polymorphism (which `area()` runs), encapsulation (a private field, a setter that refuses), inheritance, recursion, and memory in C++'s words.
 - Ten C++ examples: basics, references, classes, virtual methods, exceptions, vector and sort, a map, a heap and a stack, a linked list and a binary search tree.
+- A reference says whose variable it is (`a → x (3)`), so it doesn't look like a copy; the call stack writes C++'s names (`Circle::area()`); C and C++ doubles print as `cout` does (`7.14`).
 
 **Working with folders and files**
 - An Explorer in the side bar, beside the examples, for a program of several files: the folder's files as a tree, as in VS Code. A click shows a file; the file the run is in is the one lit.

@@ -391,12 +391,18 @@ public class VisualPanel extends JPanel implements TraceListener, Zoom.Aware {
         return zoomed;
     }
 
+    // A muted line in the middle, wrapped to the picture's width (a narrow picture clipped it at both edges).
     private void hint(Graphics2D g, String text) {
-        g.setFont(Style.UI_FONT);
+        g.setFont(Style.sans(false, Style.UI_SMALL));
         g.setColor(Style.MUTED);
         FontMetrics metrics = g.getFontMetrics();
         Rectangle visible = zoomedVisible();
-        g.drawString(text, visible.x + (visible.width - metrics.stringWidth(text)) / 2, visible.y + visible.height / 2);
+        List<String> lines = wrap(text, metrics, Math.max(metrics.stringWidth("plain variables"), visible.width - 2 * Style.SPACE_6));
+        int y = visible.y + (visible.height - lines.size() * metrics.getHeight()) / 2 + metrics.getAscent();
+        for (String line : lines) {
+            g.drawString(line, visible.x + (visible.width - metrics.stringWidth(line)) / 2, y);
+            y += metrics.getHeight();
+        }
     }
 
     // A title, then the details wrapped to fit, on a plain band so they can be read over anything.

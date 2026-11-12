@@ -84,7 +84,7 @@ public class MemoryConcept extends Concept {
             if (allocator.equals("realloc")) {
                 text += " realloc made a new block, copied the old one into it, and gave the old one back.";
             } else if (unset && now.getFrames().get(0).getMethodName().equals(Names.simple(object.getTypeName()))) {
-                text += " Its fields aren't set yet, so they show ?; its constructor, running now, sets them.";
+                text += " Its constructor, running now, sets its fields (? until then).";
             } else if (unset) {
                 text += " Its memory isn't set yet, so it shows ?: whatever was there before.";
             } else if (allocator.equals("calloc")) {

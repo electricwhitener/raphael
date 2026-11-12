@@ -56,6 +56,20 @@ public class CallStackPanel extends JPanel implements TraceListener {
         add(Section.wrap(Section.header("call stack"), scroll));
     }
 
+    // C++ writes a method with its class: Square::area. A free function's "class" is its file's
+    // name (main), so it stays as it is.
+    private boolean qualified;
+
+    public void setQualified(boolean qualified) {
+        this.qualified = qualified;
+    }
+
+    private String shownName(FrameSnapshot frame) {
+        String file = frame.getFile() == null ? "main" : frame.getFile().substring(frame.getFile().lastIndexOf('/') + 1);
+        String unit = file.contains(".") ? file.substring(0, file.lastIndexOf('.')) : file;
+        return qualified && !frame.getClassName().equals(unit) ? frame.getClassName() + "::" + frame.getMethodName() : frame.getMethodName();
+    }
+
     @Override
     public void stepChanged(TraceModel model) {
         frames.clear();
@@ -68,7 +82,7 @@ public class CallStackPanel extends JPanel implements TraceListener {
         for (FrameSnapshot frame : snapshot.getFrames()) {
             // In a program of several files, the line's file too: "area()  Circle.java:13".
             String file = frame.getFile() == null ? "" : frame.getFile().substring(frame.getFile().lastIndexOf('/') + 1);
-            frames.addElement(String.format("%-14s %s:%d", frame.getMethodName() + "()", file, frame.getLine()));
+            frames.addElement(String.format("%-14s %s:%d", shownName(frame) + "()", file, frame.getLine()));
         }
         // The methods a caught exception just left, each stopped in the middle: greyed, above the
         // method that caught it, where they were on the stack.

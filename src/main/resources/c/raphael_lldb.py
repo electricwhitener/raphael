@@ -146,6 +146,12 @@ def plain_message(text):
     return "index %s, but the size is %s" % (m.group(1), m.group(2)) if m else text
 
 
+def number(x):
+    """A double as C++'s cout and C's %g would show it: 7.14, not 7.140000000000001; 3.0 stays a double."""
+    text = "%.15g" % x
+    return text if any(c in text for c in ".eni") else text + ".0"
+
+
 def read_pointer(address):
     if not 0 < address < (1 << 64):
         raise MemoryError(address)  # 0, or what a bad pointer minus 8 gives: nothing to read
@@ -404,7 +410,9 @@ class Step:
                         return {"p": cpp_name(real) + (": " + json.dumps(message) if message is not None else "")}
                     return {"p": cpp_name(named.GetName() or "?")}
                 target = value_at(v.GetValueAsUnsigned(), c.GetDereferencedType())
-            return self.value(target)
+            read = self.value(target)
+            named = self.named_address(v.GetValueAsUnsigned()) if "p" in read else None
+            return {"p": "→ " + named[1:] + " (" + read["p"] + ")"} if named else read  # "→ x (3)": another name for x
         if tc in (lldb.eTypeClassBuiltin, lldb.eTypeClassPointer, lldb.eTypeClassEnumeration) and unset(v):
             return {"p": "?"}
         if tc == lldb.eTypeClassPointer:
@@ -462,7 +470,7 @@ class Step:
             return {"p": char_literal(v.GetValueAsUnsigned())}
         if basic in FLOATS:
             try:
-                return {"p": repr(float(v.GetValue()))}
+                return {"p": number(float(v.GetValue()))}
             except (TypeError, ValueError):
                 return {"p": v.GetValue() or "?"}
         if basic in UNSIGNED:
@@ -805,7 +813,7 @@ def return_value(frame, rtype):
         data = register.GetData()
         e = err()
         number = data.GetFloat(e, 0) if c.GetByteSize() == 4 else data.GetDouble(e, 0)
-        return {"p": repr(float(number))} if e.Success() else None
+        return {"p": globals()["number"](float(number))} if e.Success() else None
     raw = frame.FindRegister("x0" if arm64() else "rax").GetValueAsUnsigned()
     data = lldb.SBData.CreateDataFromUInt64Array(Run.target.GetByteOrder(), Run.target.GetAddressByteSize(), [raw])
     value = Run.target.CreateValueFromData("returned", data, rtype)

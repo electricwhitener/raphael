@@ -11,13 +11,13 @@ oop/account | A class with private data | Only the class's own methods change it
 oop/shapes | Virtual methods | One call, shape->area(), runs each kind of shape's own area.
 oop/exceptions | Exceptions | at() throws out_of_range, the catch gets it, and the program goes on.
 
-## The standard library
+## Standard library (STL)
 stl/vector_sort | vector and sort | A vector grows with push_back; sort puts it in order.
 stl/word_count | Counting with a map | counts[word]++ counts each word, its keys kept in order.
 stl/heap_and_stack | A heap and a stack | priority_queue keeps the biggest on top as a heap; a stack gives back the last pushed.
 
-## Linked lists
+## Data structures
+### Linked lists
 lists/linked_list | A linked list | new makes each node, delete gives it back.
-
-## Trees
+### Trees
 trees/bst | Binary search tree | Insert with recursion: smaller keys go left, bigger ones right.

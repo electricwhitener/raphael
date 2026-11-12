@@ -17,10 +17,11 @@ int main() {
         cout << p->val << " ";
     }
     cout << endl;
+    Node *gone = nullptr;
     while (head != nullptr) {
-        Node *gone = head;
+        gone = head;
         head = head->next;
-        delete gone;
+        delete gone; // gone still holds the address: a dangling pointer until it's set again
     }
     return 0;
 }

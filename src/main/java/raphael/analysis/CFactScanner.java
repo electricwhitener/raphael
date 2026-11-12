@@ -60,6 +60,9 @@ public final class CFactScanner {
 
     private static void scan(CodeFacts facts, String source, String file, String unit, boolean cpp) {
         CFactScanner scanner = new CFactScanner(facts, source, file, unit, cpp);
+        if (cpp) {
+            facts.markCpp();
+        }
         scanner.tokenize();
         scanner.functions();
         scanner.momentComments();

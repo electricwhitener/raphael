@@ -52,7 +52,7 @@ class PolymorphismConcept extends Concept {
                         + (ran.equals(holds) ? "So " + holds + "'s own " + call.method() + "() runs."
                         : holds + " has no " + call.method() + "() of its own, so the one it inherits from " + ran + " runs.")
                         + (first ? " Which method runs is decided by the object, while the program runs, not by the variable's type." : "");
-                into.add(new Moment(s, "polymorphism", ran + "." + call.method() + "() runs", text, newPair && ++shown <= 3,
+                into.add(new Moment(s, "polymorphism", ran + (facts.isCpp() ? "::" : ".") + call.method() + "() runs", text, newPair && ++shown <= 3,
                         caller.getFile(), caller.getLine())); // each pair of types pauses once, up to three in a run
                 break;
             }
