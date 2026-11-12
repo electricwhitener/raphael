@@ -1,0 +1,19 @@
+# Stage 15 probe, started by hand (Actions → macos-probe → Run workflow): what lldb on a Mac
+# reports at C++'s exception breakpoints, for raphael_lldb.py's throw and catch.
+name: macos-probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  exceptions:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Throw and catch under lldb
+        working-directory: .claude/tools/cppspike
+        run: |
+          c++ --version | head -1
+          c++ -g -O0 -fno-inline -std=gnu++17 throw.cpp -o throw
+          EXE=$PWD/throw perl -e 'alarm 120; exec @ARGV' lldb --batch --no-lldbinit -o "command script import probe_exceptions.py" 2>&1 | grep PROBE || true
