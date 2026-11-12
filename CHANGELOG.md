@@ -4,6 +4,12 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 
 ## Unreleased
 
+**C++**
+- C++ programs run, step by step, on Windows, macOS and Linux, with the same pictures as Java and C: classes drawn with their base class's fields inside them, an object through a base-class pointer drawn as what it really is (a Dog, not an Animal), references, `new` and `delete` (a deleted object faded, with "freed"), and the standard library's `vector`, `string`, `map`, `set`, `list`, `stack` (upright), `queue` and `priority_queue` (as a heap).
+- `throw` and `catch` show the caught card, with the exception's real type and message ("out_of_range: index 5, but the size is 3").
+- The Objects view draws C++ classes as UML, and the key moments explain C++ too: polymorphism (which `area()` runs), encapsulation (a private field, a setter that refuses), inheritance, recursion, and memory in C++'s words.
+- Ten C++ examples: basics, references, classes, virtual methods, exceptions, vector and sort, a map, a heap and a stack, a linked list and a binary search tree.
+
 **Working with folders and files**
 - An Explorer in the side bar, beside the examples, for a program of several files: the folder's files as a tree, as in VS Code. A click shows a file; the file the run is in is the one lit.
 - Raphael opens the tabs you had when you quit (saved files, folders and examples) the next time it starts.
