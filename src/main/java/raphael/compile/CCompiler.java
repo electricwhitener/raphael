@@ -15,8 +15,9 @@ import java.util.regex.Pattern;
 import raphael.model.SourceFile;
 import raphael.toolchain.Toolchains;
 
-// Compiles a C program with gcc into an executable the debugger can step through, and turns
-// gcc's messages into Raphael's compile errors.
+// Compiles a C program with gcc (or a C++ one with g++) into an executable the debugger can step
+// through, and turns the compiler's messages into Raphael's compile errors. C and C++ differ only
+// in the compiler, its flags, the files compiled and the runtime linked in.
 // The result's classDir is the build folder (the code is in its src folder) and its mainClass is
 // the executable's name there ("program", or "program.exe" on Windows).
 // OOP: encapsulation (callers only see compile() and compileFolder()); the same CompileResult
@@ -26,10 +27,28 @@ public class CCompiler {
     // -g keeps names and lines; -O0 and -fno-inline keep every line and call where the code has it.
     // The -Werror flags make every gcc stop where gcc 14 and later do (and Apple's clang does), so a
     // program compiles the same everywhere; -std=gnu17, since gcc 15 moved to C23.
-    private static final List<String> FLAGS = List.of("-g", "-O0", "-fno-inline", "-fno-omit-frame-pointer",
+    private static final List<String> C_FLAGS = List.of("-g", "-O0", "-fno-inline", "-fno-omit-frame-pointer",
             "-std=gnu17", "-fdiagnostics-color=never", "-Werror=implicit-function-declaration", "-Werror=implicit-int",
             "-Werror=incompatible-pointer-types", "-Werror=int-conversion");
-    private static final String SINGLE = "main.c"; // the editor's one text, on disk
+    private static final List<String> CPP_FLAGS = List.of("-g", "-O0", "-fno-inline", "-fno-omit-frame-pointer",
+            "-std=gnu++17", "-fdiagnostics-color=never");
+
+    private final boolean cpp;
+    private final String compilerName;   // gcc or g++
+    private final List<String> flags;
+    private final String single;         // the editor's one text, on disk: main.c or main.cpp
+
+    public CCompiler() {
+        this(false);
+    }
+
+    // cpp: a C++ program, with g++.
+    public CCompiler(boolean cpp) {
+        this.cpp = cpp;
+        this.compilerName = cpp ? "g++" : "gcc";
+        this.flags = cpp ? CPP_FLAGS : C_FLAGS;
+        this.single = cpp ? "main.cpp" : "main.c";
+    }
     private static final String EXE = Toolchains.WINDOWS ? "program.exe" : "program";
     private static final long TIMEOUT_S = 60;
 
@@ -45,14 +64,15 @@ public class CCompiler {
     private static final Pattern FLAG_NAME = Pattern.compile("\\s*\\[-W[^\\]]*\\]$");
 
     private static Path[] runtime; // raphael_rt.h and raphael_rt.o, compiled once per run of Raphael (and on Windows their folder, for -B)
+    private static Path cppRuntime; // raphael_new.o: C++'s new and delete, sent to raphael_rt.c's table
 
     // A program typed into the editor (or opened as one file).
     public CompileResult compile(String code) throws CompileSetupException {
         Path dir = tempFolder();
-        write(dir.resolve("src").resolve(SINGLE), code);
+        write(dir.resolve("src").resolve(single), code);
         raphael.analysis.CodeFacts facts = new raphael.analysis.CodeFacts();
         raphael.analysis.CFactScanner.scan(facts, code, null, "main"); // one text: its frames have no file name, and its unit is main.c's
-        return build(dir, List.of(SINGLE), Map.of(), facts);
+        return build(dir, List.of(single), Map.of(), facts);
     }
 
     // A program of several files, from a folder; each path is relative to the folder. Every .c file
@@ -70,7 +90,7 @@ public class CCompiler {
             }
             write(onDisk, file.text());
             sourceFiles.put(file.path(), file.path());
-            if (file.path().endsWith(".c")) {
+            if (cpp ? file.path().matches(".*\\.(cpp|cc|cxx)$") : file.path().endsWith(".c")) {
                 sources.add(file.path());
             }
             String name = file.path().substring(file.path().lastIndexOf('/') + 1);
@@ -81,23 +101,28 @@ public class CCompiler {
 
     private CompileResult build(Path dir, List<String> sources, Map<String, String> sourceFiles,
                                 raphael.analysis.CodeFacts facts) throws CompileSetupException {
-        Path gcc = Toolchains.find("gcc");
+        Path gcc = Toolchains.find(compilerName);
         if (gcc == null) {
-            throw new CompileSetupException(Toolchains.howToInstall("gcc to compile C"));
+            throw new CompileSetupException(Toolchains.howToInstall(cpp ? "g++ to compile C++" : "gcc to compile C"));
         }
         // First the code on its own, so its errors are exactly gcc's (raphael_rt.h includes
         // stdlib.h, which would hide a missing #include); then with the shim, into the program.
         List<String> check = new ArrayList<>(List.of(gcc.toString(), "-fsyntax-only"));
-        check.addAll(FLAGS);
+        check.addAll(flags);
         check.addAll(sources);
         Output gccSaid = run(check, dir.resolve("src"));
         if (gccSaid.exit() == 0) {
-            Path[] shim = runtime(gcc);
+            Path[] shim = runtime(Toolchains.find("gcc") != null ? Toolchains.find("gcc") : gcc);
             List<String> command = new ArrayList<>(List.of(gcc.toString()));
-            command.addAll(FLAGS);
-            command.addAll(List.of("-include", shim[0].toString()));
+            command.addAll(flags);
+            if (!cpp) { // C: malloc and free become the shim's (C++ sends new and delete there instead)
+                command.addAll(List.of("-include", shim[0].toString()));
+            }
             command.addAll(sources);
             command.add(shim[1].toString());
+            if (cpp) {
+                command.add(cppRuntime(gcc).toString());
+            }
             if (shim.length > 2) {
                 // Windows: gcc's link rule names default-manifest.o by an unquoted path, which the
                 // space in "C:\Program Files" splits; -B makes gcc take Raphael's copy, from a folder
@@ -110,9 +135,9 @@ public class CCompiler {
         List<CompileResult.CompileError> errors = errors(gccSaid.text(), !sourceFiles.isEmpty());
         if (gccSaid.exit() != 0 && errors.isEmpty()) { // something gcc said that isn't in a known form
             errors.add(new CompileResult.CompileError(0, gccSaid.text().strip().lines().limit(6)
-                    .reduce((a, b) -> a + "\n" + b).orElse("gcc stopped without saying why.")));
+                    .reduce((a, b) -> a + "\n" + b).orElse(compilerName + " stopped without saying why.")));
         }
-        errors = onTheirLine(errors, dir.resolve("src"));
+        errors = onTheirLine(errors, dir.resolve("src"), single);
         boolean ok = gccSaid.exit() == 0;
         return new CompileResult(ok, ok ? List.of() : errors, dir, ok ? EXE : null, sourceFiles, facts);
     }
@@ -158,12 +183,12 @@ public class CCompiler {
 
     // gcc reports a missing ; on the line after it (where it found what came next): such an error
     // moves back to the last line with code before it, where the ; belongs.
-    static List<CompileResult.CompileError> onTheirLine(List<CompileResult.CompileError> errors, Path src) {
+    static List<CompileResult.CompileError> onTheirLine(List<CompileResult.CompileError> errors, Path src, String single) {
         List<CompileResult.CompileError> moved = new ArrayList<>();
         for (CompileResult.CompileError error : errors) {
             if (error.line() > 1 && SEMICOLON_BEFORE.matcher(error.message()).find()) {
                 try {
-                    List<String> lines = Files.readAllLines(src.resolve(error.file() == null ? SINGLE : error.file()));
+                    List<String> lines = Files.readAllLines(src.resolve(error.file() == null ? single : error.file()));
                     int line = (int) error.line() - 1;
                     while (line > 1 && lines.get(line - 1).strip().isEmpty()) {
                         line--;
@@ -220,6 +245,27 @@ public class CCompiler {
         }
         runtime = new Path[] {header, object};
         return runtime;
+    }
+
+    // C++'s new and delete, compiled once by g++ (without -g, so the debugger never steps into them).
+    private static synchronized Path cppRuntime(Path gpp) throws CompileSetupException {
+        if (cppRuntime != null && Files.exists(cppRuntime)) {
+            return cppRuntime;
+        }
+        Path dir = tempFolder();
+        Path source = dir.resolve("raphael_new.cpp");
+        try (InputStream in = CCompiler.class.getResourceAsStream("/c/raphael_new.cpp")) {
+            write(source, new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        } catch (IOException | NullPointerException e) {
+            throw new CompileSetupException("Raphael's C++ runtime file is missing from the app.", e);
+        }
+        Path object = dir.resolve("raphael_new.o");
+        Output said = run(List.of(gpp.toString(), "-O1", "-c", source.toString(), "-o", object.toString()), dir);
+        if (said.exit() != 0) {
+            throw new CompileSetupException("g++ couldn't compile Raphael's C++ runtime: " + said.text().strip());
+        }
+        cppRuntime = object;
+        return cppRuntime;
     }
 
     private record Output(int exit, String text) {

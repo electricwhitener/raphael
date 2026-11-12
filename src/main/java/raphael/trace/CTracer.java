@@ -27,6 +27,7 @@ import raphael.model.ObjectNode;
 import raphael.model.PrimitiveValue;
 import raphael.model.ReferenceValue;
 import raphael.model.Snapshot;
+import raphael.model.ThrownException;
 import raphael.model.Trace;
 import raphael.model.Value;
 import raphael.toolchain.Toolchains;
@@ -477,7 +478,18 @@ public class CTracer implements Tracer {
                 ((Map<String, Object>) newFiles).forEach((name, text) -> now.put(name, (String) text));
                 files = Collections.unmodifiableMap(now);
             }
-            return new Step(frames, heap, globals, ((Number) message.get("out")).intValue(), exception, files, exits);
+            ThrownException thrown = null;
+            if (message.get("thrown") instanceof Map) { // C++: the first step of a catch, with what it caught
+                Map<String, Object> t = (Map<String, Object>) message.get("thrown");
+                List<String> left = new ArrayList<>();
+                for (Object call : (List<Object>) t.get("left")) {
+                    left.add(call + "()");
+                }
+                thrown = new ThrownException((String) t.get("type"), (String) t.get("message"), ((Number) t.get("line")).intValue(),
+                        ((Number) t.get("catch")).intValue(), left, namedFiles ? (String) t.get("file") : null,
+                        namedFiles ? (String) t.get("catchFile") : null);
+            }
+            return new Step(frames, heap, globals, ((Number) message.get("out")).intValue(), exception, files, exits, thrown);
         }
 
         private Map<String, Value> values(Map<String, Object> json) {
@@ -534,14 +546,15 @@ public class CTracer implements Tracer {
 
     // A step as read, before its output length is known in characters.
     private record Step(List<FrameSnapshot> frames, Map<Long, HeapObject> heap, Map<String, Value> globals,
-                        int outputBytes, String exception, Map<String, String> files, List<Exit> exits) {
+                        int outputBytes, String exception, Map<String, String> files, List<Exit> exits,
+                        ThrownException thrown) {
 
         int line() {
             return frames.isEmpty() ? -1 : frames.get(0).getLine();
         }
 
         Snapshot snapshot(int outputLength) {
-            return new Snapshot(frames, heap, globals, outputLength, exception, null, files, exits, List.of(), 0);
+            return new Snapshot(frames, heap, globals, outputLength, exception, thrown, files, exits, List.of(), 0);
         }
     }
 }

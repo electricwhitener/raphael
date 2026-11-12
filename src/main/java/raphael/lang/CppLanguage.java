@@ -3,10 +3,19 @@ package raphael.lang;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import raphael.compile.CCompiler;
+import raphael.compile.CompileResult;
+import raphael.compile.CompileSetupException;
+import raphael.compile.GccHints;
+import raphael.model.SourceFile;
+import raphael.toolchain.Toolchains;
+import raphael.trace.CTracer;
+import raphael.trace.Tracer;
 
-// C++: C with classes, templates and the standard library.
-// OOP: inheritance (a Language, through NotRunnableYet until Stage 15) and overriding.
-public class CppLanguage extends NotRunnableYet {
+// C++: C with classes, templates and the standard library. Compiled with g++ (CCompiler in its
+// C++ mode) and traced through gdb, or lldb on a Mac, by the same tracer as C (CTracer).
+// OOP: inheritance (a Language) and overriding; composition (the C compiler and tracer reused).
+public class CppLanguage extends Language {
 
     private static final Set<String> KEYWORDS = new HashSet<>(CLanguage.KEYWORDS);
 
@@ -77,5 +86,40 @@ public class CppLanguage extends NotRunnableYet {
     public int likeness(String code) {
         return Languages.count(code, "#include <iostream>", "std::", "cout", "cin", "using namespace std", "class ",
                 "#include <vector>", "nullptr", "public:", "private:");
+    }
+
+    // Null when g++ and a debugger with Python are here (on a Mac, Apple's clang++, which answers to g++, and lldb).
+    @Override
+    public String cantRun() {
+        if (Toolchains.MAC) { // until raphael_lldb.py reads C++ (Stage 15, step 5)
+            return "C++ on a Mac comes with the next update (lldb, the Mac's debugger, is being taught C++).";
+        }
+        if (Toolchains.find("g++") == null) {
+            return Toolchains.howToInstall("g++ to compile C++");
+        }
+        if (!Toolchains.debuggerHasPython()) {
+            return Toolchains.howToInstall(Toolchains.debugger() + " (with Python) to run C++");
+        }
+        return null;
+    }
+
+    @Override
+    public Tracer newTracer() {
+        return new CTracer();
+    }
+
+    @Override
+    public CompileResult compile(String code) throws CompileSetupException {
+        return new CCompiler(true).compile(code);
+    }
+
+    @Override
+    public CompileResult compileFolder(List<SourceFile> files, String preferredMain) throws CompileSetupException {
+        return new CCompiler(true).compileFolder(files, preferredMain);
+    }
+
+    @Override
+    public String hint(String compilerMessage) {
+        return GccHints.hint(compilerMessage);
     }
 }
