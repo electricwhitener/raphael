@@ -21,7 +21,7 @@ scripts/package.sh             # a ready-to-run copy in target/installer/Raphael
 Every pull request runs the tests on Windows, macOS and Linux.
 
 ## How the code is organised
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains the pipeline (compile → trace → detect → lay out → animate) and has a map of every file. [DECISIONS.md](DECISIONS.md) explains why things are the way they are, and [ROADMAP.md](ROADMAP.md) lists what's planned.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains the pipeline (compile → trace → detect → lay out → animate) and has a map of every file.
 
 A few conventions:
 - Every colour, size, font and timing lives in `render/Style`.

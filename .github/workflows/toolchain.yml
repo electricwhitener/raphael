@@ -41,7 +41,7 @@ jobs:
           gdb --version | head -1
           gdb -q -batch -nx -ex "python import sys; print('gdb has Python', sys.version)"
       - name: Trace the spike's linked list
-        working-directory: .claude/tools/cspike
+        working-directory: .github/probes/c
         run: |
           gcc -g -O0 -fno-inline -o list.exe list.c
           RAPHAEL_OUT=steps.jsonl gdb -q -batch -nx -x spike.py ./list.exe
@@ -51,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-steps
-          path: .claude/tools/cspike/steps.jsonl
+          path: .github/probes/c/steps.jsonl
 
   # macOS has no gdb: Raphael traces C there with lldb, from Apple's Command Line Tools.
   macos-lldb:
@@ -65,7 +65,7 @@ jobs:
           lldb --version | head -1
           lldb --batch --no-lldbinit -o "script import sys; print('lldb has Python', sys.version)"
       - name: Trace the spike's linked list
-        working-directory: .claude/tools/cspike
+        working-directory: .github/probes/c
         run: |
           mkdir -p src run
           cp list.c src/list.c
@@ -90,7 +90,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-steps
-          path: .claude/tools/cspike/raw.txt
+          path: .github/probes/c/raw.txt
 
   # The program must never outlive Raphael. On macOS this failed now and then (2026-11-11):
   # Raphael killed while the program was still connecting. Ten runs in a row of that test.

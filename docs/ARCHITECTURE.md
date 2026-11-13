@@ -2,7 +2,7 @@
 
 The technical notes for contributors: what is needed to build it, how a run flows through the code, which file does what, where each object-oriented idea is used, and what the tests check. The [README](../README.md) is the plain-language introduction.
 
-"How it works" follows a Java program. C and C++ take the same path through their own classes (`lang/`, `compile/CCompiler`, `trace/CTracer` and the debugger scripts in `src/main/resources/c/`), all listed in the file map. [CLAUDE.md](../CLAUDE.md) has the full history, stage by stage.
+"How it works" follows a Java program. C and C++ take the same path through their own classes (`lang/`, `compile/CCompiler`, `trace/CTracer` and the debugger scripts in `src/main/resources/c/`), all listed in the file map.
 
 ## Requirements and dependencies
 **To build it, you need:**
@@ -230,7 +230,7 @@ Safety:
 
 ## OOP concepts
 
-This table lists where each concept is used. [Chapter 5 of the report](report/05-oop-and-design.md) goes through the main ones with the code.
+This table lists where each concept is used.
 
 Each class also names its concept in an `// OOP:` comment at the top of the file.
 

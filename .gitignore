@@ -10,3 +10,15 @@ dist/
 .project
 .settings/
 dist-installers/
+
+# Private: kept on the developer's computer, never published (decided 2026-11-13).
+# Notes and prompts for Claude Code, plans, the decision log, report drafts and design mockups.
+CLAUDE.md
+.claude/
+ROADMAP.md
+DECISIONS.md
+PLAN.md
+DEMO.md
+docs/report/
+docs/design/
+docs/OOP-HIGHLIGHTS.md

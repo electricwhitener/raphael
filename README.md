@@ -101,7 +101,7 @@ Other good tools exist. Here is how Raphael is different from each:
 - **Plugins for VS Code and IntelliJ**, for people who already work there.
 - **Signed installers**, so Windows and macOS stop warning about them.
 
-The full plan is in [ROADMAP.md](ROADMAP.md), and every version's changes are in [CHANGELOG.md](CHANGELOG.md).
+Every version's changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build it yourself
 You need JDK 21 and Maven 3.8 or newer. For C and C++, you also need gcc, g++ and gdb (or Apple's Command Line Tools on a Mac).
