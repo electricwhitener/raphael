@@ -24,6 +24,7 @@ Versions follow [semantic versioning](https://semver.org): the first number chan
 - The fonts are the ones VS Code uses on your system: Consolas and Segoe UI on Windows (also when Raphael runs inside WSL, read from Windows' own fonts), Menlo and the system font on a Mac, the system's monospace font on Linux. IBM Plex Mono, inside the app, is the fallback.
 
 **Fixes**
+- A C++ program with a `vector` of pointers (the "Virtual methods" example) stopped with "something went wrong inside Raphael" when its run was ready: the trace table couldn't read the vector's cells. It plays as it should now.
 - ← → Home and End step the run wherever the keyboard is, except where you type (the code, the search box, the terminal while the program asks for input). After a click in the side bar, a table or a panel, they used to move around in there instead.
 - A panel's × is a small, thin cross in a small square, as in VS Code, not a button as tall as the tab strip.
 - Ctrl+N asks which language the new program is in (the last one is lit, so Ctrl+N then Enter is quick).

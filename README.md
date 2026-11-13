@@ -29,13 +29,23 @@ It began as a course project for object-oriented programming in Java, and is now
 - **Talk to it.** A program that asks for input asks in Raphael's terminal: type the answer and press Enter, as you would anywhere else.
 - **Keep a run.** Save a recording and open it later, or send it to someone, without running anything again.
 
-| Bubble sort: the markers show which two cells are compared | Grid DP: the cell being filled and the two it reads |
-|---|---|
-| ![BubbleSort](docs/window-bubble.png) | ![GridPaths](docs/window-grid.png) |
+### A look around
 
-| Objects: each box says what it is and what it inherits | Dark mode |
+| Bubble sort (Java): `i` and `j` under the two cells being compared, the cell just written in amber, and the examples in the side bar | Dijkstra's shortest paths (Java, dark mode): the weights table, the graph drawn as a graph, and the distances so far |
 |---|---|
-| ![BankAccounts](docs/window-oop.png) | ![Dark mode](docs/window-dark.png) |
+| ![Bubble sort with index markers](docs/screens/bubble-sort.png) | ![Dijkstra with the graph drawn](docs/screens/dijkstra-dark.png) |
+
+| A min-heap (Java): the array and the tree it stands for, drawn together, with `i`, `left` and `right` on both | Fibonacci in the Calls view: every call as a tree, the finished ones with their answers, the running one lit |
+|---|---|
+| ![A min-heap as an array and a tree](docs/screens/min-heap.png) | ![Fibonacci's calls as a tree](docs/screens/fibonacci-calls.png) |
+
+| Virtual methods (C++) in the Objects view: the classes, the objects, and a key moment explaining why the Circle's `area()` runs | `delete` (C++): the freed node faded, and a key moment warning that `gone` is now a dangling pointer |
+|---|---|
+| ![C++ polymorphism explained](docs/screens/cpp-virtual-methods.png) | ![A deleted node in C++](docs/screens/cpp-delete.png) |
+
+| A crash (C, dark mode): which pointer was NULL, at which line, and how to avoid it | Reading input (Java) in the Files view: what was typed, word by word, as the program reads it |
+|---|---|
+| ![A C crash explained](docs/screens/c-crash-dark.png) | ![Input being read word by word](docs/screens/reading-input.png) |
 
 ## How it works, simply
 Think of a flip book. Raphael runs your program and, after every single line, takes a photo of everything in its memory. Then it lets you flip through the photos.
@@ -60,6 +70,10 @@ Each installer has everything inside it, including Java and, on Windows, the C a
 | Any other Linux | `Raphael-…-linux-x64.tar.gz` | Unpack it anywhere and run `Raphael/bin/Raphael`. For C and C++, install gcc, g++ and gdb. |
 
 They're all on the [latest release](https://github.com/electricwhitener/raphael/releases/latest) page. Raphael tells you in its status bar when a newer version is out (it checks once a day, and you can turn that off in Settings).
+
+Raphael opens on a start page: pick the language you're learning, start a new program, open one, or choose an example.
+
+![The start page](docs/screens/welcome.png)
 
 ## How it compares
 Other good tools exist. Here is how Raphael is different from each:

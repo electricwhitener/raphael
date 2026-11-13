@@ -176,8 +176,10 @@ public class TraceTablePanel extends javax.swing.JPanel implements TraceListener
             if (value instanceof ReferenceValue) {
                 HeapObject object = step.getObject(((ReferenceValue) value).id());
                 if (object instanceof raphael.model.ArrayNode && !((raphael.model.ArrayNode) object).getElementType().endsWith("[]")) {
-                    String cells = object.describe(step); // "int[5] [0, 1, 4, ?, ?]": the cells, so a change shows
-                    return cells.substring(cells.indexOf('[', cells.indexOf(']') + 1));
+                    // "int[5] [0, 1, 4, ?, ?]" or C++'s "vector<int>(3) [5, 2, 9]": the cells, so a change shows
+                    String cells = object.describe(step);
+                    int start = cells.indexOf(" [");
+                    return start >= 0 ? cells.substring(start + 1) : cells;
                 }
                 return object == null ? "→ ?" : object.shortName();
             }
