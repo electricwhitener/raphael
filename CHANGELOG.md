@@ -2,7 +2,7 @@
 
 Versions follow [semantic versioning](https://semver.org): the first number changes when something stops working the way it did, the second when something is added, the third for fixes.
 
-## Unreleased
+## 1.5.0 (2026-11-13)
 
 **C++**
 - C++ programs run, step by step, on Windows, macOS and Linux, with the same pictures as Java and C: classes drawn with their base class's fields inside them, an object through a base-class pointer drawn as what it really is (a Dog, not an Animal), references, `new` and `delete` (a deleted object faded, with "freed"), and the standard library's `vector`, `string`, `map`, `set`, `list`, `stack` (upright), `queue` and `priority_queue` (as a heap).
